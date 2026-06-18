@@ -327,26 +327,26 @@ export default function PipelinePage() {
                 </div>
               </div>
               {selectedContato ? (
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-sm font-semibold text-gray-800">{selectedContato.nome}</span>
-                  <span className="text-gray-300 text-xs">·</span>
-                  <span className="text-xs text-gray-500">{selectedContato.cargo}</span>
-                  <span className="text-gray-300 text-xs">·</span>
-                  <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{selectedContato.canal_preferencial}</span>
-                  <div className="flex items-center gap-2 ml-auto text-gray-400">
-                    {selectedContato.linkedin_url && (
-                      <a href={`https://${selectedContato.linkedin_url}`} target="_blank" rel="noopener noreferrer"
-                        className="hover:text-blue-600 transition-colors" title="LinkedIn"><ExternalLink size={14} /></a>
-                    )}
+                <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
+                  <span className="text-sm font-semibold text-gray-800 truncate shrink-0">{selectedContato.nome}</span>
+                  <span className="text-gray-300 text-xs shrink-0">|</span>
+                  <span className="text-xs text-gray-500 truncate shrink-0">{selectedContato.cargo}</span>
+                  <span className="text-gray-300 text-xs shrink-0">|</span>
+                  <span className="text-xs text-gray-600 shrink-0">{selectedContato.canal_preferencial}</span>
+                  <div className="flex items-center gap-2 ml-auto shrink-0 text-gray-400">
                     {selectedContato.email && (
-                      <a href={`mailto:${selectedContato.email}`} className="hover:text-blue-600 transition-colors" title={selectedContato.email}><Mail size={14} /></a>
-                    )}
-                    {selectedEmpresa.website && (
-                      <a href={selectedEmpresa.website} target="_blank" rel="noopener noreferrer"
-                        className="hover:text-blue-600 transition-colors" title="Site"><ExternalLink size={14} /></a>
+                      <a href={`mailto:${selectedContato.email}`} className="hover:text-blue-600 transition-colors" title={selectedContato.email}><Mail size={13} /></a>
                     )}
                     {selectedContato.telefone && (
-                      <a href={`tel:${selectedContato.telefone}`} className="hover:text-blue-600 transition-colors" title={selectedContato.telefone}><Phone size={14} /></a>
+                      <a href={`tel:${selectedContato.telefone}`} className="hover:text-green-600 transition-colors" title={selectedContato.telefone}><Phone size={13} /></a>
+                    )}
+                    {selectedContato.canal_preferencial === 'WhatsApp' && selectedContato.telefone && (
+                      <a href={`https://wa.me/${selectedContato.telefone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                        className="hover:text-green-500 transition-colors" title="WhatsApp"><MessageSquare size={13} /></a>
+                    )}
+                    {selectedContato.linkedin_url && (
+                      <a href={`https://${selectedContato.linkedin_url}`} target="_blank" rel="noopener noreferrer"
+                        className="hover:text-blue-600 transition-colors" title="LinkedIn"><ExternalLink size={13} /></a>
                     )}
                   </div>
                 </div>
@@ -354,7 +354,7 @@ export default function PipelinePage() {
                 <div className="flex items-center gap-3 text-gray-400">
                   {selectedEmpresa.website && (
                     <a href={selectedEmpresa.website} target="_blank" rel="noopener noreferrer"
-                      className="hover:text-blue-600 transition-colors" title="Site"><ExternalLink size={14} /></a>
+                      className="hover:text-blue-600 transition-colors" title="Site"><ExternalLink size={13} /></a>
                   )}
                 </div>
               )}
@@ -404,7 +404,7 @@ export default function PipelinePage() {
                     color: '#374151',
                   },
                 ].map(card => (
-                  <div key={card.label} className="bg-gray-50 rounded-xl px-3 py-2.5" style={{ maxHeight: 80 }}>
+                  <div key={card.label} className="bg-gray-50 rounded-xl px-3 py-2" style={{ maxHeight: 80 }}>
                     <div className="text-xs text-gray-400 mb-1 leading-none">{card.label}</div>
                     <div className="font-bold text-sm leading-tight truncate" style={{ color: card.color }}>{card.value}</div>
                     {card.sub && <div className="text-xs text-gray-400 mt-0.5">{card.sub}</div>}
@@ -426,15 +426,13 @@ export default function PipelinePage() {
                     {AI_ACTIONS[selectedEmpresa.id]?.action ?? 'Executar próxima etapa da cadência'}
                   </p>
                 </div>
+                <button className="w-full text-xs font-medium text-gray-600 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors mb-2">
+                  Registrar ação
+                </button>
                 <div className="flex gap-2">
                   <button className="flex-1 text-xs font-semibold text-white py-1.5 rounded-lg transition-opacity hover:opacity-90" style={{ backgroundColor: '#6366f1' }}>
                     Executar ação
                   </button>
-                  {isActionDelayed && (
-                    <button className="flex-1 text-xs font-medium text-red-600 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-colors">
-                      Registrar ação
-                    </button>
-                  )}
                   <button className="flex-1 text-xs font-medium text-gray-600 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
                     Gerar mensagem
                   </button>
@@ -496,7 +494,7 @@ export default function PipelinePage() {
                             {entry.kind === 'abordagem' && `Abordagem via ${entry.item.canal}`}
                             {entry.kind === 'resposta' && 'Resposta recebida'}
                             {entry.kind === 'followup' && 'Follow-up registrado'}
-                            {entry.kind === 'webhook' && entry.item.evento}
+                            {entry.kind === 'webhook' && entry.item.evento.replace(/\s*--\s*etapa\s*\d+/gi, '')}
                           </div>
                           <div className="text-xs text-gray-400">
                             {new Date(entry.date).toLocaleDateString('pt-BR')}
