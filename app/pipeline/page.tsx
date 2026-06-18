@@ -1,16 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import Link from 'next/link';
 import {
   Settings, Plus, Search, X, Star, ExternalLink, Mail, Phone,
   MessageSquare, Bot, User, ArrowRight, CheckCircle,
-  Zap, FileText, Bell, BarChart2,
+  Zap, FileText, Bell, BarChart2, Loader2,
 } from 'lucide-react';
-import { getCanalBadgeClasses, getStatusLabel, getStatusBadgeClasses } from '@/lib/utils';
+import { getStatusLabel, getStatusBadgeClasses } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
-import type { Empresa } from '@/lib/types';
+import type { Empresa, Contato } from '@/lib/types';
+import { getLeads } from '@/lib/api';
+import type { Lead } from '@/lib/supabase';
 
 const TODAY = '2026-06-16';
 
@@ -49,13 +51,57 @@ const AI_SUMMARIES: Record<string, string> = {
   'emp-010': 'Transportadora em Campinas sem resposta após cadência completa. Programada para reativação em agosto 2026.',
 };
 
+// Adapta um Lead do Supabase para o shape Empresa usado pelo layout
+function leadToEmpresa(lead: Lead): Empresa {
+  return {
+    id: lead.id,
+    nome: lead.empresa,
+    segmento: lead.segmento as Empresa['segmento'],
+    origem: (lead.origem || 'Automação') as Empresa['origem'],
+    cidade: lead.cidade,
+    estado: lead.estado,
+    website: lead.site ?? undefined,
+    responsavel: lead.responsavel_id ?? '',
+    status: 'em_prospeccao',
+    estagio_pipeline: lead.estagio as Empresa['estagio_pipeline'],
+    em_cadencia: false,
+    data_entrada: lead.created_at,
+    ultimo_contato: lead.ultimo_contato ?? undefined,
+    blacklist: false,
+    score_engajamento: lead.score,
+    observacoes: lead.proxima_acao ?? undefined,
+    funcionarios_faixa: lead.faixa_funcionarios ?? undefined,
+  };
+}
+
+// Cria um Contato sintético a partir dos campos de contato embutidos no Lead
+function leadToContato(lead: Lead): Contato {
+  const canalMap: Record<Lead['canal_preferencial'], Contato['canal_preferencial']> = {
+    email: 'Email',
+    whatsapp: 'WhatsApp',
+    linkedin: 'LinkedIn',
+    telefone: 'Telefone',
+  };
+  return {
+    id: `${lead.id}-contato`,
+    empresa_id: lead.id,
+    nome: lead.contato_nome,
+    cargo: lead.contato_cargo,
+    canal_preferencial: canalMap[lead.canal_preferencial],
+    email: lead.contato_email || undefined,
+    telefone: lead.contato_telefone ?? undefined,
+    linkedin_url: lead.linkedin ?? undefined,
+    principal: true,
+    blacklist: false,
+  };
+}
+
 function daysBetween(a: string, b: string) {
   return Math.floor(
     (new Date(b.substring(0, 10)).getTime() - new Date(a.substring(0, 10)).getTime()) /
     (1000 * 60 * 60 * 24)
   );
 }
-
 
 function LeadCard({ empresa, onClick }: { empresa: Empresa; onClick: () => void }) {
   const timeSince = empresa.ultimo_contato
@@ -99,20 +145,59 @@ function LeadCard({ empresa, onClick }: { empresa: Empresa; onClick: () => void 
 }
 
 export default function PipelinePage() {
-  const { empresas, contatos, getTimelineForEmpresa } = useApp();
+  const { empresas: mockEmpresas, contatos: mockContatos, getTimelineForEmpresa } = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [supabaseLeads, setSupabaseLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [useFallback, setUseFallback] = useState(false);
 
-  const activeLeads = empresas.filter(e => !e.blacklist && e.status !== 'descartado');
+  useEffect(() => {
+    async function carregar() {
+      try {
+        const data = await getLeads();
+        setSupabaseLeads(data);
+      } catch (err) {
+        console.error('Erro ao carregar leads:', err);
+        setUseFallback(true);
+      } finally {
+        setLoading(false);
+      }
+    }
+    carregar();
+  }, []);
+
+  // Supabase é fonte ativa quando carregou sem erro (mesmo que vazio)
+  const usingSupabase = !useFallback && !loading;
+
+  // Lista de empresas para o Kanban
+  const activeLeads: Empresa[] = usingSupabase
+    ? supabaseLeads.map(leadToEmpresa)
+    : mockEmpresas.filter(e => !e.blacklist && e.status !== 'descartado');
+
   const filtered = activeLeads.filter(e =>
     !search ||
     e.nome.toLowerCase().includes(search.toLowerCase()) ||
     e.segmento.toLowerCase().includes(search.toLowerCase())
   );
 
-  const selectedEmpresa = selectedId ? empresas.find(e => e.id === selectedId) ?? null : null;
-  const selectedContato = selectedId ? (contatos.find(c => c.empresa_id === selectedId && c.principal) ?? null) : null;
-  const selectedTimeline = selectedId ? [...getTimelineForEmpresa(selectedId)].reverse().slice(0, 6) : [];
+  // Dados do painel lateral
+  const selectedEmpresa: Empresa | null = selectedId
+    ? (usingSupabase
+        ? (() => { const l = supabaseLeads.find(l => l.id === selectedId); return l ? leadToEmpresa(l) : null; })()
+        : mockEmpresas.find(e => e.id === selectedId) ?? null)
+    : null;
+
+  const selectedContato: Contato | null = selectedId
+    ? (usingSupabase
+        ? (() => { const l = supabaseLeads.find(l => l.id === selectedId); return l ? leadToContato(l) : null; })()
+        : mockContatos.find(c => c.empresa_id === selectedId && c.principal) ?? null)
+    : null;
+
+  // Timeline disponível apenas com dados mock (interacoes Supabase ainda não conectadas)
+  const selectedTimeline = selectedId && !usingSupabase
+    ? [...getTimelineForEmpresa(selectedId)].reverse().slice(0, 6)
+    : [];
 
   const panelTimeSince = selectedEmpresa
     ? (selectedEmpresa.ultimo_contato
@@ -165,38 +250,50 @@ export default function PipelinePage() {
 
       {/* Kanban */}
       <div className="overflow-x-auto px-6 pb-4">
-        <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
-          {STAGES.map(stage => {
-            const stageLeads = filtered.filter(e => e.estagio_pipeline === stage.id);
-            return (
-              <div key={stage.id} style={{ width: 240 }} className="flex flex-col">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: stage.color }} />
-                    <span className="text-sm font-semibold text-gray-700 leading-tight">{stage.label}</span>
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-gray-400">
+            <Loader2 size={18} className="animate-spin" />
+            <span className="text-sm">Carregando leads...</span>
+          </div>
+        ) : usingSupabase && supabaseLeads.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2">
+            <span className="text-sm font-medium text-gray-500">Nenhum lead encontrado.</span>
+            <span className="text-xs">Importe seus contatos para começar.</span>
+          </div>
+        ) : (
+          <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
+            {STAGES.map(stage => {
+              const stageLeads = filtered.filter(e => e.estagio_pipeline === stage.id);
+              return (
+                <div key={stage.id} style={{ width: 240 }} className="flex flex-col">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: stage.color }} />
+                      <span className="text-sm font-semibold text-gray-700 leading-tight">{stage.label}</span>
+                    </div>
+                    <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                      {stageLeads.length}
+                    </span>
                   </div>
-                  <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                    {stageLeads.length}
-                  </span>
-                </div>
 
-                <div className="space-y-2.5 flex-1" style={{ minHeight: 120 }}>
-                  {stageLeads.map(empresa => (
-                    <LeadCard
-                      key={empresa.id}
-                      empresa={empresa}
-                      onClick={() => setSelectedId(empresa.id)}
-                    />
-                  ))}
-                </div>
+                  <div className="space-y-2.5 flex-1" style={{ minHeight: 120 }}>
+                    {stageLeads.map(empresa => (
+                      <LeadCard
+                        key={empresa.id}
+                        empresa={empresa}
+                        onClick={() => setSelectedId(empresa.id)}
+                      />
+                    ))}
+                  </div>
 
-                <button className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 border border-dashed border-gray-200 rounded-xl py-2.5 hover:border-gray-300 transition-colors">
-                  <Plus size={12} /> Adicionar lead
-                </button>
-              </div>
-            );
-          })}
-        </div>
+                  <button className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 border border-dashed border-gray-200 rounded-xl py-2.5 hover:border-gray-300 transition-colors">
+                    <Plus size={12} /> Adicionar lead
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Como funciona */}
@@ -423,7 +520,7 @@ export default function PipelinePage() {
                 </div>
                 <div className={`rounded-xl px-3 py-2 mb-2 ${isActionDelayed ? 'bg-red-50' : 'bg-indigo-50'}`}>
                   <p className={`text-sm font-semibold leading-snug ${isActionDelayed ? 'text-red-900' : 'text-indigo-900'}`}>
-                    {AI_ACTIONS[selectedEmpresa.id]?.action ?? 'Executar próxima etapa da cadência'}
+                    {selectedEmpresa.observacoes ?? AI_ACTIONS[selectedEmpresa.id]?.action ?? 'Executar próxima etapa da cadência'}
                   </p>
                 </div>
                 <button className="w-full text-xs font-medium text-gray-600 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors mb-2">
