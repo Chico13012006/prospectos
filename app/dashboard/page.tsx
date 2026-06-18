@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { getStatusBadgeClasses } from '@/lib/utils';
 import { SdrPill } from '@/components/ui/SdrAvatar';
+import { useState, useEffect } from 'react';
+import { getLeadsStats, getLeadsRecentes, getLeadsPorResponsavel } from '@/lib/api';
 
 const TODAY = '2026-06-16';
 
@@ -73,11 +75,37 @@ const evolucaoDados = [
 export default function DashboardPage() {
   const { empresas, abordagens, respostas, followUps } = useApp();
 
-  const leadsEncontrados = empresas.length;
-  const leadsQualificados = empresas.filter(e => e.status !== 'novo' && !e.blacklist && e.status !== 'descartado').length;
+  const [leadsData, setLeadsData] = useState<any[]>([])
+  const [leadsRecentes, setLeadsRecentes] = useState<any[]>([])
+  const [sdrDataSupabase, setSdrDataSupabase] = useState<any[]>([])
+
+  useEffect(() => {
+    async function carregarDash() {
+      try {
+        const [stats, recentes, sdrs] = await Promise.all([
+          getLeadsStats(),
+          getLeadsRecentes(10),
+          getLeadsPorResponsavel(),
+        ])
+        if (stats) setLeadsData(stats)
+        if (recentes.length > 0) setLeadsRecentes(recentes)
+        if (sdrs.length > 0) setSdrDataSupabase(sdrs)
+      } catch (err) {
+        console.error('Erro ao carregar dashboard:', err)
+      }
+    }
+    carregarDash()
+  }, [])
+
+  const leadsEncontrados = leadsData.length > 0 ? leadsData.length : empresas.length;
+  const leadsQualificados = leadsData.length > 0
+    ? leadsData.filter((l: any) => l.estagio !== 'novos_leads').length
+    : empresas.filter(e => e.status !== 'novo' && !e.blacklist && e.status !== 'descartado').length;
   const mensagensEnviadas = abordagens.length;
   const respostasRecebidas = respostas.length;
-  const leadsEncaminhados = empresas.filter(e => e.estagio_pipeline === 'reuniao_agendada' || e.status === 'respondeu_positivo').length;
+  const leadsEncaminhados = leadsData.length > 0
+    ? leadsData.filter((l: any) => l.estagio === 'reuniao_agendada').length
+    : empresas.filter(e => e.estagio_pipeline === 'reuniao_agendada' || e.status === 'respondeu_positivo').length;
 
   const nichoData = [
     { nicho: 'Logística', positivos: 2, responsavel: 'Francisco' },
@@ -86,11 +114,11 @@ export default function DashboardPage() {
     { nicho: 'Indústria', positivos: 1, responsavel: 'Silmara' },
   ];
 
-  const leadsInteresse = empresas.filter(
+  const leadsInteresseMock = empresas.filter(
     e => e.status === 'respondeu_positivo' || e.status === 'pediu_mais_info'
   ).slice(0, 5);
 
-  const sdrData = ['Francisco', 'Silmara'].map(sdr => {
+  const sdrDataMock = ['Francisco', 'Silmara'].map(sdr => {
     const leads = empresas.filter(e => e.responsavel === sdr);
     const msgs = abordagens.filter(a => {
       const emp = empresas.find(e => e.id === a.empresa_id);
@@ -106,6 +134,47 @@ export default function DashboardPage() {
   });
 
   const atrasados = followUps.filter(f => f.status === 'atrasado').length;
+
+  function calcularFunil(data: any[]) {
+    const total = data.length || 1
+    const novos = data.filter((l: any) => l.estagio === 'novos_leads').length
+    const enviados = data.filter((l: any) => l.estagio !== 'novos_leads').length
+    const responderam = data.filter((l: any) => ['aguardando_resposta', 'follow_up', 'interessado', 'reuniao_agendada'].includes(l.estagio)).length
+    const interesse = data.filter((l: any) => l.estagio === 'interessado' || l.estagio === 'reuniao_agendada').length
+    const encaminhados = data.filter((l: any) => l.estagio === 'reuniao_agendada').length
+    return [
+      { label: 'Encontrados', value: total, pct: '100%', color: '#1e3a5f', w: 100 },
+      { label: 'Qualificados', value: total - novos, pct: `${Math.round((total - novos) / total * 100)}%`, color: '#2d5a8e', w: Math.max(Math.round((total - novos) / total * 100), 10) },
+      { label: 'Enviados', value: enviados, pct: `${Math.round(enviados / total * 100)}%`, color: '#3b82f6', w: Math.max(Math.round(enviados / total * 100), 10) },
+      { label: 'Responderam', value: responderam, pct: `${Math.round(responderam / total * 100)}%`, color: '#6366f1', w: Math.max(Math.round(responderam / total * 100), 5) },
+      { label: 'Interesse identificado', value: interesse, pct: `${Math.round(interesse / total * 100)}%`, color: '#8b5cf6', w: Math.max(Math.round(interesse / total * 100), 5) },
+      { label: 'Encaminhados', value: encaminhados, pct: `${Math.round(encaminhados / total * 100)}%`, color: '#22c55e', w: Math.max(Math.round(encaminhados / total * 100), 5) },
+    ]
+  }
+
+  const activeFunnelSteps = leadsData.length > 0 ? calcularFunil(leadsData) : funnelSteps
+
+  const activeFila = leadsRecentes.length > 0
+    ? leadsRecentes.slice(0, 5).map((l: any) => ({
+        id: l.id,
+        nome: l.empresa,
+        segmento: l.segmento,
+        responsavel: l.responsavel_id ?? '',
+        estagio: l.estagio,
+        badge: l.estagio === 'reuniao_agendada' ? 'Encaminhado' : l.estagio === 'novos_leads' ? 'Novo' : 'Pendente',
+      }))
+    : leadsInteresseMock.map(e => ({
+        id: e.id,
+        nome: e.nome,
+        segmento: e.segmento,
+        responsavel: e.responsavel,
+        estagio: e.estagio_pipeline,
+        badge: e.estagio_pipeline === 'reuniao_agendada' ? 'Encaminhado' : e.status === 'pediu_mais_info' ? 'Novo' : 'Pendente',
+      }))
+
+  const activeSdrData = sdrDataSupabase.length > 0
+    ? sdrDataSupabase.map((s: any) => ({ sdr: s.nome, leads: s.total, msgs: 0, resps: 0, taxa: 0, reunioes: s.reunioes }))
+    : sdrDataMock
 
   return (
     <div className="p-6 space-y-5">
@@ -174,7 +243,7 @@ export default function DashboardPage() {
           <div className="flex gap-8">
             {/* Visual funnel */}
             <div className="flex flex-col items-center gap-1.5 py-1" style={{ minWidth: 120 }}>
-              {funnelSteps.map(step => (
+              {activeFunnelSteps.map(step => (
                 <div
                   key={step.label}
                   className="h-7 flex items-center justify-center text-white text-xs font-semibold rounded"
@@ -194,7 +263,7 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {funnelSteps.map(step => (
+                {activeFunnelSteps.map(step => (
                   <tr key={step.label} className="border-b border-gray-50">
                     <td className="py-1.5 text-gray-700 text-sm">{step.label}</td>
                     <td className="py-1.5 text-right font-semibold text-sm" style={{ color: step.color }}>
@@ -278,23 +347,22 @@ export default function DashboardPage() {
             Fila de leads com interesse
           </h2>
           <div className="space-y-2">
-            {leadsInteresse.map(e => (
-              <Link key={e.id} href={`/leads/${e.id}`}>
+            {activeFila.map(item => (
+              <Link key={item.id} href={`/leads/${item.id}`}>
                 <div className="flex items-center gap-2 p-2 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-800 truncate">{e.nome}</div>
-                    <div className="text-xs text-gray-500">{e.segmento}</div>
+                    <div className="text-sm font-medium text-gray-800 truncate">{item.nome}</div>
+                    <div className="text-xs text-gray-500">{item.segmento}</div>
                   </div>
-                  <div className="shrink-0"><SdrPill name={e.responsavel} /></div>
+                  <div className="shrink-0"><SdrPill name={item.responsavel} /></div>
                   <span className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 font-medium ${
-                    e.estagio_pipeline === 'reuniao_agendada'
+                    item.badge === 'Encaminhado'
                       ? 'bg-green-100 text-green-700'
-                      : e.status === 'pediu_mais_info'
+                      : item.badge === 'Novo'
                       ? 'bg-blue-100 text-blue-700'
                       : 'bg-amber-100 text-amber-700'
                   }`}>
-                    {e.estagio_pipeline === 'reuniao_agendada' ? 'Encaminhado'
-                      : e.status === 'pediu_mais_info' ? 'Novo' : 'Pendente'}
+                    {item.badge}
                   </span>
                 </div>
               </Link>
@@ -384,7 +452,7 @@ export default function DashboardPage() {
             </tr>
           </thead>
           <tbody>
-            {sdrData.map(sdr => (
+            {activeSdrData.map(sdr => (
               <tr key={sdr.sdr} className="border-b border-gray-50 hover:bg-gray-50">
                 <td className="py-3 px-3">
                   <SdrPill name={sdr.sdr} />

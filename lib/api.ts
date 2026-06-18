@@ -95,3 +95,40 @@ export async function getTemplates(): Promise<Template[]> {
   if (error) throw error
   return data || []
 }
+
+// --- ANALYTICS / DASHBOARD ---
+
+export async function getLeadsStats() {
+  const { data, error } = await supabase
+    .from('leads')
+    .select('estagio, score, responsavel_id, created_at, canal_preferencial, segmento, estado')
+  if (error || !data) return null
+  return data
+}
+
+export async function getLeadsRecentes(limit = 10) {
+  const { data, error } = await supabase
+    .from('leads')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error || !data) return []
+  return data
+}
+
+export async function getLeadsPorResponsavel() {
+  const { data: usuarios, error: errU } = await supabase
+    .from('usuarios')
+    .select('id, nome')
+  const { data: leads, error: errL } = await supabase
+    .from('leads')
+    .select('responsavel_id, estagio')
+  if (errU || errL || !usuarios || !leads) return []
+
+  return usuarios.map(u => ({
+    nome: u.nome,
+    total: leads.filter(l => l.responsavel_id === u.id).length,
+    reunioes: leads.filter(l => l.responsavel_id === u.id && l.estagio === 'reuniao_agendada').length,
+    interessados: leads.filter(l => l.responsavel_id === u.id && l.estagio === 'interessado').length,
+  }))
+}

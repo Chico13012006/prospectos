@@ -9,6 +9,8 @@ import { getCanalBadgeClasses } from '@/lib/utils';
 import {
   Download, Save, RefreshCw, Brain, Lightbulb, TrendingUp, MapPin,
 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { getLeadsStats } from '@/lib/api';
 
 const CANAL_COLORS: Record<string, string> = {
   LinkedIn: '#0077b5',
@@ -72,8 +74,34 @@ function heatColor(v: number): string {
 export default function InteligenciaComercialPage() {
   const { abordagens, respostas, templates, empresas } = useApp();
 
+  const [leadsData, setLeadsData] = useState<any[]>([])
+
+  useEffect(() => {
+    async function carregarIntel() {
+      try {
+        const stats = await getLeadsStats()
+        if (stats && stats.length > 0) setLeadsData(stats)
+      } catch (err) {
+        console.error('Erro ao carregar inteligência comercial:', err)
+      }
+    }
+    carregarIntel()
+  }, [])
+
   const totalAbordagens = abordagens.length;
   const totalRespostas = respostas.length;
+
+  // KPIs dinâmicos
+  const leadsTotal = leadsData.length > 0 ? leadsData.length : totalAbordagens
+  const interessados = leadsData.length > 0
+    ? leadsData.filter((l: any) => l.estagio === 'interessado' || l.estagio === 'reuniao_agendada').length
+    : 3
+  const reunioes = leadsData.length > 0
+    ? leadsData.filter((l: any) => l.estagio === 'reuniao_agendada').length
+    : 1
+  const taxaConversao = leadsData.length > 0
+    ? `${(reunioes / leadsData.length * 100).toFixed(1)}%`
+    : `${totalAbordagens > 0 ? ((totalRespostas / totalAbordagens) * 100).toFixed(1) : 0}%`
 
   const porCanal = (['LinkedIn', 'Email', 'WhatsApp', 'Telefone'] as const).map(canal => {
     const msgs = abordagens.filter(a => a.canal === canal).length;
@@ -86,6 +114,16 @@ export default function InteligenciaComercialPage() {
     return { canal, msgs, resps, taxa, conv };
   }).filter(d => d.msgs > 0);
 
+  const canalLabels: Record<string, string> = { email: 'Email', whatsapp: 'WhatsApp', linkedin: 'LinkedIn', telefone: 'Telefone' }
+  const performanceCanal = ['email', 'whatsapp', 'linkedin', 'telefone'].map(canal => ({
+    canal: canalLabels[canal],
+    msgs: leadsData.filter((l: any) => l.canal_preferencial === canal).length,
+    resps: 0,
+    taxa: leadsData.length > 0 ? (leadsData.filter((l: any) => l.canal_preferencial === canal).length / leadsData.length * 100).toFixed(1) : '0',
+    conv: leadsData.length > 0 ? leadsData.filter((l: any) => l.canal_preferencial === canal).length / leadsData.length * 100 : 0,
+  })).filter(c => c.msgs > 0)
+  const activeCanal = leadsData.length > 0 ? performanceCanal : porCanal
+
   const porSegmento = [
     { segmento: 'Logística', leads: 2, respostas: 0, conversao: 0 },
     { segmento: 'Agro', leads: 2, respostas: 2, conversao: 2.80 },
@@ -95,18 +133,39 @@ export default function InteligenciaComercialPage() {
     { segmento: 'Outros', leads: 2, respostas: 1, conversao: 0.90 },
   ];
 
-  const topTemplates = [...templates]
-    .sort((a, b) => b.taxa_resposta - a.taxa_resposta)
-    .slice(0, 5);
+  const porSegmentoSupabase = leadsData.length > 0
+    ? [...new Set(leadsData.map((l: any) => l.segmento))].map((seg: any) => ({
+        segmento: seg,
+        leads: leadsData.filter((l: any) => l.segmento === seg).length,
+        respostas: leadsData.filter((l: any) => l.segmento === seg && l.estagio === 'reuniao_agendada').length,
+        conversao: leadsData.filter((l: any) => l.segmento === seg).length > 0
+          ? leadsData.filter((l: any) => l.segmento === seg && l.estagio === 'reuniao_agendada').length /
+            leadsData.filter((l: any) => l.segmento === seg).length * 5
+          : 0,
+      }))
+    : null
+  const activeSegmentos = porSegmentoSupabase ?? porSegmento
 
-  const geoData = [
+  const geoDataFallback = [
     { estado: 'SP', respostas: 2 },
     { estado: 'MG', respostas: 3 },
     { estado: 'RJ', respostas: 1 },
     { estado: 'ES', respostas: 1 },
     { estado: 'PA', respostas: 0 },
     { estado: 'Outros', respostas: 0 },
-  ];
+  ]
+  const porEstadoSupabase = leadsData.length > 0
+    ? [...new Set(leadsData.map((l: any) => l.estado))].map((est: any) => ({
+        estado: est,
+        respostas: leadsData.filter((l: any) => l.estado === est).length,
+      })).sort((a, b) => b.respostas - a.respostas)
+    : null
+  const activeGeoData = porEstadoSupabase ?? geoDataFallback
+
+  const topTemplates = [...templates]
+    .sort((a, b) => b.taxa_resposta - a.taxa_resposta)
+    .slice(0, 5);
+
 
   return (
     <div className="p-6 space-y-5">
@@ -148,12 +207,12 @@ export default function InteligenciaComercialPage() {
       {/* 6 KPI cards */}
       <div className="grid grid-cols-6 gap-3">
         {[
-          { label: 'Leads Abordados', value: totalAbordagens, pct: '+14%', color: '#1e3a5f' },
+          { label: 'Leads Abordados', value: leadsTotal, pct: '+14%', color: '#1e3a5f' },
           { label: 'Mensagens Enviadas', value: totalAbordagens, pct: '+23%', color: '#3b82f6' },
           { label: 'Respostas Recebidas', value: totalRespostas, pct: '+5%', color: '#22c55e' },
-          { label: 'Interesses Positivos', value: 3, pct: '+50%', color: '#f59e0b' },
-          { label: 'Reuniões Agendadas', value: 1, pct: '0%', color: '#8b5cf6' },
-          { label: 'Taxa de Conversão', value: `${totalAbordagens > 0 ? ((totalRespostas / totalAbordagens) * 100).toFixed(1) : 0}%`, pct: '+2,1 p.p.', color: '#ef4444' },
+          { label: 'Interesses Positivos', value: interessados, pct: '+50%', color: '#f59e0b' },
+          { label: 'Reuniões Agendadas', value: reunioes, pct: '0%', color: '#8b5cf6' },
+          { label: 'Taxa de Conversão', value: taxaConversao, pct: '+2,1 p.p.', color: '#ef4444' },
         ].map(kpi => (
           <div key={kpi.label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">
             <div className="text-xs text-gray-500 mb-2 leading-tight">{kpi.label}</div>
@@ -175,7 +234,7 @@ export default function InteligenciaComercialPage() {
             </tr>
           </thead>
           <tbody>
-            {porCanal.map(c => (
+            {activeCanal.map(c => (
               <tr key={c.canal} className="border-b border-gray-50 hover:bg-gray-50">
                 <td className="py-2.5 px-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${getCanalBadgeClasses(c.canal)}`}>{c.canal}</span>
@@ -272,7 +331,7 @@ export default function InteligenciaComercialPage() {
             </tr>
           </thead>
           <tbody>
-            {porSegmento.sort((a, b) => b.conversao - a.conversao).map(s => (
+            {activeSegmentos.sort((a, b) => b.conversao - a.conversao).map(s => (
               <tr key={s.segmento} className="border-b border-gray-50 hover:bg-gray-50">
                 <td className="py-2.5 px-3">
                   <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full font-medium">{s.segmento}</span>
@@ -341,7 +400,7 @@ export default function InteligenciaComercialPage() {
             Distribuição Geográfica
           </h2>
           <div className="grid grid-cols-3 gap-2 mb-4">
-            {geoData.filter(g => g.estado !== 'Outros').map(g => (
+            {activeGeoData.filter(g => g.estado !== 'Outros').slice(0, 6).map(g => (
               <div key={g.estado}
                 className="rounded-xl border border-gray-100 p-3 text-center"
                 style={{ backgroundColor: g.respostas > 2 ? '#eff6ff' : g.respostas > 0 ? '#f0fdf4' : '#f9fafb' }}>
@@ -360,7 +419,7 @@ export default function InteligenciaComercialPage() {
               </tr>
             </thead>
             <tbody>
-              {geoData.map(g => (
+              {activeGeoData.map(g => (
                 <tr key={g.estado} className="border-b border-gray-50">
                   <td className="py-1.5 text-gray-700">{g.estado}</td>
                   <td className="py-1.5 text-right font-semibold text-indigo-600">{g.respostas}</td>
