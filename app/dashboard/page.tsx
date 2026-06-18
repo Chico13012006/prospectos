@@ -80,9 +80,9 @@ export default function DashboardPage() {
   const leadsEncaminhados = empresas.filter(e => e.estagio_pipeline === 'reuniao_agendada' || e.status === 'respondeu_positivo').length;
 
   const nichoData = [
-    { nicho: 'Logística', positivos: 2, responsavel: 'Francisca' },
-    { nicho: 'Mineração', positivos: 2, responsavel: 'Francisca' },
-    { nicho: 'Agro', positivos: 2, responsavel: 'Francisca' },
+    { nicho: 'Logística', positivos: 2, responsavel: 'Francisco' },
+    { nicho: 'Mineração', positivos: 2, responsavel: 'Francisco' },
+    { nicho: 'Agro', positivos: 2, responsavel: 'Francisco' },
     { nicho: 'Indústria', positivos: 1, responsavel: 'Silmara' },
   ];
 
@@ -90,7 +90,7 @@ export default function DashboardPage() {
     e => e.status === 'respondeu_positivo' || e.status === 'pediu_mais_info'
   ).slice(0, 5);
 
-  const sdrData = ['Francisca', 'Silmara'].map(sdr => {
+  const sdrData = ['Francisco', 'Silmara'].map(sdr => {
     const leads = empresas.filter(e => e.responsavel === sdr);
     const msgs = abordagens.filter(a => {
       const emp = empresas.find(e => e.id === a.empresa_id);
@@ -261,7 +261,7 @@ export default function DashboardPage() {
                 <tr key={n.nicho} className="border-b border-gray-50">
                   <td className="py-2 text-gray-700">{n.nicho}</td>
                   <td className="py-2 text-center font-bold text-green-600">{n.positivos}</td>
-                  <td className="py-2 text-right text-xs text-gray-500">{n.responsavel}</td>
+                  <td className="py-2 text-right"><SdrPill name={n.responsavel} /></td>
                 </tr>
               ))}
             </tbody>
@@ -285,7 +285,7 @@ export default function DashboardPage() {
                     <div className="text-sm font-medium text-gray-800 truncate">{e.nome}</div>
                     <div className="text-xs text-gray-500">{e.segmento}</div>
                   </div>
-                  <div className="text-xs text-gray-400 shrink-0">{e.responsavel}</div>
+                  <div className="shrink-0"><SdrPill name={e.responsavel} /></div>
                   <span className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 font-medium ${
                     e.estagio_pipeline === 'reuniao_agendada'
                       ? 'bg-green-100 text-green-700'

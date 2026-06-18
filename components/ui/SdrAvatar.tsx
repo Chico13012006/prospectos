@@ -1,7 +1,7 @@
-type SdrName = 'Francisca' | 'Silmara';
+type SdrName = 'Francisco' | 'Silmara';
 
 const CONFIG: Record<SdrName, { bg: string; border: string; color: string; dot: string; initials: string }> = {
-  Francisca: { bg: '#EEEDFE', border: '#AFA9EC', color: '#3C3489', dot: '#7F77DD', initials: 'FR' },
+  Francisco: { bg: '#EEEDFE', border: '#AFA9EC', color: '#3C3489', dot: '#7F77DD', initials: 'FR' },
   Silmara:   { bg: '#E1F5EE', border: '#5DCAA5', color: '#085041', dot: '#1D9E75', initials: 'SI' },
 };
 

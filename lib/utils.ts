@@ -2,7 +2,7 @@ import type { StatusLead, OrigemAcao, EstagioPipeline } from './types';
 
 export const TODAY = '2026-06-16';
 
-export const SDRS = ['Francisca', 'Silmara'] as const;
+export const SDRS = ['Francisco', 'Silmara'] as const;
 
 export const ESTAGIOS_PIPELINE: EstagioPipeline[] = [
   'novos_leads', 'primeiro_contato', 'aguardando_resposta', 'follow_up', 'interessado', 'reuniao_agendada',

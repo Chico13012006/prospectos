@@ -9,14 +9,14 @@ import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
 const TODAY = '2026-06-16';
 
 const MEMBER_COLORS = {
-  Francisca: { bg: '#e0e7ff', text: '#4f46e5', accent: '#6366f1' },
+  Francisco: { bg: '#e0e7ff', text: '#4f46e5', accent: '#6366f1' },
   Silmara: { bg: '#fce7f3', text: '#be185d', accent: '#ec4899' },
 };
 
-const META_MES = { Francisca: 20, Silmara: 20 };
+const META_MES = { Francisco: 20, Silmara: 20 };
 
 const RECENT_ACTIVITY = {
-  Francisca: [
+  Francisco: [
     { data: '2026-06-14', empresa: 'AgroFast Soluções', acao: 'Lead adicionado', canal: 'LinkedIn' },
     { data: '2026-06-09', empresa: 'TransOil Logística', acao: 'Mensagem enviada', canal: 'Email' },
     { data: '2026-06-05', empresa: 'TransOil Logística', acao: 'Abordagem inicial', canal: 'LinkedIn' },
@@ -36,9 +36,9 @@ const RECENT_ACTIVITY = {
 
 export default function EquipePage() {
   const { empresas, abordagens, respostas, followUps } = useApp();
-  const [activeTab, setActiveTab] = useState<'Francisca' | 'Silmara'>('Francisca');
+  const [activeTab, setActiveTab] = useState<'Francisco' | 'Silmara'>('Francisco');
 
-  const sdrData = (['Francisca', 'Silmara'] as const).map(sdr => {
+  const sdrData = (['Francisco', 'Silmara'] as const).map(sdr => {
     const leads = empresas.filter(e => e.responsavel === sdr);
     const msgs = abordagens.filter(a => {
       const emp = empresas.find(e => e.id === a.empresa_id);
@@ -208,7 +208,7 @@ export default function EquipePage() {
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <h2 className="font-semibold text-gray-800">Atividade recente</h2>
           <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-            {(['Francisca', 'Silmara'] as const).map(tab => (
+            {(['Francisco', 'Silmara'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
