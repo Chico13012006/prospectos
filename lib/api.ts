@@ -72,16 +72,26 @@ export async function atualizarEstagio(leadId: string, novoEstagio: string): Pro
   if (error) throw error
 }
 
-// Dispara o n8n para executar a próxima etapa da cadência do lead
-export async function executarAcao(leadId: string): Promise<{ ok: boolean; estagio?: string; erro?: string }> {
-  const url = process.env.NEXT_PUBLIC_N8N_EXECUTAR_ACAO_URL
-  if (!url) throw new Error('NEXT_PUBLIC_N8N_EXECUTAR_ACAO_URL não configurada')
-  const res = await fetch(url, {
+// Dispara o n8n (via proxy server-side) para executar a próxima etapa da cadência do lead
+export async function executarAcao(
+  leadId: string
+): Promise<{ ok: boolean; estagio?: string; erro?: string }> {
+  const secret = process.env.NEXT_PUBLIC_INTERNAL_SECRET
+
+  const res = await fetch('/api/executar-acao', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-internal-secret': secret ?? '',
+    },
     body: JSON.stringify({ lead_id: leadId }),
   })
-  if (!res.ok) throw new Error(`Erro n8n: ${res.status}`)
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.erro ?? `Erro ${res.status}`)
+  }
+
   return res.json()
 }
 
