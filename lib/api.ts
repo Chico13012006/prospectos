@@ -76,13 +76,10 @@ export async function atualizarEstagio(leadId: string, novoEstagio: string): Pro
 export async function executarAcao(
   leadId: string
 ): Promise<{ ok: boolean; estagio?: string; erro?: string }> {
-  const secret = process.env.NEXT_PUBLIC_INTERNAL_SECRET
-
   const res = await fetch('/api/executar-acao', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-internal-secret': secret ?? '',
     },
     body: JSON.stringify({ lead_id: leadId }),
   })
