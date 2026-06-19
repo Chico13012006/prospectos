@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import {
   Settings, Plus, Search, X, Star, ExternalLink, Mail, Phone,
   MessageSquare, Bot, User, ArrowRight, CheckCircle,
-  Zap, FileText, Bell, BarChart2, Loader2,
+  Zap, FileText, Bell, BarChart2, Loader2, Clock,
 } from 'lucide-react';
-import { getStatusLabel, getStatusBadgeClasses } from '@/lib/utils';
+import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatDate, formatDateTime } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
-import type { Empresa, Contato } from '@/lib/types';
-import { getLeads, getInteracoesByLead } from '@/lib/api';
+import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
+import { getLeads, getInteracoesByLead, createInteracao } from '@/lib/api';
 import type { Lead, Interacao } from '@/lib/supabase';
 
 const TODAY = '2026-06-16';
@@ -111,6 +111,38 @@ const INTERACAO_TIPO: Record<string, { label: string; Icon: typeof Bot; color: s
   reuniao: { label: 'Reunião', Icon: Bell, color: 'text-purple-500' },
 };
 
+// Badge de tipo na Central do Lead (cobre variações de follow_up: follow_up_1/2/3/4)
+function getTipoInteracaoBadge(tipo: string): { label: string; classes: string } {
+  if (tipo === 'abordagem') return { label: 'Primeiro contato enviado', classes: 'bg-blue-100 text-blue-700' };
+  if (tipo.startsWith('follow_up')) return { label: 'Follow-up enviado', classes: 'bg-purple-100 text-purple-700' };
+  if (tipo === 'resposta') return { label: 'Resposta recebida', classes: 'bg-green-100 text-green-700' };
+  if (tipo === 'nota') return { label: 'Nota', classes: 'bg-gray-100 text-gray-600' };
+  if (tipo === 'reuniao') return { label: 'Reunião', classes: 'bg-amber-100 text-amber-700' };
+  return { label: tipo, classes: 'bg-gray-100 text-gray-600' };
+}
+
+// Badge de status (lado direito) derivado do tipo
+function getStatusInteracao(tipo: string): { label: string; classes: string } | null {
+  if (tipo === 'abordagem' || tipo.startsWith('follow_up')) return { label: 'Enviado', classes: 'bg-blue-50 text-blue-600' };
+  if (tipo === 'resposta') return { label: 'Respondido', classes: 'bg-green-50 text-green-600' };
+  if (tipo === 'reuniao') return { label: 'Agendado', classes: 'bg-amber-50 text-amber-600' };
+  return null;
+}
+
+// Rótulo, ícone e cor do canal (valores em minúsculo no Supabase)
+const CANAL_INFO: Record<string, { label: string; Icon: typeof Bot; classes: string }> = {
+  email: { label: 'Email', Icon: Mail, classes: 'bg-gray-100 text-gray-700' },
+  whatsapp: { label: 'WhatsApp', Icon: MessageSquare, classes: 'bg-green-100 text-green-700' },
+  linkedin: { label: 'LinkedIn', Icon: ExternalLink, classes: 'bg-blue-100 text-blue-700' },
+  telefone: { label: 'Telefone', Icon: Phone, classes: 'bg-purple-100 text-purple-700' },
+};
+
+function scoreColor(score: number): string {
+  if (score >= 70) return '#16a34a';
+  if (score < 50) return '#f97316';
+  return '#6b7280';
+}
+
 function LeadCard({ empresa, onClick }: { empresa: Empresa; onClick: () => void }) {
   const timeSince = empresa.ultimo_contato
     ? daysBetween(empresa.ultimo_contato, TODAY)
@@ -163,6 +195,11 @@ export default function PipelinePage() {
   const [loadingInteracoes, setLoadingInteracoes] = useState(false);
   const [interacoesError, setInteracoesError] = useState(false);
   const [showAllInteracoes, setShowAllInteracoes] = useState(false);
+  // Central do Lead (modal completo)
+  const [centralTab, setCentralTab] = useState<'timeline' | 'dados'>('timeline');
+  const [showRegistrar, setShowRegistrar] = useState(false);
+  const [novaInteracao, setNovaInteracao] = useState({ tipo: 'abordagem', canal: 'email', descricao: '' });
+  const [salvandoInteracao, setSalvandoInteracao] = useState(false);
 
   useEffect(() => {
     async function carregar() {
@@ -182,31 +219,34 @@ export default function PipelinePage() {
   // Supabase é fonte ativa quando carregou sem erro (mesmo que vazio)
   const usingSupabase = !useFallback && !loading;
 
-  // Busca as interações reais do lead selecionado quando o painel abre
-  useEffect(() => {
-    setShowAllInteracoes(false);
+  // Carrega (ou recarrega) as interações reais do lead selecionado
+  const carregarInteracoes = useCallback(async () => {
     if (!selectedId || !usingSupabase) {
       setInteracoes([]);
       setInteracoesError(false);
       return;
     }
-    let cancelado = false;
-    async function carregarInteracoes() {
-      setLoadingInteracoes(true);
-      setInteracoesError(false);
-      try {
-        const data = await getInteracoesByLead(selectedId!);
-        if (!cancelado) setInteracoes(data);
-      } catch (err) {
-        console.error('Erro ao carregar interações:', err);
-        if (!cancelado) setInteracoesError(true);
-      } finally {
-        if (!cancelado) setLoadingInteracoes(false);
-      }
+    setLoadingInteracoes(true);
+    setInteracoesError(false);
+    try {
+      const data = await getInteracoesByLead(selectedId);
+      setInteracoes(data);
+    } catch (err) {
+      console.error('Erro ao carregar interações:', err);
+      setInteracoesError(true);
+    } finally {
+      setLoadingInteracoes(false);
     }
-    carregarInteracoes();
-    return () => { cancelado = true; };
   }, [selectedId, usingSupabase]);
+
+  // Busca as interações quando o painel abre / troca de lead e reseta a Central
+  useEffect(() => {
+    setShowAllInteracoes(false);
+    setCentralTab('timeline');
+    setShowRegistrar(false);
+    setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' });
+    carregarInteracoes();
+  }, [selectedId, usingSupabase, carregarInteracoes]);
 
   // Lista de empresas para o Kanban
   const activeLeads: Empresa[] = usingSupabase
@@ -231,6 +271,33 @@ export default function PipelinePage() {
         ? (() => { const l = supabaseLeads.find(l => l.id === selectedId); return l ? leadToContato(l) : null; })()
         : mockContatos.find(c => c.empresa_id === selectedId && c.principal) ?? null)
     : null;
+
+  // Lead bruto do Supabase para a Central do Lead (dados 100% reais)
+  const selectedLead: Lead | null = usingSupabase && selectedId
+    ? supabaseLeads.find(l => l.id === selectedId) ?? null
+    : null;
+
+  // Salva uma nova interação manual e recarrega a timeline
+  async function handleRegistrarInteracao() {
+    if (!selectedId || !novaInteracao.descricao.trim()) return;
+    setSalvandoInteracao(true);
+    try {
+      await createInteracao({
+        lead_id: selectedId,
+        tipo: novaInteracao.tipo as Interacao['tipo'],
+        canal: novaInteracao.canal,
+        descricao: novaInteracao.descricao.trim(),
+        origem_acao: 'humano',
+      });
+      setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' });
+      setShowRegistrar(false);
+      await carregarInteracoes();
+    } catch (err) {
+      console.error('Erro ao registrar interação:', err);
+    } finally {
+      setSalvandoInteracao(false);
+    }
+  }
 
   // Timeline mock — usada quando o Supabase não é a fonte ativa ou como fallback de erro
   const fullMockTimeline = selectedId
@@ -745,103 +812,267 @@ export default function PipelinePage() {
             </div>
           </div>
 
-          {/* Modal: histórico completo de interações */}
+          {/* Central do Lead — modal completo */}
           {showAllInteracoes && (
             <div
               className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40"
               onClick={() => setShowAllInteracoes(false)}
             >
               <div
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col"
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col"
                 onClick={e => e.stopPropagation()}
               >
-                <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between">
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-base leading-tight">Histórico de interações</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">{selectedEmpresa.nome}</p>
+                {/* HEADER */}
+                <div className="px-6 py-5 border-b border-gray-100">
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0">
+                      <h2 className="text-xl font-bold text-gray-900 leading-tight">{selectedEmpresa.nome}</h2>
+                      <div className="text-sm text-gray-500 mt-0.5">
+                        {selectedEmpresa.cidade}, {selectedEmpresa.estado} · {selectedEmpresa.segmento}
+                      </div>
+                      {selectedContato && (
+                        <div className="flex items-center gap-1.5 text-sm text-gray-600 mt-1">
+                          <span className="font-semibold text-gray-800">{selectedContato.nome}</span>
+                          <span className="text-gray-300">·</span>
+                          <span className="text-gray-500">{selectedContato.cargo}</span>
+                          <span className="text-gray-300">·</span>
+                          {(() => {
+                            const ci = selectedLead ? CANAL_INFO[selectedLead.canal_preferencial] : null;
+                            const Icon = ci?.Icon ?? Mail;
+                            return (
+                              <span className="inline-flex items-center gap-1 text-gray-600">
+                                <Icon size={13} /> {selectedContato.canal_preferencial}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setShowAllInteracoes(false)}
+                      className="text-gray-400 hover:text-gray-700 transition-colors shrink-0"
+                    >
+                      <X size={20} />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setShowAllInteracoes(false)}
-                    className="text-gray-400 hover:text-gray-700 transition-colors"
-                  >
-                    <X size={18} />
-                  </button>
+
+                  {/* Row de badges informativos */}
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    <div className="flex flex-col bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Responsável</span>
+                      <span className="text-sm font-medium text-gray-700">{selectedEmpresa.responsavel || '—'}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Status</span>
+                      <span className="text-sm font-medium text-gray-700">{getEstagioPipelineLabel(selectedEmpresa.estagio_pipeline as EstagioPipeline)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Último contato</span>
+                      <span className="text-sm font-medium text-gray-700">{selectedLead?.ultimo_contato ? formatDate(selectedLead.ultimo_contato) : '—'}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100 max-w-xs">
+                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Próxima ação</span>
+                      <span className="text-sm font-medium text-gray-700 truncate">{selectedLead?.proxima_acao || '—'}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Canal preferencial</span>
+                      <span className="text-sm font-medium text-gray-700 capitalize">{selectedLead?.canal_preferencial ?? selectedContato?.canal_preferencial ?? '—'}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Score</span>
+                      <span className="text-sm font-bold" style={{ color: scoreColor(selectedLead?.score ?? selectedEmpresa.score_engajamento) }}>
+                        {selectedLead?.score ?? selectedEmpresa.score_engajamento} <span className="text-gray-400 font-normal">/ 100</span>
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-6 py-4">
-                  {showMockTimeline ? (
-                    fullMockTimeline.length === 0 ? (
-                      <p className="text-sm text-gray-400">Nenhuma interação registrada.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {fullMockTimeline.map((entry, i) => (
-                          <div key={i} className="flex items-start gap-3">
-                            <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
-                              {entry.kind === 'abordagem' && (
-                                entry.item.origem_acao === 'automatico'
-                                  ? <Bot size={12} className="text-blue-500" />
-                                  : <User size={12} className="text-green-500" />
-                              )}
-                              {entry.kind === 'resposta' && <MessageSquare size={12} className="text-green-600" />}
-                              {entry.kind === 'followup' && <CheckCircle size={12} className="text-green-600" />}
-                              {entry.kind === 'webhook' && <Zap size={12} className="text-purple-500" />}
+                {/* TABS */}
+                <div className="px-6 border-b border-gray-100 flex gap-1">
+                  {([
+                    { id: 'timeline', label: 'Linha do tempo' },
+                    { id: 'dados', label: 'Dados do lead' },
+                  ] as const).map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setCentralTab(tab.id)}
+                      className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                        centralTab === tab.id
+                          ? 'border-indigo-500 text-indigo-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* CONTEÚDO */}
+                <div className="flex-1 overflow-y-auto px-6 py-5">
+                  {centralTab === 'timeline' ? (
+                    <div>
+                      {/* Botão registrar */}
+                      <div className="mb-4">
+                        <button
+                          onClick={() => setShowRegistrar(v => !v)}
+                          className="flex items-center gap-1.5 text-sm font-medium text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          <Plus size={14} /> Registrar interação
+                        </button>
+
+                        {showRegistrar && (
+                          <div className="mt-3 p-4 rounded-xl border border-gray-200 bg-gray-50 space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-xs font-medium text-gray-500 block mb-1">Tipo</label>
+                                <select
+                                  value={novaInteracao.tipo}
+                                  onChange={e => setNovaInteracao(s => ({ ...s, tipo: e.target.value }))}
+                                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                >
+                                  <option value="abordagem">Abordagem</option>
+                                  <option value="follow_up">Follow-up</option>
+                                  <option value="resposta">Resposta</option>
+                                  <option value="nota">Nota</option>
+                                  <option value="reuniao">Reunião</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-xs font-medium text-gray-500 block mb-1">Canal</label>
+                                <select
+                                  value={novaInteracao.canal}
+                                  onChange={e => setNovaInteracao(s => ({ ...s, canal: e.target.value }))}
+                                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                >
+                                  <option value="email">Email</option>
+                                  <option value="whatsapp">WhatsApp</option>
+                                  <option value="linkedin">LinkedIn</option>
+                                  <option value="telefone">Telefone</option>
+                                </select>
+                              </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm text-gray-700">
-                                {entry.kind === 'abordagem' && `Abordagem via ${entry.item.canal}`}
-                                {entry.kind === 'resposta' && 'Resposta recebida'}
-                                {entry.kind === 'followup' && 'Follow-up registrado'}
-                                {entry.kind === 'webhook' && entry.item.evento.replace(/\s*--\s*etapa\s*\d+/gi, '')}
-                              </div>
-                              <div className="text-xs text-gray-400 mt-0.5">
-                                {new Date(entry.date).toLocaleDateString('pt-BR')}
-                                {entry.kind === 'abordagem' && (
-                                  <span className="ml-1.5">
-                                    {entry.item.origem_acao === 'automatico' ? '· IA' : '· Manual'}
-                                  </span>
-                                )}
-                              </div>
+                            <div>
+                              <label className="text-xs font-medium text-gray-500 block mb-1">Descrição</label>
+                              <textarea
+                                value={novaInteracao.descricao}
+                                onChange={e => setNovaInteracao(s => ({ ...s, descricao: e.target.value }))}
+                                rows={3}
+                                placeholder="Descreva a interação..."
+                                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-none"
+                              />
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => { setShowRegistrar(false); setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' }); }}
+                                className="text-sm font-medium text-gray-600 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                onClick={handleRegistrarInteracao}
+                                disabled={salvandoInteracao || !novaInteracao.descricao.trim()}
+                                className="flex items-center gap-1.5 text-sm font-semibold text-white px-4 py-1.5 rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50"
+                                style={{ backgroundColor: '#6366f1' }}
+                              >
+                                {salvandoInteracao && <Loader2 size={13} className="animate-spin" />}
+                                Salvar
+                              </button>
                             </div>
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )
-                  ) : loadingInteracoes ? (
-                    <div className="flex items-center gap-2 text-gray-400 py-4">
-                      <Loader2 size={15} className="animate-spin" />
-                      <span className="text-sm">Carregando interações...</span>
-                    </div>
-                  ) : interacoes.length === 0 ? (
-                    <p className="text-sm text-gray-400">Nenhuma interação registrada ainda.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {interacoes.map(interacao => {
-                        const cfg = INTERACAO_TIPO[interacao.tipo] ?? INTERACAO_TIPO.nota;
-                        const isIA = interacao.origem_acao === 'ia';
-                        const Icon = isIA ? Bot : cfg.Icon;
-                        return (
-                          <div key={interacao.id} className="flex items-start gap-3">
-                            <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
-                              <Icon size={12} className={isIA ? 'text-blue-500' : cfg.color} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm text-gray-700">
-                                {interacao.descricao || cfg.label}
-                                {interacao.canal && (
-                                  <span className="text-gray-400"> · {interacao.canal}</span>
+
+                      {/* Lista da timeline */}
+                      {loadingInteracoes ? (
+                        <div className="flex items-center gap-2 text-gray-400 py-6">
+                          <Loader2 size={16} className="animate-spin" />
+                          <span className="text-sm">Carregando interações...</span>
+                        </div>
+                      ) : interacoes.length === 0 ? (
+                        <p className="text-sm text-gray-400 py-4">Nenhuma interação registrada ainda.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {interacoes.map(interacao => {
+                            const tipoBadge = getTipoInteracaoBadge(interacao.tipo);
+                            const statusBadge = getStatusInteracao(interacao.tipo);
+                            const canal = interacao.canal ? CANAL_INFO[interacao.canal.toLowerCase()] : null;
+                            const isIA = interacao.origem_acao === 'ia';
+                            return (
+                              <div key={interacao.id} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                                <div className="flex items-start justify-between gap-3 mb-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                                      <Clock size={11} /> {formatDateTime(interacao.created_at)}
+                                    </span>
+                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${tipoBadge.classes}`}>
+                                      {tipoBadge.label}
+                                    </span>
+                                    {canal && (
+                                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${canal.classes}`}>
+                                        <canal.Icon size={11} /> {canal.label}
+                                      </span>
+                                    )}
+                                    {isIA && (
+                                      <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">IA</span>
+                                    )}
+                                  </div>
+                                  {statusBadge && (
+                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${statusBadge.classes}`}>
+                                      {statusBadge.label}
+                                    </span>
+                                  )}
+                                </div>
+                                {interacao.descricao && (
+                                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{interacao.descricao}</p>
                                 )}
-                              </div>
-                              <div className="text-xs text-gray-400 mt-0.5">
-                                {new Date(interacao.created_at).toLocaleDateString('pt-BR')}
-                                <span className="ml-1.5">{isIA ? '· IA' : '· Manual'}</span>
                                 {interacao.usuarios?.nome && (
-                                  <span className="ml-1.5">· {interacao.usuarios.nome}</span>
+                                  <p className="text-xs text-gray-400 mt-1.5">por {interacao.usuarios.nome}</p>
                                 )}
                               </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* ABA DADOS DO LEAD */
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                      {[
+                        { label: 'Empresa', value: selectedLead?.empresa ?? selectedEmpresa.nome },
+                        { label: 'Cidade', value: selectedLead?.cidade ?? selectedEmpresa.cidade },
+                        { label: 'Estado', value: selectedLead?.estado ?? selectedEmpresa.estado },
+                        { label: 'Segmento', value: selectedLead?.segmento ?? selectedEmpresa.segmento },
+                        { label: 'Site', value: selectedLead?.site, isLink: true },
+                        { label: 'LinkedIn', value: selectedLead?.linkedin, isLink: true },
+                        { label: 'Contato Nome', value: selectedLead?.contato_nome ?? selectedContato?.nome },
+                        { label: 'Contato Cargo', value: selectedLead?.contato_cargo ?? selectedContato?.cargo },
+                        { label: 'Contato Email', value: selectedLead?.contato_email ?? selectedContato?.email },
+                        { label: 'Contato Telefone', value: selectedLead?.contato_telefone ?? selectedContato?.telefone },
+                        { label: 'Canal Preferencial', value: selectedLead?.canal_preferencial, capitalize: true },
+                        { label: 'Origem', value: selectedLead?.origem ?? selectedEmpresa.origem },
+                        { label: 'Score', value: selectedLead ? `${selectedLead.score} / 100` : `${selectedEmpresa.score_engajamento} / 100` },
+                        { label: 'Criado em', value: selectedLead?.created_at ? formatDate(selectedLead.created_at) : formatDate(selectedEmpresa.data_entrada) },
+                      ].map(field => (
+                        <div key={field.label} className="border-b border-gray-100 pb-2">
+                          <span className="text-xs text-gray-400 uppercase tracking-wide block mb-0.5">{field.label}</span>
+                          {field.value ? (
+                            field.isLink ? (
+                              <a
+                                href={field.value.startsWith('http') ? field.value : `https://${field.value}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-indigo-600 hover:underline break-all"
+                              >
+                                {field.value}
+                              </a>
+                            ) : (
+                              <span className={`text-sm font-medium text-gray-700 ${field.capitalize ? 'capitalize' : ''}`}>{field.value}</span>
+                            )
+                          ) : (
+                            <span className="text-sm text-gray-300">—</span>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
