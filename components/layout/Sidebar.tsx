@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Kanban,
@@ -12,7 +12,9 @@ import {
   Zap,
   Bot,
   ArrowRight,
+  LogOut,
 } from 'lucide-react';
+import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
 const BRAND_NAVY = '#1e3a5f';
 const BRAND_NAVY_ACTIVE = '#2d5a8e';
@@ -27,9 +29,17 @@ const mainNav = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + '/');
+
+  async function handleLogout() {
+    const supabase = createSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
+  }
 
   return (
     <aside
@@ -115,6 +125,16 @@ export default function Sidebar() {
           <Settings size={18} strokeWidth={1.8} />
           Configurações
         </Link>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors w-full mt-0.5"
+          style={{ color: 'rgba(186,210,255,0.75)' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.07)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+        >
+          <LogOut size={18} strokeWidth={1.8} />
+          Sair
+        </button>
       </div>
     </aside>
   );
