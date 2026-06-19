@@ -72,6 +72,19 @@ export async function atualizarEstagio(leadId: string, novoEstagio: string): Pro
   if (error) throw error
 }
 
+// Dispara o n8n para executar a próxima etapa da cadência do lead
+export async function executarAcao(leadId: string): Promise<{ ok: boolean; estagio?: string; erro?: string }> {
+  const url = process.env.NEXT_PUBLIC_N8N_EXECUTAR_ACAO_URL
+  if (!url) throw new Error('NEXT_PUBLIC_N8N_EXECUTAR_ACAO_URL não configurada')
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lead_id: leadId }),
+  })
+  if (!res.ok) throw new Error(`Erro n8n: ${res.status}`)
+  return res.json()
+}
+
 // Registra uma interação/nota no histórico
 export async function registrarNota(leadId: string, descricao: string, tipo: string = 'nota'): Promise<void> {
   const { error } = await supabase

@@ -10,7 +10,7 @@ import {
 import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatDate, formatDateTime } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
 import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
-import { getLeads, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota } from '@/lib/api';
+import { getLeads, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao } from '@/lib/api';
 import type { Lead, Interacao } from '@/lib/supabase';
 
 const TODAY = '2026-06-16';
@@ -201,6 +201,8 @@ export default function PipelinePage() {
   const [novaInteracao, setNovaInteracao] = useState({ tipo: 'abordagem', canal: 'email', descricao: '' });
   const [salvandoInteracao, setSalvandoInteracao] = useState(false);
   const [confirmandoPerdido, setConfirmandoPerdido] = useState(false);
+  const [executando, setExecutando] = useState(false);
+  const [feedbackAcao, setFeedbackAcao] = useState<string | null>(null);
 
   // Carrega (ou recarrega) os leads do kanban
   const carregarLeads = useCallback(async () => {
@@ -248,6 +250,7 @@ export default function PipelinePage() {
     setCentralTab('timeline');
     setShowRegistrar(false);
     setConfirmandoPerdido(false);
+    setFeedbackAcao(null);
     setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' });
     carregarInteracoes();
   }, [selectedId, usingSupabase, carregarInteracoes]);
@@ -334,6 +337,24 @@ export default function PipelinePage() {
       console.error('Erro ao marcar como perdido:', err);
       setConfirmandoPerdido(false);
       alert('Erro ao marcar como perdido. Tente novamente.');
+    }
+  }
+
+  // Dispara o n8n para executar a próxima etapa da cadência do lead
+  async function handleExecutarAcao() {
+    if (!selectedId) return;
+    setExecutando(true);
+    setFeedbackAcao(null);
+    try {
+      const result = await executarAcao(selectedId);
+      setFeedbackAcao(`✓ Ação executada! Estágio: ${result.estagio ?? 'atualizado'}`);
+      await carregarLeads();
+      await carregarInteracoes();
+    } catch (err) {
+      console.error('Erro ao executar ação:', err);
+      setFeedbackAcao('✗ Erro ao executar ação. Tente novamente.');
+    } finally {
+      setExecutando(false);
     }
   }
 
@@ -664,22 +685,38 @@ export default function PipelinePage() {
                     <span className="ml-auto text-xs font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Atrasada</span>
                   )}
                 </div>
-                <div className={`rounded-xl px-3 py-2 mb-2 ${isActionDelayed ? 'bg-red-50' : 'bg-indigo-50'}`}>
+                <button
+                  type="button"
+                  onClick={handleExecutarAcao}
+                  disabled={executando}
+                  title="Executar próxima etapa da cadência"
+                  className={`w-full text-left rounded-xl px-3 py-2 mb-2 transition-colors disabled:opacity-60 ${isActionDelayed ? 'bg-red-50 hover:bg-red-100' : 'bg-indigo-50 hover:bg-indigo-100'}`}
+                >
                   <p className={`text-sm font-semibold leading-snug ${isActionDelayed ? 'text-red-900' : 'text-indigo-900'}`}>
                     {selectedEmpresa.observacoes ?? AI_ACTIONS[selectedEmpresa.id]?.action ?? 'Executar próxima etapa da cadência'}
                   </p>
-                </div>
+                </button>
                 <button className="w-full text-xs font-medium text-gray-600 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors mb-2">
                   Registrar ação
                 </button>
                 <div className="flex gap-2">
-                  <button className="flex-1 text-xs font-semibold text-white py-1.5 rounded-lg transition-opacity hover:opacity-90" style={{ backgroundColor: '#6366f1' }}>
-                    Executar ação
+                  <button
+                    onClick={handleExecutarAcao}
+                    disabled={executando}
+                    className="flex-1 text-xs font-semibold text-white py-1.5 rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50"
+                    style={{ backgroundColor: '#6366f1' }}
+                  >
+                    {executando ? 'Executando...' : 'Executar ação'}
                   </button>
                   <button className="flex-1 text-xs font-medium text-gray-600 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
                     Gerar mensagem
                   </button>
                 </div>
+                {feedbackAcao && (
+                  <p className={`text-xs mt-2 ${feedbackAcao.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>
+                    {feedbackAcao}
+                  </p>
+                )}
               </div>
 
               {/* Resumo IA */}
