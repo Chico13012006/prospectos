@@ -10,7 +10,7 @@ import {
 import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatDate, formatDateTime } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
 import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
-import { getLeads, getInteracoesByLead, createInteracao } from '@/lib/api';
+import { getLeads, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota } from '@/lib/api';
 import type { Lead, Interacao } from '@/lib/supabase';
 
 const TODAY = '2026-06-16';
@@ -200,21 +200,24 @@ export default function PipelinePage() {
   const [showRegistrar, setShowRegistrar] = useState(false);
   const [novaInteracao, setNovaInteracao] = useState({ tipo: 'abordagem', canal: 'email', descricao: '' });
   const [salvandoInteracao, setSalvandoInteracao] = useState(false);
+  const [confirmandoPerdido, setConfirmandoPerdido] = useState(false);
+
+  // Carrega (ou recarrega) os leads do kanban
+  const carregarLeads = useCallback(async () => {
+    try {
+      const data = await getLeads();
+      setSupabaseLeads(data);
+    } catch (err) {
+      console.error('Erro ao carregar leads:', err);
+      setUseFallback(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function carregar() {
-      try {
-        const data = await getLeads();
-        setSupabaseLeads(data);
-      } catch (err) {
-        console.error('Erro ao carregar leads:', err);
-        setUseFallback(true);
-      } finally {
-        setLoading(false);
-      }
-    }
-    carregar();
-  }, []);
+    carregarLeads();
+  }, [carregarLeads]);
 
   // Supabase é fonte ativa quando carregou sem erro (mesmo que vazio)
   const usingSupabase = !useFallback && !loading;
@@ -244,6 +247,7 @@ export default function PipelinePage() {
     setShowAllInteracoes(false);
     setCentralTab('timeline');
     setShowRegistrar(false);
+    setConfirmandoPerdido(false);
     setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' });
     carregarInteracoes();
   }, [selectedId, usingSupabase, carregarInteracoes]);
@@ -296,6 +300,40 @@ export default function PipelinePage() {
       console.error('Erro ao registrar interação:', err);
     } finally {
       setSalvandoInteracao(false);
+    }
+  }
+
+  // Move o lead para outro estágio, registra a nota e atualiza a UI
+  async function handleMoverEstagio(novoEstagio: string) {
+    if (!selectedId || !novoEstagio) return;
+    try {
+      await atualizarEstagio(selectedId, novoEstagio);
+      await registrarNota(selectedId, `Estágio alterado manualmente para: ${novoEstagio}`);
+      await carregarLeads();
+      await carregarInteracoes();
+    } catch (err) {
+      console.error('Erro ao mover estágio:', err);
+      alert('Erro ao mover estágio. Tente novamente.');
+    }
+  }
+
+  // Marca o lead como perdido (confirmação em dois cliques)
+  async function handleMarcarPerdido() {
+    if (!selectedId) return;
+    if (!confirmandoPerdido) {
+      setConfirmandoPerdido(true);
+      return;
+    }
+    try {
+      await atualizarEstagio(selectedId, 'perdido');
+      await registrarNota(selectedId, 'Lead marcado como perdido manualmente.');
+      setConfirmandoPerdido(false);
+      await carregarLeads();
+      setSelectedId(null);
+    } catch (err) {
+      console.error('Erro ao marcar como perdido:', err);
+      setConfirmandoPerdido(false);
+      alert('Erro ao marcar como perdido. Tente novamente.');
     }
   }
 
@@ -800,14 +838,27 @@ export default function PipelinePage() {
 
             {/* Footer */}
             <div className="px-5 py-4 border-t border-gray-100 flex items-center gap-2.5 bg-gray-50">
-              <select className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-600 focus:outline-none">
-                <option value="">Mover para outro estágio</option>
-                {STAGES.filter(s => s.id !== selectedEmpresa.estagio_pipeline).map(s => (
+              <select
+                value={selectedLead?.estagio ?? selectedEmpresa.estagio_pipeline ?? ''}
+                onChange={(e) => handleMoverEstagio(e.target.value)}
+                className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-600 focus:outline-none"
+              >
+                <option value="" disabled>Mover para outro estágio</option>
+                {STAGES.map(s => (
                   <option key={s.id} value={s.id}>{s.label}</option>
                 ))}
+                <option value="perdido">Perdido</option>
               </select>
-              <button className="text-sm font-medium text-red-600 border border-red-200 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 transition-colors whitespace-nowrap">
-                Marcar como perdido
+              <button
+                onClick={handleMarcarPerdido}
+                onBlur={() => setConfirmandoPerdido(false)}
+                className={`text-sm font-medium px-3 py-2 rounded-lg transition-colors whitespace-nowrap ${
+                  confirmandoPerdido
+                    ? 'bg-red-600 text-white hover:bg-red-700 border border-red-600'
+                    : 'text-red-600 border border-red-200 bg-red-50 hover:bg-red-100'
+                }`}
+              >
+                {confirmandoPerdido ? 'Confirmar perda?' : 'Marcar como perdido'}
               </button>
             </div>
           </div>

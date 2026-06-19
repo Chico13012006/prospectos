@@ -60,6 +60,32 @@ export async function updateLeadEstagio(id: string, estagio: Lead['estagio']): P
   if (error) throw error
 }
 
+// Atualiza o estágio de um lead e registra o último contato
+export async function atualizarEstagio(leadId: string, novoEstagio: string): Promise<void> {
+  const { error } = await supabase
+    .from('leads')
+    .update({
+      estagio: novoEstagio,
+      ultimo_contato: new Date().toISOString(),
+    })
+    .eq('id', leadId)
+  if (error) throw error
+}
+
+// Registra uma interação/nota no histórico
+export async function registrarNota(leadId: string, descricao: string, tipo: string = 'nota'): Promise<void> {
+  const { error } = await supabase
+    .from('interacoes')
+    .insert({
+      lead_id: leadId,
+      tipo,
+      canal: 'plataforma',
+      descricao,
+      origem_acao: 'manual',
+    })
+  if (error) throw error
+}
+
 // --- INTERACOES ---
 
 export async function getInteracoesByLead(leadId: string): Promise<Interacao[]> {
