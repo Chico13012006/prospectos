@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import Link from 'next/link';
 import {
   Settings, Plus, Search, X, Star, ExternalLink, Mail, Phone,
   MessageSquare, Bot, User, ArrowRight, CheckCircle,
@@ -163,6 +162,7 @@ export default function PipelinePage() {
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
   const [loadingInteracoes, setLoadingInteracoes] = useState(false);
   const [interacoesError, setInteracoesError] = useState(false);
+  const [showAllInteracoes, setShowAllInteracoes] = useState(false);
 
   useEffect(() => {
     async function carregar() {
@@ -184,6 +184,7 @@ export default function PipelinePage() {
 
   // Busca as interações reais do lead selecionado quando o painel abre
   useEffect(() => {
+    setShowAllInteracoes(false);
     if (!selectedId || !usingSupabase) {
       setInteracoes([]);
       setInteracoesError(false);
@@ -232,9 +233,10 @@ export default function PipelinePage() {
     : null;
 
   // Timeline mock — usada quando o Supabase não é a fonte ativa ou como fallback de erro
-  const mockTimeline = selectedId
-    ? [...getTimelineForEmpresa(selectedId)].reverse().slice(0, 6)
+  const fullMockTimeline = selectedId
+    ? [...getTimelineForEmpresa(selectedId)].reverse()
     : [];
+  const mockTimeline = fullMockTimeline.slice(0, 6);
   // Renderiza o histórico mock quando não há Supabase ativo ou quando a busca falhou
   const showMockTimeline = !usingSupabase || interacoesError;
 
@@ -605,9 +607,13 @@ export default function PipelinePage() {
               <div className="px-5 py-4 border-b border-gray-100">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Histórico de interações</span>
-                  <Link href={`/leads/${selectedEmpresa.id}`} className="text-xs text-indigo-600 hover:underline flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllInteracoes(true)}
+                    className="text-xs text-indigo-600 hover:underline flex items-center gap-0.5"
+                  >
                     Ver tudo <ArrowRight size={10} />
-                  </Link>
+                  </button>
                 </div>
                 {showMockTimeline ? (
                   mockTimeline.length === 0 ? (
@@ -738,6 +744,110 @@ export default function PipelinePage() {
               </button>
             </div>
           </div>
+
+          {/* Modal: histórico completo de interações */}
+          {showAllInteracoes && (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40"
+              onClick={() => setShowAllInteracoes(false)}
+            >
+              <div
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between">
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-base leading-tight">Histórico de interações</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">{selectedEmpresa.nome}</p>
+                  </div>
+                  <button
+                    onClick={() => setShowAllInteracoes(false)}
+                    className="text-gray-400 hover:text-gray-700 transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-6 py-4">
+                  {showMockTimeline ? (
+                    fullMockTimeline.length === 0 ? (
+                      <p className="text-sm text-gray-400">Nenhuma interação registrada.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {fullMockTimeline.map((entry, i) => (
+                          <div key={i} className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
+                              {entry.kind === 'abordagem' && (
+                                entry.item.origem_acao === 'automatico'
+                                  ? <Bot size={12} className="text-blue-500" />
+                                  : <User size={12} className="text-green-500" />
+                              )}
+                              {entry.kind === 'resposta' && <MessageSquare size={12} className="text-green-600" />}
+                              {entry.kind === 'followup' && <CheckCircle size={12} className="text-green-600" />}
+                              {entry.kind === 'webhook' && <Zap size={12} className="text-purple-500" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm text-gray-700">
+                                {entry.kind === 'abordagem' && `Abordagem via ${entry.item.canal}`}
+                                {entry.kind === 'resposta' && 'Resposta recebida'}
+                                {entry.kind === 'followup' && 'Follow-up registrado'}
+                                {entry.kind === 'webhook' && entry.item.evento.replace(/\s*--\s*etapa\s*\d+/gi, '')}
+                              </div>
+                              <div className="text-xs text-gray-400 mt-0.5">
+                                {new Date(entry.date).toLocaleDateString('pt-BR')}
+                                {entry.kind === 'abordagem' && (
+                                  <span className="ml-1.5">
+                                    {entry.item.origem_acao === 'automatico' ? '· IA' : '· Manual'}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : loadingInteracoes ? (
+                    <div className="flex items-center gap-2 text-gray-400 py-4">
+                      <Loader2 size={15} className="animate-spin" />
+                      <span className="text-sm">Carregando interações...</span>
+                    </div>
+                  ) : interacoes.length === 0 ? (
+                    <p className="text-sm text-gray-400">Nenhuma interação registrada ainda.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {interacoes.map(interacao => {
+                        const cfg = INTERACAO_TIPO[interacao.tipo] ?? INTERACAO_TIPO.nota;
+                        const isIA = interacao.origem_acao === 'ia';
+                        const Icon = isIA ? Bot : cfg.Icon;
+                        return (
+                          <div key={interacao.id} className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
+                              <Icon size={12} className={isIA ? 'text-blue-500' : cfg.color} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm text-gray-700">
+                                {interacao.descricao || cfg.label}
+                                {interacao.canal && (
+                                  <span className="text-gray-400"> · {interacao.canal}</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-400 mt-0.5">
+                                {new Date(interacao.created_at).toLocaleDateString('pt-BR')}
+                                <span className="ml-1.5">{isIA ? '· IA' : '· Manual'}</span>
+                                {interacao.usuarios?.nome && (
+                                  <span className="ml-1.5">· {interacao.usuarios.nome}</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
