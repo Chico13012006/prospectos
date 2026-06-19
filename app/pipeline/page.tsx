@@ -61,7 +61,7 @@ function leadToEmpresa(lead: Lead): Empresa {
     cidade: lead.cidade,
     estado: lead.estado,
     website: lead.site ?? undefined,
-    responsavel: lead.responsavel_id ?? '',
+    responsavel: lead.usuarios?.nome ?? lead.responsavel_id ?? '',
     status: 'em_prospeccao',
     estagio_pipeline: lead.estagio as Empresa['estagio_pipeline'],
     em_cadencia: false,

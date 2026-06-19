@@ -2,13 +2,22 @@ import { supabase, Lead, Interacao, Usuario, Template } from './supabase'
 
 // --- LEADS ---
 
-export async function getLeads(): Promise<Lead[]> {
+export async function getLeads() {
   const { data, error } = await supabase
     .from('leads')
-    .select('*')
-    .eq('perdido', false)
+    .select(`
+      *,
+      usuarios:responsavel_id (
+        id,
+        nome
+      )
+    `)
     .order('created_at', { ascending: false })
-  if (error) throw error
+
+  if (error) {
+    console.error('Erro ao buscar leads:', error)
+    return []
+  }
   return data || []
 }
 
