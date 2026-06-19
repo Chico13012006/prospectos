@@ -21,8 +21,14 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({ lead_id: body.lead_id }),
     });
 
-    const data = await n8nRes.json();
-    return NextResponse.json(data, { status: n8nRes.ok ? 200 : 500 });
+    let data: Record<string, unknown> = {};
+    try {
+      const text = await n8nRes.text();
+      if (text) data = JSON.parse(text);
+    } catch {
+      // n8n retornou resposta vazia ou não-JSON — tudo bem
+    }
+    return NextResponse.json({ ok: n8nRes.ok, ...data }, { status: n8nRes.ok ? 200 : 500 });
 
   } catch (err) {
     console.error('[executar-acao] erro interno:', err);
