@@ -81,7 +81,7 @@ export async function registrarNota(leadId: string, descricao: string, tipo: str
       tipo,
       canal: 'plataforma',
       descricao,
-      origem_acao: 'manual',
+      origem_acao: 'humano',
     })
   if (error) throw error
 }
