@@ -47,6 +47,10 @@ export type Interacao = {
   origem_acao: 'ia' | 'humano'
   responsavel_id?: string
   created_at: string
+  usuarios?: {
+    id: string
+    nome: string
+  } | null
 }
 
 export type Usuario = {

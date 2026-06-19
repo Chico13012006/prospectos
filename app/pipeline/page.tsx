@@ -11,8 +11,8 @@ import {
 import { getStatusLabel, getStatusBadgeClasses } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
 import type { Empresa, Contato } from '@/lib/types';
-import { getLeads } from '@/lib/api';
-import type { Lead } from '@/lib/supabase';
+import { getLeads, getInteracoesByLead } from '@/lib/api';
+import type { Lead, Interacao } from '@/lib/supabase';
 
 const TODAY = '2026-06-16';
 
@@ -103,6 +103,15 @@ function daysBetween(a: string, b: string) {
   );
 }
 
+// Rótulo e ícone por tipo de interação vinda do Supabase
+const INTERACAO_TIPO: Record<string, { label: string; Icon: typeof Bot; color: string }> = {
+  abordagem: { label: 'Abordagem', Icon: User, color: 'text-green-500' },
+  resposta: { label: 'Resposta recebida', Icon: MessageSquare, color: 'text-green-600' },
+  follow_up: { label: 'Follow-up registrado', Icon: CheckCircle, color: 'text-green-600' },
+  nota: { label: 'Nota', Icon: FileText, color: 'text-gray-500' },
+  reuniao: { label: 'Reunião', Icon: Bell, color: 'text-purple-500' },
+};
+
 function LeadCard({ empresa, onClick }: { empresa: Empresa; onClick: () => void }) {
   const timeSince = empresa.ultimo_contato
     ? daysBetween(empresa.ultimo_contato, TODAY)
@@ -151,6 +160,9 @@ export default function PipelinePage() {
   const [supabaseLeads, setSupabaseLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [useFallback, setUseFallback] = useState(false);
+  const [interacoes, setInteracoes] = useState<Interacao[]>([]);
+  const [loadingInteracoes, setLoadingInteracoes] = useState(false);
+  const [interacoesError, setInteracoesError] = useState(false);
 
   useEffect(() => {
     async function carregar() {
@@ -169,6 +181,31 @@ export default function PipelinePage() {
 
   // Supabase é fonte ativa quando carregou sem erro (mesmo que vazio)
   const usingSupabase = !useFallback && !loading;
+
+  // Busca as interações reais do lead selecionado quando o painel abre
+  useEffect(() => {
+    if (!selectedId || !usingSupabase) {
+      setInteracoes([]);
+      setInteracoesError(false);
+      return;
+    }
+    let cancelado = false;
+    async function carregarInteracoes() {
+      setLoadingInteracoes(true);
+      setInteracoesError(false);
+      try {
+        const data = await getInteracoesByLead(selectedId!);
+        if (!cancelado) setInteracoes(data);
+      } catch (err) {
+        console.error('Erro ao carregar interações:', err);
+        if (!cancelado) setInteracoesError(true);
+      } finally {
+        if (!cancelado) setLoadingInteracoes(false);
+      }
+    }
+    carregarInteracoes();
+    return () => { cancelado = true; };
+  }, [selectedId, usingSupabase]);
 
   // Lista de empresas para o Kanban
   const activeLeads: Empresa[] = usingSupabase
@@ -194,10 +231,12 @@ export default function PipelinePage() {
         : mockContatos.find(c => c.empresa_id === selectedId && c.principal) ?? null)
     : null;
 
-  // Timeline disponível apenas com dados mock (interacoes Supabase ainda não conectadas)
-  const selectedTimeline = selectedId && !usingSupabase
+  // Timeline mock — usada quando o Supabase não é a fonte ativa ou como fallback de erro
+  const mockTimeline = selectedId
     ? [...getTimelineForEmpresa(selectedId)].reverse().slice(0, 6)
     : [];
+  // Renderiza o histórico mock quando não há Supabase ativo ou quando a busca falhou
+  const showMockTimeline = !usingSupabase || interacoesError;
 
   const panelTimeSince = selectedEmpresa
     ? (selectedEmpresa.ultimo_contato
@@ -570,40 +609,79 @@ export default function PipelinePage() {
                     Ver tudo <ArrowRight size={10} />
                   </Link>
                 </div>
-                {selectedTimeline.length === 0 ? (
-                  <p className="text-xs text-gray-400">Nenhuma interação registrada.</p>
+                {showMockTimeline ? (
+                  mockTimeline.length === 0 ? (
+                    <p className="text-xs text-gray-400">Nenhuma interação registrada.</p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {mockTimeline.map((entry, i) => (
+                        <div key={i} className="flex items-start gap-2.5">
+                          <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
+                            {entry.kind === 'abordagem' && (
+                              entry.item.origem_acao === 'automatico'
+                                ? <Bot size={10} className="text-blue-500" />
+                                : <User size={10} className="text-green-500" />
+                            )}
+                            {entry.kind === 'resposta' && <MessageSquare size={10} className="text-green-600" />}
+                            {entry.kind === 'followup' && <CheckCircle size={10} className="text-green-600" />}
+                            {entry.kind === 'webhook' && <Zap size={10} className="text-purple-500" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs text-gray-700">
+                              {entry.kind === 'abordagem' && `Abordagem via ${entry.item.canal}`}
+                              {entry.kind === 'resposta' && 'Resposta recebida'}
+                              {entry.kind === 'followup' && 'Follow-up registrado'}
+                              {entry.kind === 'webhook' && entry.item.evento.replace(/\s*--\s*etapa\s*\d+/gi, '')}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {new Date(entry.date).toLocaleDateString('pt-BR')}
+                              {entry.kind === 'abordagem' && (
+                                <span className="ml-1.5">
+                                  {entry.item.origem_acao === 'automatico' ? '· IA' : '· Manual'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : loadingInteracoes ? (
+                  <div className="flex items-center gap-2 text-gray-400 py-2">
+                    <Loader2 size={13} className="animate-spin" />
+                    <span className="text-xs">Carregando interações...</span>
+                  </div>
+                ) : interacoes.length === 0 ? (
+                  <p className="text-xs text-gray-400">Nenhuma interação registrada ainda.</p>
                 ) : (
                   <div className="space-y-2.5">
-                    {selectedTimeline.map((entry, i) => (
-                      <div key={i} className="flex items-start gap-2.5">
-                        <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
-                          {entry.kind === 'abordagem' && (
-                            entry.item.origem_acao === 'automatico'
-                              ? <Bot size={10} className="text-blue-500" />
-                              : <User size={10} className="text-green-500" />
-                          )}
-                          {entry.kind === 'resposta' && <MessageSquare size={10} className="text-green-600" />}
-                          {entry.kind === 'followup' && <CheckCircle size={10} className="text-green-600" />}
-                          {entry.kind === 'webhook' && <Zap size={10} className="text-purple-500" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs text-gray-700">
-                            {entry.kind === 'abordagem' && `Abordagem via ${entry.item.canal}`}
-                            {entry.kind === 'resposta' && 'Resposta recebida'}
-                            {entry.kind === 'followup' && 'Follow-up registrado'}
-                            {entry.kind === 'webhook' && entry.item.evento.replace(/\s*--\s*etapa\s*\d+/gi, '')}
+                    {interacoes.map(interacao => {
+                      const cfg = INTERACAO_TIPO[interacao.tipo] ?? INTERACAO_TIPO.nota;
+                      const isIA = interacao.origem_acao === 'ia';
+                      const Icon = isIA ? Bot : cfg.Icon;
+                      return (
+                        <div key={interacao.id} className="flex items-start gap-2.5">
+                          <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
+                            <Icon size={10} className={isIA ? 'text-blue-500' : cfg.color} />
                           </div>
-                          <div className="text-xs text-gray-400">
-                            {new Date(entry.date).toLocaleDateString('pt-BR')}
-                            {entry.kind === 'abordagem' && (
-                              <span className="ml-1.5">
-                                {entry.item.origem_acao === 'automatico' ? '· IA' : '· Manual'}
-                              </span>
-                            )}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs text-gray-700">
+                              {interacao.descricao || cfg.label}
+                              {interacao.canal && (
+                                <span className="text-gray-400"> · {interacao.canal}</span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {new Date(interacao.created_at).toLocaleDateString('pt-BR')}
+                              <span className="ml-1.5">{isIA ? '· IA' : '· Manual'}</span>
+                              {interacao.usuarios?.nome && (
+                                <span className="ml-1.5">· {interacao.usuarios.nome}</span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

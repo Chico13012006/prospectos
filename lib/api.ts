@@ -65,7 +65,13 @@ export async function updateLeadEstagio(id: string, estagio: Lead['estagio']): P
 export async function getInteracoesByLead(leadId: string): Promise<Interacao[]> {
   const { data, error } = await supabase
     .from('interacoes')
-    .select('*')
+    .select(`
+      *,
+      usuarios:responsavel_id (
+        id,
+        nome
+      )
+    `)
     .eq('lead_id', leadId)
     .order('created_at', { ascending: false })
   if (error) throw error
