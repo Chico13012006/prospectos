@@ -7,8 +7,8 @@ import Sidebar from './Sidebar';
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  // A página de login é renderizada em tela cheia, sem o sidebar
-  if (pathname === '/login') {
+  // Páginas de autenticação são renderizadas em tela cheia, sem o sidebar
+  if (pathname === '/login' || pathname === '/definir-senha') {
     return <>{children}</>;
   }
 

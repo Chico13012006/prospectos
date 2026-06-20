@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
 
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/login`,
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/definir-senha`,
     });
 
     if (error) return NextResponse.json({ erro: error.message }, { status: 400 });
