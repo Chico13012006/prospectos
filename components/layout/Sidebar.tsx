@@ -13,6 +13,7 @@ import {
   Bot,
   ArrowRight,
   LogOut,
+  User,
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
@@ -108,6 +109,23 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="px-3 py-3 border-t border-white/10">
+        <Link
+          href="/perfil"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
+          style={{
+            backgroundColor: isActive('/perfil') ? BRAND_NAVY_ACTIVE : 'transparent',
+            color: isActive('/perfil') ? '#ffffff' : 'rgba(186,210,255,0.75)',
+          }}
+          onMouseEnter={e => {
+            if (!isActive('/perfil')) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.07)';
+          }}
+          onMouseLeave={e => {
+            if (!isActive('/perfil')) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+          }}
+        >
+          <User size={18} strokeWidth={1.8} />
+          Perfil
+        </Link>
         <Link
           href="/configuracoes"
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
