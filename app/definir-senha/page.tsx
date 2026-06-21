@@ -67,7 +67,7 @@ export default function DefinirSenhaPage() {
       return;
     }
 
-    router.push('/pipeline');
+    router.push('/meu-perfil');
     router.refresh();
   }
 

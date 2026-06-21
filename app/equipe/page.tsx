@@ -13,6 +13,7 @@ interface Membro {
   last_sign_in_at: string | null;
   created_at: string;
   total_leads: number;
+  avatar_url: string | null;
 }
 
 const NICHOS = [
@@ -57,9 +58,9 @@ const BARRA_CORES: Record<string, string> = {
   'Todos os nichos': 'bg-indigo-500',
 };
 
-function iniciais(nome: string | null, email: string) {
-  if (nome) return nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
-  return email.slice(0, 2).toUpperCase();
+function avatarUrl(nome: string | null, email: string) {
+  const seed = nome || email;
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(seed)}&background=6366f1&color=fff&size=64&bold=true`;
 }
 
 function formatarAcesso(data: string | null) {
@@ -288,9 +289,11 @@ export default function EquipePage() {
                     {/* Pessoa */}
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold text-xs flex-shrink-0">
-                          {iniciais(m.nome, m.email)}
-                        </div>
+                        <img
+                          src={m.avatar_url || avatarUrl(m.nome, m.email)}
+                          alt={m.nome || m.email}
+                          className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                        />
                         <div>
                           <p className="font-medium text-gray-900">{m.nome || '—'}</p>
                           <p className="text-xs text-gray-500">{m.email}</p>

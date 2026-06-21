@@ -15,7 +15,7 @@ export async function GET() {
     if (error) return NextResponse.json({ erro: error.message }, { status: 400 });
 
     const { data: perfis } = await supabaseAdmin
-      .from('perfis').select('id, nome, role, nicho');
+      .from('perfis').select('id, nome, role, nicho, avatar_url');
 
     const supabasePublic = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,6 +36,7 @@ export async function GET() {
         last_sign_in_at: u.last_sign_in_at,
         created_at: u.created_at,
         total_leads: totalLeads,
+        avatar_url: perfil?.avatar_url || null,
       };
     });
 
