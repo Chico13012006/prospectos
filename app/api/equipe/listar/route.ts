@@ -21,11 +21,29 @@ export async function GET() {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
-    const { data: leads } = await supabasePublic.from('leads').select('responsavel');
+    // Os leads são atribuídos a um responsável da tabela `usuarios` via
+    // `responsavel_id` (UUID). Já os membros da equipe são usuários de auth.
+    // A ligação entre os dois é feita pelo e-mail.
+    const { data: usuarios } = await supabasePublic
+      .from('usuarios').select('id, email');
+    const { data: leads } = await supabasePublic
+      .from('leads').select('responsavel_id');
+
+    // responsavel_id (usuarios.id) -> email
+    const emailPorResponsavel = new Map(
+      (usuarios ?? []).map(usr => [usr.id, usr.email?.toLowerCase() ?? null])
+    );
+    // e-mail -> total de leads atribuídos
+    const leadsPorEmail = new Map<string, number>();
+    for (const l of leads ?? []) {
+      const email = emailPorResponsavel.get(l.responsavel_id);
+      if (!email) continue;
+      leadsPorEmail.set(email, (leadsPorEmail.get(email) ?? 0) + 1);
+    }
 
     const membros = authData.users.map(u => {
       const perfil = perfis?.find(p => p.id === u.id);
-      const totalLeads = leads?.filter(l => l.responsavel === u.email).length ?? 0;
+      const totalLeads = u.email ? (leadsPorEmail.get(u.email.toLowerCase()) ?? 0) : 0;
       return {
         id: u.id,
         email: u.email,
