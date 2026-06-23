@@ -106,19 +106,19 @@ export default function PerfilPage() {
   const fotoExibida = avatarPreview || avatarUrl(nome || null, email);
 
   if (carregando) {
-    return <div className="p-6 text-sm text-gray-400">Carregando...</div>;
+    return <div className="p-6 text-sm text-slate-500">Carregando...</div>;
   }
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Meu Perfil</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Gerencie suas informações e credenciais de acesso.</p>
+        <h1 className="text-2xl font-bold text-slate-100">Meu Perfil</h1>
+        <p className="text-slate-400 text-sm mt-0.5">Gerencie suas informações e credenciais de acesso.</p>
       </div>
 
       {/* Foto e dados */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-base font-semibold text-gray-900 mb-5 flex items-center gap-2">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] p-6">
+        <h2 className="text-base font-semibold text-slate-100 mb-5 flex items-center gap-2">
           <User size={17} /> Informações pessoais
         </h2>
 
@@ -129,7 +129,7 @@ export default function PerfilPage() {
               <img
                 src={fotoExibida}
                 alt="Avatar"
-                className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md"
+                className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-none"
               />
               <button
                 type="button"
@@ -144,12 +144,12 @@ export default function PerfilPage() {
               </button>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-700">{nome || 'Sem nome'}</p>
-              <p className="text-xs text-gray-400">{email}</p>
+              <p className="text-sm font-medium text-slate-300">{nome || 'Sem nome'}</p>
+              <p className="text-xs text-slate-500">{email}</p>
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="text-xs text-indigo-600 hover:underline mt-1"
+                className="text-xs text-indigo-400 hover:underline mt-1"
               >
                 Alterar foto
               </button>
@@ -159,29 +159,29 @@ export default function PerfilPage() {
 
           {/* Email (readonly) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
             <input
               type="email" value={email} disabled
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
+              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm bg-[#0f1117] text-slate-500 cursor-not-allowed"
             />
           </div>
 
           {/* Nome */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Nome completo</label>
             <input
               type="text" value={nome} onChange={e => setNome(e.target.value)} required
               placeholder="Seu nome"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
           {/* Nicho */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nicho / Segmento</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Nicho / Segmento</label>
             <select
               value={nicho} onChange={e => setNicho(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#1a1f2e]"
             >
               <option value="">Selecione seu segmento</option>
               {NICHOS.map(n => <option key={n} value={n}>{n}</option>)}
@@ -189,7 +189,7 @@ export default function PerfilPage() {
           </div>
 
           {feedbackPerfil && (
-            <p className={`text-sm ${feedbackPerfil.tipo === 'sucesso' ? 'text-green-600' : 'text-red-500'}`}>
+            <p className={`text-sm ${feedbackPerfil.tipo === 'sucesso' ? 'text-green-400' : 'text-red-500'}`}>
               {feedbackPerfil.tipo === 'sucesso' ? '✓' : '✗'} {feedbackPerfil.msg}
             </p>
           )}
@@ -205,38 +205,38 @@ export default function PerfilPage() {
       </div>
 
       {/* Alterar senha */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-base font-semibold text-gray-900 mb-5 flex items-center gap-2">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] p-6">
+        <h2 className="text-base font-semibold text-slate-100 mb-5 flex items-center gap-2">
           <Lock size={17} /> Alterar senha
         </h2>
 
         <form onSubmit={handleAlterarSenha} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nova senha</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Nova senha</label>
             <input
               type="password" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} required
               placeholder="••••••••" minLength={6}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar nova senha</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Confirmar nova senha</label>
             <input
               type="password" value={confirmarSenha} onChange={e => setConfirmarSenha(e.target.value)} required
               placeholder="••••••••" minLength={6}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
           {feedbackSenha && (
-            <p className={`text-sm ${feedbackSenha.tipo === 'sucesso' ? 'text-green-600' : 'text-red-500'}`}>
+            <p className={`text-sm ${feedbackSenha.tipo === 'sucesso' ? 'text-green-400' : 'text-red-500'}`}>
               {feedbackSenha.tipo === 'sucesso' ? '✓' : '✗'} {feedbackSenha.msg}
             </p>
           )}
 
           <button
             type="submit" disabled={salvandoSenha}
-            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-900 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             <Lock size={15} />
             {salvandoSenha ? 'Alterando...' : 'Alterar senha'}

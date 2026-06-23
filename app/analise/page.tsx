@@ -118,8 +118,8 @@ export default function AnalisePage() {
   return (
     <div className="p-6 space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Painel de Análise</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Performance de cadências, canais e templates</p>
+        <h1 className="text-2xl font-bold text-slate-100">Painel de Análise</h1>
+        <p className="text-slate-400 text-sm mt-0.5">Performance de cadências, canais e templates</p>
       </div>
 
       {/* Top KPIs */}
@@ -129,10 +129,10 @@ export default function AnalisePage() {
           { label: 'Respostas Recebidas', value: respostas.length, sub: `${autoRespostas} auto · ${humanRespostas} manual`, color: '#22c55e' },
           { label: 'Taxa Global de Resposta', value: `${abordagens.length > 0 ? Math.round((respostas.length / abordagens.length) * 100) : 0}%`, sub: 'total abordagens vs respostas', color: '#6366f1' },
         ].map((kpi, i) => (
-          <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-            <div className="text-xs text-gray-500 mb-1">{kpi.label}</div>
+          <div key={i} className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-4">
+            <div className="text-xs text-slate-400 mb-1">{kpi.label}</div>
             <div className="text-2xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
-            <div className="text-xs text-gray-400 mt-1">{kpi.sub}</div>
+            <div className="text-xs text-slate-500 mt-1">{kpi.sub}</div>
           </div>
         ))}
       </div>
@@ -140,11 +140,11 @@ export default function AnalisePage() {
       {/* Row 2: Canal chart + Response types */}
       <div className="grid grid-cols-2 gap-5">
         {/* Response rate by canal */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-gray-800 mb-4">Taxa de Resposta por Canal</h2>
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+          <h2 className="font-semibold text-slate-200 mb-4">Taxa de Resposta por Canal</h2>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={porCanal} margin={{ left: -10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a3147" />
               <XAxis dataKey="canal" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} unit="%" />
               <Tooltip
@@ -152,7 +152,7 @@ export default function AnalisePage() {
                   name === 'taxa' ? `${value}%` : value,
                   name === 'taxa' ? 'Taxa de resposta' : name === 'enviadas' ? 'Enviadas' : 'Respostas'
                 ]}
-                contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
+                contentStyle={{ borderRadius: 8, border: '1px solid #2a3147', backgroundColor: '#1a1f2e', color: '#f1f5f9', fontSize: 12 }}
               />
               <Bar dataKey="enviadas" fill="#bfdbfe" name="enviadas" radius={[3, 3, 0, 0]} />
               <Bar dataKey="respostas" fill="#6366f1" name="respostas" radius={[3, 3, 0, 0]} />
@@ -162,20 +162,20 @@ export default function AnalisePage() {
             {porCanal.map(c => (
               <div key={c.canal} className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${getCanalBadgeClasses(c.canal)}`}>{c.canal}</span>
-                <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                <div className="flex-1 bg-[#252b3b] rounded-full h-1.5">
                   <div className="h-1.5 rounded-full bg-indigo-500" style={{ width: `${c.taxa}%` }} />
                 </div>
-                <span className="text-xs font-bold text-indigo-600 w-8 text-right">{c.taxa}%</span>
+                <span className="text-xs font-bold text-indigo-400 w-8 text-right">{c.taxa}%</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Response types pie */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-gray-800 mb-4">Tipos de Resposta Recebida</h2>
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+          <h2 className="font-semibold text-slate-200 mb-4">Tipos de Resposta Recebida</h2>
           {porTipo.length === 0 ? (
-            <div className="text-gray-400 text-sm text-center py-12">Nenhuma resposta registrada.</div>
+            <div className="text-slate-500 text-sm text-center py-12">Nenhuma resposta registrada.</div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -183,7 +183,7 @@ export default function AnalisePage() {
                   {porTipo.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
+                  contentStyle={{ borderRadius: 8, border: '1px solid #2a3147', backgroundColor: '#1a1f2e', color: '#f1f5f9', fontSize: 12 }}
                   formatter={(value, name) => [value, name]}
                 />
                 <Legend iconType="circle" iconSize={8}
@@ -195,38 +195,38 @@ export default function AnalisePage() {
       </div>
 
       {/* Template ranking */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
           <TrendingUp size={16} className="text-green-500" />
           Performance por Template
         </h2>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100">
-              <th className="text-left py-2 px-3 text-gray-500 text-xs font-medium">#</th>
-              <th className="text-left py-2 px-3 text-gray-500 text-xs font-medium">Template</th>
-              <th className="text-left py-2 px-3 text-gray-500 text-xs font-medium">Canal</th>
-              <th className="text-left py-2 px-3 text-gray-500 text-xs font-medium">Usos</th>
-              <th className="text-left py-2 px-3 text-gray-500 text-xs font-medium">Taxa de Resposta</th>
+            <tr className="border-b border-[#2a3147]">
+              <th className="text-left py-2 px-3 text-slate-400 text-xs font-medium">#</th>
+              <th className="text-left py-2 px-3 text-slate-400 text-xs font-medium">Template</th>
+              <th className="text-left py-2 px-3 text-slate-400 text-xs font-medium">Canal</th>
+              <th className="text-left py-2 px-3 text-slate-400 text-xs font-medium">Usos</th>
+              <th className="text-left py-2 px-3 text-slate-400 text-xs font-medium">Taxa de Resposta</th>
             </tr>
           </thead>
           <tbody>
             {porTemplate.map((t, i) => (
-              <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50">
-                <td className="py-2.5 px-3 text-gray-400 text-xs font-bold">{i + 1}</td>
+              <tr key={t.id} className="border-b border-[#2a3147] hover:bg-[#0f1117]">
+                <td className="py-2.5 px-3 text-slate-500 text-xs font-bold">{i + 1}</td>
                 <td className="py-2.5 px-3">
-                  <div className="font-medium text-gray-800 text-sm">{t.nome}</div>
+                  <div className="font-medium text-slate-200 text-sm">{t.nome}</div>
                 </td>
                 <td className="py-2.5 px-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${getCanalBadgeClasses(t.canal)}`}>{t.canal}</span>
                 </td>
-                <td className="py-2.5 px-3 text-gray-600 text-sm">{t.total_usos}</td>
+                <td className="py-2.5 px-3 text-slate-300 text-sm">{t.total_usos}</td>
                 <td className="py-2.5 px-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-24 bg-gray-100 rounded-full h-1.5">
+                    <div className="w-24 bg-[#252b3b] rounded-full h-1.5">
                       <div className="h-1.5 rounded-full bg-green-500" style={{ width: `${t.taxa_resposta}%` }} />
                     </div>
-                    <span className="text-xs font-bold text-green-600">{t.taxa_resposta}%</span>
+                    <span className="text-xs font-bold text-green-400">{t.taxa_resposta}%</span>
                   </div>
                 </td>
               </tr>
@@ -238,14 +238,14 @@ export default function AnalisePage() {
       {/* By responsible + auto vs human */}
       <div className="grid grid-cols-2 gap-5">
         {/* By responsible */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-gray-800 mb-4">Performance por Responsável</h2>
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+          <h2 className="font-semibold text-slate-200 mb-4">Performance por Responsável</h2>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={porResponsavel} margin={{ left: -10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a3147" />
               <XAxis dataKey="responsavel" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #2a3147', backgroundColor: '#1a1f2e', color: '#f1f5f9', fontSize: 12 }} />
               <Bar dataKey="abordagens" fill="#bfdbfe" name="Abordagens" radius={[3,3,0,0]} />
               <Bar dataKey="respostas" fill="#22c55e" name="Respostas" radius={[3,3,0,0]} />
             </BarChart>
@@ -253,8 +253,8 @@ export default function AnalisePage() {
         </div>
 
         {/* Auto vs human */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+          <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
             Volume: Automático vs Humano
           </h2>
           <div className="space-y-4 mt-4">
@@ -266,15 +266,15 @@ export default function AnalisePage() {
             ].map((item, i) => (
               <div key={i}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="flex items-center gap-1.5 text-sm text-gray-600">
+                  <span className="flex items-center gap-1.5 text-sm text-slate-300">
                     <item.icon size={14} style={{ color: item.color }} />
                     {item.label}
                   </span>
                   <span className="text-sm font-bold" style={{ color: item.color }}>
-                    {item.value} <span className="text-xs text-gray-400 font-normal">/ {item.total}</span>
+                    {item.value} <span className="text-xs text-slate-500 font-normal">/ {item.total}</span>
                   </span>
                 </div>
-                <div className="w-full bg-gray-100 rounded-full h-2">
+                <div className="w-full bg-[#252b3b] rounded-full h-2">
                   <div className="h-2 rounded-full" style={{
                     width: item.total > 0 ? `${Math.round((item.value / item.total) * 100)}%` : '0%',
                     backgroundColor: item.color,
@@ -287,17 +287,17 @@ export default function AnalisePage() {
       </div>
 
       {/* Weekly comparison */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
           <TrendingUp size={16} className="text-indigo-500" />
           Comparativo Semanal — Abordagens vs Respostas
         </h2>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={weeklyChart} margin={{ left: -10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#2a3147" />
             <XAxis dataKey="semana" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-            <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }} />
+            <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #2a3147', backgroundColor: '#1a1f2e', color: '#f1f5f9', fontSize: 12 }} />
             <Legend iconType="circle" iconSize={8}
               formatter={(v) => <span style={{ fontSize: 11, color: '#64748b' }}>{v}</span>} />
             <Line type="monotone" dataKey="abordagens" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} name="Abordagens" />
@@ -307,40 +307,40 @@ export default function AnalisePage() {
       </div>
 
       {/* Segment analysis */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
           <BarChart2 size={16} className="text-cyan-500" />
           Taxa de Resposta por Segmento
         </h2>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100">
-              <th className="text-left py-2 px-3 text-gray-500 text-xs font-medium">Segmento</th>
-              <th className="text-right py-2 px-3 text-gray-500 text-xs font-medium">Leads</th>
-              <th className="text-right py-2 px-3 text-gray-500 text-xs font-medium">Abordagens</th>
-              <th className="text-right py-2 px-3 text-gray-500 text-xs font-medium">Respostas</th>
-              <th className="text-right py-2 px-3 text-gray-500 text-xs font-medium">Positivos</th>
-              <th className="text-left py-2 px-3 text-gray-500 text-xs font-medium">Taxa</th>
+            <tr className="border-b border-[#2a3147]">
+              <th className="text-left py-2 px-3 text-slate-400 text-xs font-medium">Segmento</th>
+              <th className="text-right py-2 px-3 text-slate-400 text-xs font-medium">Leads</th>
+              <th className="text-right py-2 px-3 text-slate-400 text-xs font-medium">Abordagens</th>
+              <th className="text-right py-2 px-3 text-slate-400 text-xs font-medium">Respostas</th>
+              <th className="text-right py-2 px-3 text-slate-400 text-xs font-medium">Positivos</th>
+              <th className="text-left py-2 px-3 text-slate-400 text-xs font-medium">Taxa</th>
             </tr>
           </thead>
           <tbody>
             {porSegmento.map(s => (
-              <tr key={s.segmento} className="border-b border-gray-50 hover:bg-gray-50">
+              <tr key={s.segmento} className="border-b border-[#2a3147] hover:bg-[#0f1117]">
                 <td className="py-2.5 px-3">
-                  <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full font-medium">{s.segmento}</span>
+                  <span className="text-xs px-2 py-0.5 bg-[#252b3b] text-slate-300 rounded-full font-medium">{s.segmento}</span>
                 </td>
-                <td className="py-2.5 px-3 text-right text-gray-600 text-sm">{s.leads}</td>
-                <td className="py-2.5 px-3 text-right text-gray-600 text-sm">{s.abordagens}</td>
-                <td className="py-2.5 px-3 text-right text-gray-600 text-sm">{s.respostas}</td>
+                <td className="py-2.5 px-3 text-right text-slate-300 text-sm">{s.leads}</td>
+                <td className="py-2.5 px-3 text-right text-slate-300 text-sm">{s.abordagens}</td>
+                <td className="py-2.5 px-3 text-right text-slate-300 text-sm">{s.respostas}</td>
                 <td className="py-2.5 px-3 text-right">
-                  <span className={`text-xs font-semibold ${s.positivos > 0 ? 'text-green-600' : 'text-gray-400'}`}>{s.positivos}</span>
+                  <span className={`text-xs font-semibold ${s.positivos > 0 ? 'text-green-400' : 'text-slate-500'}`}>{s.positivos}</span>
                 </td>
                 <td className="py-2.5 px-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-20 bg-gray-100 rounded-full h-1.5">
+                    <div className="w-20 bg-[#252b3b] rounded-full h-1.5">
                       <div className="h-1.5 rounded-full bg-cyan-500" style={{ width: `${Math.min(s.taxa, 100)}%` }} />
                     </div>
-                    <span className="text-xs font-bold text-cyan-600 w-8">{s.taxa}%</span>
+                    <span className="text-xs font-bold text-cyan-400 w-8">{s.taxa}%</span>
                   </div>
                 </td>
               </tr>

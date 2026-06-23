@@ -93,19 +93,19 @@ export default function MeuPerfilPage() {
 
   if (carregando) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-400 text-sm">Carregando...</p>
+      <div className="min-h-screen bg-[#0f1117] flex items-center justify-center">
+        <p className="text-slate-500 text-sm">Carregando...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
+    <div className="min-h-screen bg-[#0f1117] flex items-center justify-center p-4">
+      <div className="bg-[#1a1f2e] rounded-2xl shadow-lg p-8 w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-6">
-          <h1 className="text-xl font-bold text-gray-900">Configure seu perfil</h1>
-          <p className="text-gray-500 text-sm mt-1">Adicione suas informações para continuar</p>
+          <h1 className="text-xl font-bold text-slate-100">Configure seu perfil</h1>
+          <p className="text-slate-400 text-sm mt-1">Adicione suas informações para continuar</p>
         </div>
 
         <form onSubmit={handleSalvar} className="space-y-5">
@@ -115,12 +115,12 @@ export default function MeuPerfilPage() {
               <img
                 src={fotoExibida}
                 alt="Avatar"
-                className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md"
+                className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-none"
               />
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="absolute bottom-0 right-0 w-8 h-8 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-md transition-colors"
+                className="absolute bottom-0 right-0 w-8 h-8 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-none transition-colors"
               >
                 {uploading ? (
                   <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -129,35 +129,35 @@ export default function MeuPerfilPage() {
                 )}
               </button>
             </div>
-            <p className="text-xs text-gray-400">Clique para adicionar foto</p>
+            <p className="text-xs text-slate-500">Clique para adicionar foto</p>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFoto} />
           </div>
 
           {/* Email (readonly) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
             <input
               type="email" value={email} disabled
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
+              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm bg-[#0f1117] text-slate-400 cursor-not-allowed"
             />
           </div>
 
           {/* Nome */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo *</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Nome completo *</label>
             <input
               type="text" value={nome} onChange={e => setNome(e.target.value)} required
               placeholder="Seu nome"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
           {/* Nicho */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nicho / Segmento</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Nicho / Segmento</label>
             <select
               value={nicho} onChange={e => setNicho(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#1a1f2e]"
             >
               <option value="">Selecione seu segmento</option>
               {NICHOS.map(n => <option key={n} value={n}>{n}</option>)}

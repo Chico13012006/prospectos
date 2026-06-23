@@ -72,20 +72,20 @@ export default function DefinirSenhaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
+    <div className="min-h-screen bg-[#0f1117] flex items-center justify-center">
+      <div className="bg-[#1a1f2e] rounded-2xl shadow-lg p-8 w-full max-w-md">
         {/* Logo / Header */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">ProspectOS</h1>
-          <p className="text-gray-500 text-sm mt-1">Defina sua senha para acessar a plataforma</p>
+          <h1 className="text-2xl font-bold text-slate-100">ProspectOS</h1>
+          <p className="text-slate-400 text-sm mt-1">Defina sua senha para acessar a plataforma</p>
         </div>
 
         {preparando ? (
-          <p className="text-center text-gray-400 text-sm">Validando convite...</p>
+          <p className="text-center text-slate-500 text-sm">Validando convite...</p>
         ) : sessaoPronta ? (
           <form onSubmit={handleDefinirSenha} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nova senha</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Nova senha</label>
               <input
                 type="password"
                 value={senha}
@@ -93,7 +93,7 @@ export default function DefinirSenhaPage() {
                 required
                 minLength={6}
                 placeholder="••••••••"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 

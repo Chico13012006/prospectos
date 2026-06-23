@@ -1,8 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --brand: #1e3a5f;
-  --brand-light: #2d5a8e;
+  --bg-base: #0f1117;
+  --bg-card: #1a1f2e;
+  --bg-card-hover: #1e2435;
+  --bg-input: #252b3b;
+  --border: #2a3147;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
 }
 
 * {
@@ -11,34 +19,62 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #F8F9FC;
-  color: #111827;
-  font-feature-settings: "kern" 1, "liga" 1;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-feature-settings: 'rlig' 1, 'calt' 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Card premium reutilizável */
+/* Card premium reutilizável (dark) */
 .card {
-  background: #ffffff;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .card-hover {
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 .card-hover:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transform: translateY(-1px);
+  box-shadow: 0 4px 24px rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-muted { color: var(--text-muted); }
+
+/* Form elements — base dark. Em @layer base para vencer o preflight do
+   Tailwind por ordem de origem. Utilitários Tailwind com bg-* ainda sobrescrevem. */
+@layer base {
+  input,
+  select,
+  textarea {
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    border-color: var(--border);
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-muted);
+  }
+  select option {
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--accent);
+  }
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-thumb { background: #2a3147; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3b435c; }
 
 /* Timeline connector */
 .timeline-connector::before {
@@ -48,7 +84,7 @@ body {
   top: 40px;
   bottom: -12px;
   width: 2px;
-  background: #e2e8f0;
+  background: #2a3147;
 }
 
 /* Score bar animation */
@@ -58,6 +94,6 @@ body {
 
 /* Table hover */
 .table-row-hover:hover {
-  background-color: #f0f7ff;
+  background-color: #1e2435;
   cursor: pointer;
 }

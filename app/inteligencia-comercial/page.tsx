@@ -172,17 +172,17 @@ export default function InteligenciaComercialPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Inteligência Comercial</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-slate-100">Inteligência Comercial</h1>
+          <p className="text-sm text-slate-400 mt-0.5">
             Análises detalhadas para otimizar sua prospecção e automações.
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs text-gray-400 bg-white border border-gray-200 rounded-lg px-3 py-2">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-[#1a1f2e] border border-[#2a3147] rounded-lg px-3 py-2">
             <RefreshCw size={11} />
             Dados atualizados há 5 minutos
           </div>
-          <button className="flex items-center gap-2 text-sm text-gray-600 border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50">
+          <button className="flex items-center gap-2 text-sm text-slate-300 border border-[#2a3147] px-3 py-2 rounded-lg hover:bg-[#0f1117]">
             <Save size={14} /> Salvar visão
           </button>
           <button className="flex items-center gap-2 text-sm font-medium text-white px-4 py-2 rounded-lg" style={{ backgroundColor: '#1e3a5f' }}>
@@ -194,14 +194,14 @@ export default function InteligenciaComercialPage() {
       {/* Filtros */}
       <div className="flex items-center gap-2 flex-wrap">
         {['Período', 'Nicho', 'Canal', 'Responsável', 'Campanha', 'Região'].map(f => (
-          <select key={f} className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-600 focus:outline-none">
+          <select key={f} className="text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none">
             <option>{f}</option>
           </select>
         ))}
-        <button className="text-sm text-gray-500 border border-gray-200 rounded-lg px-3 py-2 bg-white hover:bg-gray-50">
+        <button className="text-sm text-slate-400 border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] hover:bg-[#0f1117]">
           + Mais filtros
         </button>
-        <button className="text-sm text-indigo-600 hover:underline px-2">Limpar filtros</button>
+        <button className="text-sm text-indigo-400 hover:underline px-2">Limpar filtros</button>
       </div>
 
       {/* 6 KPI cards */}
@@ -214,49 +214,49 @@ export default function InteligenciaComercialPage() {
           { label: 'Reuniões Agendadas', value: reunioes, pct: '0%', color: '#8b5cf6' },
           { label: 'Taxa de Conversão', value: taxaConversao, pct: '+2,1 p.p.', color: '#ef4444' },
         ].map(kpi => (
-          <div key={kpi.label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">
-            <div className="text-xs text-gray-500 mb-2 leading-tight">{kpi.label}</div>
+          <div key={kpi.label} className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-3.5">
+            <div className="text-xs text-slate-400 mb-2 leading-tight">{kpi.label}</div>
             <div className="text-xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
-            <div className="text-xs text-green-600 font-medium mt-1">{kpi.pct} vs. anterior</div>
+            <div className="text-xs text-green-400 font-medium mt-1">{kpi.pct} vs. anterior</div>
           </div>
         ))}
       </div>
 
       {/* Performance por Canal */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h2 className="font-semibold text-gray-800 mb-4">Performance por Canal</h2>
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <h2 className="font-semibold text-slate-200 mb-4">Performance por Canal</h2>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100">
+            <tr className="border-b border-[#2a3147]">
               {['Canal', 'Mensagens', 'Respostas', 'Taxa de Resposta', 'Conversão'].map(h => (
-                <th key={h} className="py-2 px-3 text-xs text-gray-500 font-medium text-left">{h}</th>
+                <th key={h} className="py-2 px-3 text-xs text-slate-400 font-medium text-left">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {activeCanal.map(c => (
-              <tr key={c.canal} className="border-b border-gray-50 hover:bg-gray-50">
+              <tr key={c.canal} className="border-b border-[#2a3147] hover:bg-[#0f1117]">
                 <td className="py-2.5 px-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${getCanalBadgeClasses(c.canal)}`}>{c.canal}</span>
                 </td>
-                <td className="py-2.5 px-3 text-gray-700">{c.msgs}</td>
-                <td className="py-2.5 px-3 text-gray-700">{c.resps}</td>
-                <td className="py-2.5 px-3 font-semibold text-indigo-600">{c.taxa}%</td>
+                <td className="py-2.5 px-3 text-slate-300">{c.msgs}</td>
+                <td className="py-2.5 px-3 text-slate-300">{c.resps}</td>
+                <td className="py-2.5 px-3 font-semibold text-indigo-400">{c.taxa}%</td>
                 <td className="py-2.5 px-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-24 bg-gray-100 rounded-full h-1.5">
+                    <div className="w-24 bg-[#252b3b] rounded-full h-1.5">
                       <div className="h-1.5 rounded-full" style={{ width: `${Math.min(c.conv, 100)}%`, backgroundColor: CANAL_COLORS[c.canal] ?? '#6366f1' }} />
                     </div>
-                    <span className="text-xs font-semibold text-gray-600">{c.taxa}%</span>
+                    <span className="text-xs font-semibold text-slate-300">{c.taxa}%</span>
                   </div>
                 </td>
               </tr>
             ))}
-            <tr className="border-t-2 border-gray-200 bg-gray-50">
-              <td className="py-2.5 px-3 font-semibold text-gray-700">Total</td>
-              <td className="py-2.5 px-3 font-semibold text-gray-700">{totalAbordagens}</td>
-              <td className="py-2.5 px-3 font-semibold text-gray-700">{totalRespostas}</td>
-              <td className="py-2.5 px-3 font-semibold text-indigo-600">
+            <tr className="border-t-2 border-[#2a3147] bg-[#0f1117]">
+              <td className="py-2.5 px-3 font-semibold text-slate-300">Total</td>
+              <td className="py-2.5 px-3 font-semibold text-slate-300">{totalAbordagens}</td>
+              <td className="py-2.5 px-3 font-semibold text-slate-300">{totalRespostas}</td>
+              <td className="py-2.5 px-3 font-semibold text-indigo-400">
                 {totalAbordagens > 0 ? ((totalRespostas / totalAbordagens) * 100).toFixed(1) : 0}%
               </td>
               <td />
@@ -267,35 +267,35 @@ export default function InteligenciaComercialPage() {
 
       {/* Respostas por Follow-up + Motivos Não Interesse */}
       <div className="grid grid-cols-2 gap-5">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-gray-800 mb-1">Respostas por Follow-up</h2>
-          <p className="text-xs text-indigo-600 font-medium mb-4">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+          <h2 className="font-semibold text-slate-200 mb-1">Respostas por Follow-up</h2>
+          <p className="text-xs text-indigo-400 font-medium mb-4">
             Insight: 63% das respostas foram recebidas após o primeiro follow-up.
           </p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={followUpRespostas} margin={{ left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a3147" />
               <XAxis dataKey="label" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #2a3147', backgroundColor: '#1a1f2e', color: '#f1f5f9', fontSize: 12 }} />
               <Bar dataKey="respostas" fill="#6366f1" name="Respostas" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
           <div className="mt-3 space-y-1">
             {followUpRespostas.map(f => (
               <div key={f.label} className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 w-28 truncate">{f.label}</span>
-                <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                <span className="text-xs text-slate-400 w-28 truncate">{f.label}</span>
+                <div className="flex-1 bg-[#252b3b] rounded-full h-1.5">
                   <div className="h-1.5 rounded-full bg-indigo-400" style={{ width: `${f.pct}%` }} />
                 </div>
-                <span className="text-xs font-semibold text-indigo-600 w-8 text-right">{f.pct}%</span>
+                <span className="text-xs font-semibold text-indigo-400 w-8 text-right">{f.pct}%</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-gray-800 mb-4">Motivos de Não Interesse</h2>
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+          <h2 className="font-semibold text-slate-200 mb-4">Motivos de Não Interesse</h2>
           <div className="flex gap-4">
             <ResponsiveContainer width="50%" height={180}>
               <PieChart>
@@ -303,15 +303,15 @@ export default function InteligenciaComercialPage() {
                   dataKey="value" paddingAngle={2}>
                   {motivosNaoInteresse.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                 </Pie>
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v) => [`${v}%`, '']} />
+                <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #2a3147', backgroundColor: '#1a1f2e', color: '#f1f5f9', fontSize: 12 }} formatter={(v) => [`${v}%`, '']} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex-1 space-y-2 py-2">
               {motivosNaoInteresse.map(m => (
                 <div key={m.name} className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: m.color }} />
-                  <span className="text-xs text-gray-600 flex-1 leading-tight">{m.name}</span>
-                  <span className="text-xs font-bold text-gray-700">{m.value}%</span>
+                  <span className="text-xs text-slate-300 flex-1 leading-tight">{m.name}</span>
+                  <span className="text-xs font-bold text-slate-300">{m.value}%</span>
                 </div>
               ))}
             </div>
@@ -320,30 +320,30 @@ export default function InteligenciaComercialPage() {
       </div>
 
       {/* Taxa de Conversão por Segmento */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h2 className="font-semibold text-gray-800 mb-4">Taxa de Conversão por Segmento</h2>
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <h2 className="font-semibold text-slate-200 mb-4">Taxa de Conversão por Segmento</h2>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100">
+            <tr className="border-b border-[#2a3147]">
               {['Segmento', 'Leads', 'Respostas', 'Conversão'].map(h => (
-                <th key={h} className="py-2 px-3 text-xs text-gray-500 font-medium text-left">{h}</th>
+                <th key={h} className="py-2 px-3 text-xs text-slate-400 font-medium text-left">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {activeSegmentos.sort((a, b) => b.conversao - a.conversao).map(s => (
-              <tr key={s.segmento} className="border-b border-gray-50 hover:bg-gray-50">
+              <tr key={s.segmento} className="border-b border-[#2a3147] hover:bg-[#0f1117]">
                 <td className="py-2.5 px-3">
-                  <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full font-medium">{s.segmento}</span>
+                  <span className="text-xs px-2 py-0.5 bg-[#252b3b] text-slate-300 rounded-full font-medium">{s.segmento}</span>
                 </td>
-                <td className="py-2.5 px-3 text-gray-600">{s.leads}</td>
-                <td className="py-2.5 px-3 text-gray-600">{s.respostas}</td>
+                <td className="py-2.5 px-3 text-slate-300">{s.leads}</td>
+                <td className="py-2.5 px-3 text-slate-300">{s.respostas}</td>
                 <td className="py-2.5 px-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-28 bg-gray-100 rounded-full h-1.5">
+                    <div className="w-28 bg-[#252b3b] rounded-full h-1.5">
                       <div className="h-1.5 rounded-full bg-green-500" style={{ width: `${Math.min(s.conversao * 20, 100)}%` }} />
                     </div>
-                    <span className="text-xs font-semibold text-green-600">{s.conversao.toFixed(2)}%</span>
+                    <span className="text-xs font-semibold text-green-400">{s.conversao.toFixed(2)}%</span>
                   </div>
                 </td>
               </tr>
@@ -354,21 +354,21 @@ export default function InteligenciaComercialPage() {
 
       {/* Heatmap + Distribuição Geográfica */}
       <div className="grid grid-cols-2 gap-5">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-gray-800 mb-1">Melhores Horários para Resposta</h2>
-          <p className="text-xs text-indigo-600 font-medium mb-4">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+          <h2 className="font-semibold text-slate-200 mb-1">Melhores Horários para Resposta</h2>
+          <p className="text-xs text-indigo-400 font-medium mb-4">
             Insight: O período entre 08h e 11h apresenta a maior taxa de resposta.
           </p>
           <div className="overflow-x-auto">
             <div className="flex gap-1 mb-1">
               <div className="w-8 shrink-0" />
               {HOURS.map(h => (
-                <div key={h} className="w-7 text-center text-xs text-gray-400">{h}</div>
+                <div key={h} className="w-7 text-center text-xs text-slate-500">{h}</div>
               ))}
             </div>
             {DAYS.map(day => (
               <div key={day} className="flex gap-1 mb-1">
-                <div className="w-8 text-xs text-gray-500 flex items-center">{day}</div>
+                <div className="w-8 text-xs text-slate-400 flex items-center">{day}</div>
                 {HOURS.map(hour => {
                   const v = heatmapData[day]?.[hour] ?? 0;
                   return (
@@ -385,44 +385,44 @@ export default function InteligenciaComercialPage() {
               </div>
             ))}
             <div className="flex items-center gap-2 mt-3">
-              <span className="text-xs text-gray-400">Menor</span>
+              <span className="text-xs text-slate-500">Menor</span>
               {['#f8fafc', '#dbeafe', '#93c5fd', '#3b82f6', '#2d5a8e', '#1e3a5f'].map((c, i) => (
                 <div key={i} className="w-5 h-3 rounded-sm" style={{ backgroundColor: c }} />
               ))}
-              <span className="text-xs text-gray-400">Maior</span>
+              <span className="text-xs text-slate-500">Maior</span>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+          <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
             <MapPin size={16} className="text-indigo-500" />
             Distribuição Geográfica
           </h2>
           <div className="grid grid-cols-3 gap-2 mb-4">
             {activeGeoData.filter(g => g.estado !== 'Outros').slice(0, 6).map(g => (
               <div key={g.estado}
-                className="rounded-xl border border-gray-100 p-3 text-center"
+                className="rounded-xl border border-[#2a3147] p-3 text-center"
                 style={{ backgroundColor: g.respostas > 2 ? '#eff6ff' : g.respostas > 0 ? '#f0fdf4' : '#f9fafb' }}>
                 <div className="text-lg font-bold" style={{ color: g.respostas > 2 ? '#1e3a5f' : g.respostas > 0 ? '#16a34a' : '#9ca3af' }}>
                   {g.estado}
                 </div>
-                <div className="text-xs text-gray-500 mt-0.5">{g.respostas} resp.</div>
+                <div className="text-xs text-slate-400 mt-0.5">{g.respostas} resp.</div>
               </div>
             ))}
           </div>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left py-1.5 text-xs text-gray-500 font-medium">Estado</th>
-                <th className="text-right py-1.5 text-xs text-gray-500 font-medium">Respostas</th>
+              <tr className="border-b border-[#2a3147]">
+                <th className="text-left py-1.5 text-xs text-slate-400 font-medium">Estado</th>
+                <th className="text-right py-1.5 text-xs text-slate-400 font-medium">Respostas</th>
               </tr>
             </thead>
             <tbody>
               {activeGeoData.map(g => (
-                <tr key={g.estado} className="border-b border-gray-50">
-                  <td className="py-1.5 text-gray-700">{g.estado}</td>
-                  <td className="py-1.5 text-right font-semibold text-indigo-600">{g.respostas}</td>
+                <tr key={g.estado} className="border-b border-[#2a3147]">
+                  <td className="py-1.5 text-slate-300">{g.estado}</td>
+                  <td className="py-1.5 text-right font-semibold text-indigo-400">{g.respostas}</td>
                 </tr>
               ))}
             </tbody>
@@ -431,35 +431,35 @@ export default function InteligenciaComercialPage() {
       </div>
 
       {/* Performance de Templates Top 5 */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
           <TrendingUp size={16} className="text-green-500" />
           Performance de Templates (Top 5)
         </h2>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100">
+            <tr className="border-b border-[#2a3147]">
               {['#', 'Template', 'Mensagens', 'Respostas', 'Taxa de Resposta', 'Conversão'].map(h => (
-                <th key={h} className={`py-2 px-3 text-xs text-gray-500 font-medium ${h === '#' || h === 'Template' ? 'text-left' : 'text-right'}`}>{h}</th>
+                <th key={h} className={`py-2 px-3 text-xs text-slate-400 font-medium ${h === '#' || h === 'Template' ? 'text-left' : 'text-right'}`}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {topTemplates.map((t, i) => (
-              <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50">
-                <td className="py-2.5 px-3 text-xs font-bold text-gray-400">{i + 1}</td>
+              <tr key={t.id} className="border-b border-[#2a3147] hover:bg-[#0f1117]">
+                <td className="py-2.5 px-3 text-xs font-bold text-slate-500">{i + 1}</td>
                 <td className="py-2.5 px-3">
-                  <div className="font-medium text-gray-800">{t.nome}</div>
+                  <div className="font-medium text-slate-200">{t.nome}</div>
                   <span className={`text-xs px-1.5 py-0.5 rounded-full ${getCanalBadgeClasses(t.canal)}`}>{t.canal}</span>
                 </td>
-                <td className="py-2.5 px-3 text-right text-gray-600">{t.total_usos}</td>
-                <td className="py-2.5 px-3 text-right text-gray-600">
+                <td className="py-2.5 px-3 text-right text-slate-300">{t.total_usos}</td>
+                <td className="py-2.5 px-3 text-right text-slate-300">
                   {Math.round(t.total_usos * t.taxa_resposta / 100)}
                 </td>
-                <td className="py-2.5 px-3 text-right font-semibold text-green-600">{t.taxa_resposta}%</td>
+                <td className="py-2.5 px-3 text-right font-semibold text-green-400">{t.taxa_resposta}%</td>
                 <td className="py-2.5 px-3 text-right">
                   <div className="flex items-center justify-end gap-2">
-                    <div className="w-20 bg-gray-100 rounded-full h-1.5">
+                    <div className="w-20 bg-[#252b3b] rounded-full h-1.5">
                       <div className="h-1.5 rounded-full bg-green-500" style={{ width: `${t.taxa_resposta}%` }} />
                     </div>
                   </div>
@@ -472,11 +472,11 @@ export default function InteligenciaComercialPage() {
 
       {/* Insights + Recomendações */}
       <div className="grid grid-cols-2 gap-5">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+          <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
             <Brain size={16} className="text-indigo-500" />
             Insights da IA
-            <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold ml-1">Novo</span>
+            <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full font-semibold ml-1">Novo</span>
           </h2>
           <ul className="space-y-3">
             {[
@@ -487,17 +487,17 @@ export default function InteligenciaComercialPage() {
               'Empresas com +100 funcionários respondem 47% mais que a média.',
             ].map((insight, i) => (
               <li key={i} className="flex items-start gap-2.5">
-                <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
                   {i + 1}
                 </div>
-                <p className="text-sm text-gray-700 leading-snug">{insight}</p>
+                <p className="text-sm text-slate-300 leading-snug">{insight}</p>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+          <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
             <Lightbulb size={16} className="text-amber-500" />
             Recomendações da IA
           </h2>
@@ -511,7 +511,7 @@ export default function InteligenciaComercialPage() {
             ].map((rec, i) => (
               <div key={i} className="flex items-start gap-2.5 p-3 rounded-xl border" style={{ backgroundColor: rec.bg, borderColor: `${rec.color}30` }}>
                 <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: rec.color }} />
-                <p className="text-sm text-gray-700 leading-snug">{rec.text}</p>
+                <p className="text-sm text-slate-300 leading-snug">{rec.text}</p>
               </div>
             ))}
           </div>
@@ -519,17 +519,17 @@ export default function InteligenciaComercialPage() {
       </div>
 
       {/* Evolução da Conversão */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
           <TrendingUp size={16} className="text-indigo-500" />
           Evolução da Conversão — últimos 45 dias
         </h2>
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={evolucaoConversao} margin={{ left: -10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#2a3147" />
             <XAxis dataKey="dia" tick={{ fontSize: 10 }} />
             <YAxis tick={{ fontSize: 10 }} unit="%" />
-            <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
+            <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #2a3147', backgroundColor: '#1a1f2e', color: '#f1f5f9', fontSize: 12 }}
               formatter={(v) => [`${v}%`, '']} />
             <Legend iconType="circle" iconSize={8}
               formatter={v => <span style={{ fontSize: 11, color: '#64748b' }}>{v}</span>} />

@@ -58,10 +58,10 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   if (!empresa) {
     return (
       <div className="p-6">
-        <Link href="/pipeline" className="text-blue-600 hover:underline flex items-center gap-1 text-sm">
+        <Link href="/pipeline" className="text-blue-400 hover:underline flex items-center gap-1 text-sm">
           <ChevronLeft size={15} /> Voltar
         </Link>
-        <p className="mt-8 text-center text-gray-400">Lead não encontrado.</p>
+        <p className="mt-8 text-center text-slate-500">Lead não encontrado.</p>
       </div>
     );
   }
@@ -78,23 +78,23 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const proximoFup = pendingFollowUps[0];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#0f1117]">
 
       {/* Compact header breadcrumb */}
-      <div className="bg-white border-b border-gray-100 px-6 py-3 flex items-center gap-3">
-        <Link href="/pipeline" className="text-gray-400 hover:text-gray-700 flex items-center gap-1 text-sm">
+      <div className="bg-[#1a1f2e] border-b border-[#2a3147] px-6 py-3 flex items-center gap-3">
+        <Link href="/pipeline" className="text-slate-500 hover:text-slate-300 flex items-center gap-1 text-sm">
           <ChevronLeft size={15} /> Pipeline
         </Link>
-        <span className="text-gray-300">/</span>
-        <span className="text-sm font-semibold text-gray-800">{empresa.nome}</span>
-        <span className="text-gray-300">—</span>
-        <span className="text-sm text-gray-500">{empresa.segmento}</span>
-        <span className="text-gray-300">—</span>
-        <span className="text-sm text-gray-500 flex items-center gap-1">
+        <span className="text-slate-600">/</span>
+        <span className="text-sm font-semibold text-slate-200">{empresa.nome}</span>
+        <span className="text-slate-600">—</span>
+        <span className="text-sm text-slate-400">{empresa.segmento}</span>
+        <span className="text-slate-600">—</span>
+        <span className="text-sm text-slate-400 flex items-center gap-1">
           <MapPin size={13} /> {empresa.cidade}, {empresa.estado}
         </span>
         {empresa.blacklist && (
-          <span className="ml-auto flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
+          <span className="ml-auto flex items-center gap-1 text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded-full">
             <Ban size={11} /> Blacklist
           </span>
         )}
@@ -105,55 +105,55 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         {/* 4 status cards */}
         <div className="grid grid-cols-4 gap-3">
           {/* Status */}
-          <div className="h-20 bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-2.5 flex flex-col justify-center">
-            <div className="text-xs text-gray-400 mb-1 font-medium">Status</div>
+          <div className="h-20 bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none px-4 py-2.5 flex flex-col justify-center">
+            <div className="text-xs text-slate-500 mb-1 font-medium">Status</div>
             <span className={`inline-flex w-fit text-sm px-2.5 py-1 rounded-full font-semibold ${getStatusBadgeClasses(empresa.status)}`}>
               {getStatusLabel(empresa.status)}
             </span>
           </div>
 
           {/* Responsável */}
-          <div className="h-20 bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-2.5 flex flex-col justify-center">
-            <div className="text-xs text-gray-400 mb-1 font-medium">Responsável</div>
+          <div className="h-20 bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none px-4 py-2.5 flex flex-col justify-center">
+            <div className="text-xs text-slate-500 mb-1 font-medium">Responsável</div>
             <div className="flex items-center gap-1.5">
-              <User size={15} className="text-gray-400" />
-              <span className="text-sm font-semibold text-gray-800">{empresa.responsavel}</span>
+              <User size={15} className="text-slate-500" />
+              <span className="text-sm font-semibold text-slate-200">{empresa.responsavel}</span>
             </div>
           </div>
 
           {/* Último contato */}
-          <div className="h-20 bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-2.5 flex flex-col justify-center">
-            <div className="text-xs text-gray-400 mb-1 font-medium">Último contato</div>
+          <div className="h-20 bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none px-4 py-2.5 flex flex-col justify-center">
+            <div className="text-xs text-slate-500 mb-1 font-medium">Último contato</div>
             {empresa.ultimo_contato ? (
               <div className="flex items-center gap-1.5">
                 {empresa.ultimo_contato_origem === 'automatico'
                   ? <Bot size={15} className="text-blue-400" />
                   : <User size={15} className="text-green-500" />}
-                <span className="text-sm font-semibold text-gray-800">{formatDate(empresa.ultimo_contato)}</span>
-                <span className="text-xs text-gray-400">
+                <span className="text-sm font-semibold text-slate-200">{formatDate(empresa.ultimo_contato)}</span>
+                <span className="text-xs text-slate-500">
                   ({daysBetween(empresa.ultimo_contato, TODAY)}d atrás)
                 </span>
               </div>
             ) : (
-              <span className="text-sm text-gray-400">Nenhum contato</span>
+              <span className="text-sm text-slate-500">Nenhum contato</span>
             )}
           </div>
 
           {/* Próxima ação */}
-          <div className={`h-20 rounded-xl border shadow-sm px-4 py-2.5 flex flex-col justify-center ${
+          <div className={`h-20 rounded-xl border shadow-none px-4 py-2.5 flex flex-col justify-center ${
             proximoFup?.status === 'atrasado'
-              ? 'bg-red-50 border-red-200'
-              : 'bg-white border-gray-100'
+              ? 'bg-red-500/10 border-red-500/30'
+              : 'bg-[#1a1f2e] border-[#2a3147]'
           }`}>
-            <div className="text-xs text-gray-400 mb-1 font-medium">Próxima ação</div>
+            <div className="text-xs text-slate-500 mb-1 font-medium">Próxima ação</div>
             {proximoFup ? (
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <div className={`text-sm font-semibold truncate ${proximoFup.status === 'atrasado' ? 'text-red-700' : 'text-gray-800'}`}>
+                  <div className={`text-sm font-semibold truncate ${proximoFup.status === 'atrasado' ? 'text-red-400' : 'text-slate-200'}`}>
                     {proximoFup.status === 'atrasado' && '⚠ '}
                     {getTipoAcaoLabel(proximoFup.tipo_acao)}
                   </div>
-                  <div className={`text-xs mt-0.5 ${proximoFup.status === 'atrasado' ? 'text-red-500' : 'text-gray-500'}`}>
+                  <div className={`text-xs mt-0.5 ${proximoFup.status === 'atrasado' ? 'text-red-500' : 'text-slate-400'}`}>
                     {formatDate(proximoFup.data_prevista)} · {proximoFup.canal_previsto}
                   </div>
                 </div>
@@ -167,51 +167,51 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                 )}
               </div>
             ) : (
-              <span className="text-sm text-gray-400">Sem follow-up</span>
+              <span className="text-sm text-slate-500">Sem follow-up</span>
             )}
           </div>
         </div>
 
         {/* Contato principal — linha compacta */}
         {contatoPrincipal && (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-2.5 flex items-center gap-2.5 text-sm">
-            <span className="font-semibold text-gray-900">{contatoPrincipal.nome}</span>
-            <span className="text-gray-400">·</span>
-            <span className="text-gray-500">{contatoPrincipal.cargo}</span>
+          <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none px-4 py-2.5 flex items-center gap-2.5 text-sm">
+            <span className="font-semibold text-slate-100">{contatoPrincipal.nome}</span>
+            <span className="text-slate-500">·</span>
+            <span className="text-slate-400">{contatoPrincipal.cargo}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full ${getCanalBadgeClasses(contatoPrincipal.canal_preferencial)}`}>
               {contatoPrincipal.canal_preferencial}
             </span>
-            <div className="flex items-center gap-3 ml-auto text-gray-400">
+            <div className="flex items-center gap-3 ml-auto text-slate-500">
               {contatoPrincipal.email && (
-                <a href={`mailto:${contatoPrincipal.email}`} title={contatoPrincipal.email} className="hover:text-blue-600">
+                <a href={`mailto:${contatoPrincipal.email}`} title={contatoPrincipal.email} className="hover:text-blue-400">
                   <Mail size={14} />
                 </a>
               )}
               {contatoPrincipal.telefone && (
-                <a href={`tel:${contatoPrincipal.telefone}`} title={contatoPrincipal.telefone} className="hover:text-blue-600">
+                <a href={`tel:${contatoPrincipal.telefone}`} title={contatoPrincipal.telefone} className="hover:text-blue-400">
                   <Phone size={14} />
                 </a>
               )}
               {contatoPrincipal.linkedin_url && (
                 <a href={`https://${contatoPrincipal.linkedin_url}`} target="_blank" rel="noopener noreferrer"
-                  title="LinkedIn" className="hover:text-blue-600">
+                  title="LinkedIn" className="hover:text-blue-400">
                   <ExternalLink size={14} />
                 </a>
               )}
               {contatos.length > 1 && (
-                <span className="text-xs text-gray-400">+{contatos.length - 1}</span>
+                <span className="text-xs text-slate-500">+{contatos.length - 1}</span>
               )}
             </div>
           </div>
         )}
 
         {/* Resumo Rápido */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none px-5 py-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold text-gray-700">Resumo Rápido</span>
+            <span className="text-sm font-semibold text-slate-300">Resumo Rápido</span>
             {!editingResumo && (
               <button onClick={() => setEditingResumo(true)}
-                className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1">
+                className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1">
                 <Edit3 size={12} /> Editar
               </button>
             )}
@@ -223,7 +223,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                 onChange={e => setResumo(e.target.value)}
                 rows={3}
                 autoFocus
-                className="w-full text-sm text-gray-700 border border-blue-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-100"
+                className="w-full text-sm text-slate-300 border border-blue-500/30 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-100"
                 placeholder="Contexto do lead: o que foi discutido, qual a dor, o que está esperando..."
               />
               <div className="flex gap-2 mt-2">
@@ -235,40 +235,40 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                 </button>
                 <button
                   onClick={() => { setResumo(empresa.observacoes || ''); setEditingResumo(false); }}
-                  className="text-xs text-gray-500 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50"
+                  className="text-xs text-slate-400 px-3 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#0f1117]"
                 >
                   Cancelar
                 </button>
               </div>
             </div>
           ) : (
-            <p className={`text-sm leading-relaxed ${resumo ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+            <p className={`text-sm leading-relaxed ${resumo ? 'text-slate-300' : 'text-slate-500 italic'}`}>
               {resumo || 'Nenhum resumo adicionado. Clique em Editar para descrever o contexto deste lead.'}
             </p>
           )}
         </div>
 
         {/* Timeline */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none overflow-hidden">
           {/* Timeline header with action buttons */}
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-800">Timeline</h2>
+          <div className="px-5 py-4 border-b border-[#2a3147] flex items-center justify-between">
+            <h2 className="font-semibold text-slate-200">Timeline</h2>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowAddAbordagem(true)}
-                className="flex items-center gap-1.5 text-xs font-medium text-blue-900 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 transition-colors"
+                className="flex items-center gap-1.5 text-xs font-medium text-blue-900 px-3 py-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 transition-colors"
               >
                 <PlusCircle size={13} /> Abordagem
               </button>
               <button
                 onClick={() => setShowAddResposta(true)}
-                className="flex items-center gap-1.5 text-xs font-medium text-green-700 px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 hover:bg-green-100 transition-colors"
+                className="flex items-center gap-1.5 text-xs font-medium text-green-400 px-3 py-1.5 rounded-lg border border-green-500/30 bg-green-500/10 hover:bg-green-500/20 transition-colors"
               >
                 <MessageCircle size={13} /> Resposta
               </button>
               <button
                 onClick={() => setShowAddFollowUp(true)}
-                className="flex items-center gap-1.5 text-xs font-medium text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition-colors"
+                className="flex items-center gap-1.5 text-xs font-medium text-indigo-400 px-3 py-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
               >
                 <Calendar size={13} /> Follow-up
               </button>
@@ -278,14 +278,14 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
           {/* Timeline entries */}
           <div className="px-5 py-4 space-y-3">
             {timeline.length === 0 && (
-              <div className="text-center text-gray-400 py-8 text-sm">
+              <div className="text-center text-slate-500 py-8 text-sm">
                 Nenhuma interação registrada. Use os botões acima para registrar.
               </div>
             )}
             {timeline.map((entry, i) => {
               // Determine visual style
               let leftBorderColor = '#e2e8f0';
-              let iconBg = 'bg-gray-100';
+              let iconBg = 'bg-[#252b3b]';
               let iconEl: React.ReactNode = null;
               let titleEl: React.ReactNode = null;
               let bodyEl: React.ReactNode = null;
@@ -296,22 +296,22 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                 const a = entry.item;
                 const isAuto = a.origem_acao === 'automatico';
                 leftBorderColor = isAuto ? '#bfdbfe' : '#bbf7d0';
-                iconBg = isAuto ? 'bg-blue-100' : 'bg-green-100';
+                iconBg = isAuto ? 'bg-blue-500/20' : 'bg-green-500/20';
                 iconEl = isAuto
-                  ? <Bot size={14} className="text-blue-600" />
-                  : <User size={14} className="text-green-600" />;
+                  ? <Bot size={14} className="text-blue-400" />
+                  : <User size={14} className="text-green-400" />;
                 origemBadge = (
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${isAuto ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${isAuto ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'}`}>
                     {isAuto ? '🤖 Automático' : '👤 Humano'}
                   </span>
                 );
                 titleEl = (
-                  <span className="font-medium text-sm text-gray-900">
+                  <span className="font-medium text-sm text-slate-100">
                     Abordagem via {a.canal}
                   </span>
                 );
                 bodyEl = (
-                  <p className="text-sm text-gray-600 mt-1 bg-gray-50 rounded-lg p-3 whitespace-pre-wrap leading-relaxed border border-gray-100 line-clamp-4">
+                  <p className="text-sm text-slate-300 mt-1 bg-[#0f1117] rounded-lg p-3 whitespace-pre-wrap leading-relaxed border border-[#2a3147] line-clamp-4">
                     {a.mensagem_enviada}
                   </p>
                 );
@@ -320,39 +320,39 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                 const isPositive = r.tipo === 'interesse_positivo' || r.tipo === 'pediu_mais_info';
                 const isNeg = r.tipo === 'opt_out' || r.tipo === 'negativa_definitiva';
                 leftBorderColor = isPositive ? '#86efac' : isNeg ? '#fca5a5' : '#fde68a';
-                iconBg = isPositive ? 'bg-green-100' : isNeg ? 'bg-red-100' : 'bg-amber-100';
-                iconEl = <MessageCircle size={14} className={isPositive ? 'text-green-600' : isNeg ? 'text-red-600' : 'text-amber-600'} />;
+                iconBg = isPositive ? 'bg-green-500/20' : isNeg ? 'bg-red-500/20' : 'bg-amber-500/20';
+                iconEl = <MessageCircle size={14} className={isPositive ? 'text-green-400' : isNeg ? 'text-red-400' : 'text-amber-400'} />;
                 origemBadge = (
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getTipoRespostaBadgeClasses(r.tipo)}`}>
                     {getTipoRespostaLabel(r.tipo)}
                   </span>
                 );
-                titleEl = <span className="font-medium text-sm text-gray-900">Resposta recebida</span>;
+                titleEl = <span className="font-medium text-sm text-slate-100">Resposta recebida</span>;
                 bodyEl = (
-                  <p className="text-sm text-gray-600 mt-1 bg-gray-50 rounded-lg p-3 italic border border-gray-100 leading-relaxed">
+                  <p className="text-sm text-slate-300 mt-1 bg-[#0f1117] rounded-lg p-3 italic border border-[#2a3147] leading-relaxed">
                     &ldquo;{r.conteudo}&rdquo;
                   </p>
                 );
               } else if (entry.kind === 'webhook') {
                 const w = entry.item;
                 leftBorderColor = '#e9d5ff';
-                iconBg = 'bg-purple-50';
+                iconBg = 'bg-purple-500/10';
                 iconEl = <span className="text-purple-500 text-xs font-bold">⚡</span>;
                 origemBadge = (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-100">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
                     automação
                   </span>
                 );
-                titleEl = <span className="font-medium text-sm text-gray-700">{w.evento}</span>;
+                titleEl = <span className="font-medium text-sm text-slate-300">{w.evento}</span>;
                 bodyEl = null;
               } else if (entry.kind === 'followup') {
                 const f = entry.item;
                 leftBorderColor = '#bbf7d0';
-                iconBg = 'bg-green-100';
-                iconEl = <CheckCircle size={14} className="text-green-600" />;
-                origemBadge = <span className="text-xs text-gray-400">realizado</span>;
-                titleEl = <span className="font-medium text-sm text-gray-900">{getTipoAcaoLabel(f.tipo_acao)}</span>;
-                bodyEl = f.observacao ? <p className="text-xs text-gray-500 mt-1">{f.observacao}</p> : null;
+                iconBg = 'bg-green-500/20';
+                iconEl = <CheckCircle size={14} className="text-green-400" />;
+                origemBadge = <span className="text-xs text-slate-500">realizado</span>;
+                titleEl = <span className="font-medium text-sm text-slate-100">{getTipoAcaoLabel(f.tipo_acao)}</span>;
+                bodyEl = f.observacao ? <p className="text-xs text-slate-400 mt-1">{f.observacao}</p> : null;
               }
 
               return (
@@ -368,7 +368,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                     <div className="flex items-center gap-2 flex-wrap">
                       {titleEl}
                       {origemBadge}
-                      <span className="text-xs text-gray-400 ml-auto shrink-0">{timeStr}</span>
+                      <span className="text-xs text-slate-500 ml-auto shrink-0">{timeStr}</span>
                     </div>
                     {bodyEl}
                   </div>
@@ -379,38 +379,38 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         </div>
 
         {/* Próximos Follow-ups */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-800">Próximos Follow-ups</h2>
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none overflow-hidden">
+          <div className="px-5 py-4 border-b border-[#2a3147] flex items-center justify-between">
+            <h2 className="font-semibold text-slate-200">Próximos Follow-ups</h2>
             <button
               onClick={() => setShowAddFollowUp(true)}
-              className="text-xs text-indigo-600 hover:underline flex items-center gap-1"
+              className="text-xs text-indigo-400 hover:underline flex items-center gap-1"
             >
               <PlusCircle size={13} /> Novo
             </button>
           </div>
           <div className="px-5 py-3 space-y-2">
             {pendingFollowUps.length === 0 ? (
-              <p className="text-sm text-gray-400 py-3">Nenhum follow-up pendente.</p>
+              <p className="text-sm text-slate-500 py-3">Nenhum follow-up pendente.</p>
             ) : (
               pendingFollowUps.map(f => (
                 <div key={f.id} className={`flex items-center gap-3 p-3 rounded-lg border ${
-                  f.status === 'atrasado' ? 'border-red-200 bg-red-50' : 'border-gray-100 bg-gray-50'
+                  f.status === 'atrasado' ? 'border-red-500/30 bg-red-500/10' : 'border-[#2a3147] bg-[#0f1117]'
                 }`}>
                   {f.status === 'atrasado'
                     ? <AlertTriangle size={14} className="text-red-500 shrink-0" />
-                    : <Clock size={14} className="text-gray-400 shrink-0" />}
+                    : <Clock size={14} className="text-slate-500 shrink-0" />}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-800">{getTipoAcaoLabel(f.tipo_acao)}</span>
+                      <span className="text-sm font-medium text-slate-200">{getTipoAcaoLabel(f.tipo_acao)}</span>
                       <span className={`text-xs px-1.5 py-0.5 rounded-full ${getCanalBadgeClasses(f.canal_previsto)}`}>
                         {f.canal_previsto}
                       </span>
-                      <span className="text-xs text-gray-400">{f.responsavel}</span>
+                      <span className="text-xs text-slate-500">{f.responsavel}</span>
                     </div>
-                    {f.observacao && <div className="text-xs text-gray-500 mt-0.5 truncate">{f.observacao}</div>}
+                    {f.observacao && <div className="text-xs text-slate-400 mt-0.5 truncate">{f.observacao}</div>}
                   </div>
-                  <div className={`text-xs font-semibold shrink-0 ${f.status === 'atrasado' ? 'text-red-600' : 'text-gray-500'}`}>
+                  <div className={`text-xs font-semibold shrink-0 ${f.status === 'atrasado' ? 'text-red-400' : 'text-slate-400'}`}>
                     {formatDate(f.data_prevista)}
                     {f.status === 'atrasado' && ' ⚠'}
                   </div>
@@ -421,22 +421,22 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         </div>
 
         {/* Lead actions footer */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none px-5 py-4">
           <div className="flex items-center gap-3 flex-wrap">
             <div className="relative">
               <button
                 onClick={() => setShowStatusChange(s => !s)}
-                className="flex items-center gap-2 text-sm text-gray-600 border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-2 text-sm text-slate-300 border border-[#2a3147] px-3 py-2 rounded-lg hover:bg-[#0f1117] transition-colors"
               >
                 Mudar status
                 <ChevronDown size={14} />
               </button>
               {showStatusChange && (
-                <div className="absolute bottom-full mb-1 left-0 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-10 min-w-48">
+                <div className="absolute bottom-full mb-1 left-0 bg-[#1a1f2e] border border-[#2a3147] rounded-xl shadow-lg py-1 z-10 min-w-48">
                   {STATUS_ALL.filter(s => s !== empresa.status).map(s => (
                     <button
                       key={s}
-                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-[#0f1117] transition-colors"
                       onClick={() => { updateEmpresa(id, { status: s }); setShowStatusChange(false); }}
                     >
                       <span className={`inline-block text-xs px-2 py-0.5 rounded-full ${getStatusBadgeClasses(s)} mr-2`}>
@@ -448,12 +448,12 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               )}
             </div>
 
-            <button className="text-sm text-gray-600 border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors">
+            <button className="text-sm text-slate-300 border border-[#2a3147] px-3 py-2 rounded-lg hover:bg-[#0f1117] transition-colors">
               Transferir responsável
             </button>
 
             {!empresa.blacklist && (
-              <button className="flex items-center gap-1.5 text-sm text-red-600 border border-red-200 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 transition-colors">
+              <button className="flex items-center gap-1.5 text-sm text-red-400 border border-red-500/30 px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition-colors">
                 <Ban size={14} /> Adicionar à Blacklist
               </button>
             )}
@@ -464,25 +464,25 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       {/* Modal: Registrar Abordagem */}
       {showAddAbordagem && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowAddAbordagem(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#1a1f2e] rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-lg text-gray-900">Registrar Abordagem</h3>
-              <button onClick={() => setShowAddAbordagem(false)}><X size={18} className="text-gray-400" /></button>
+              <h3 className="font-bold text-lg text-slate-100">Registrar Abordagem</h3>
+              <button onClick={() => setShowAddAbordagem(false)}><X size={18} className="text-slate-500" /></button>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="text-sm font-medium text-gray-700">Canal</label>
-                <select className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
+                <label className="text-sm font-medium text-slate-300">Canal</label>
+                <select className="mt-1 w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm bg-[#1a1f2e]">
                   <option>LinkedIn</option><option>Email</option><option>WhatsApp</option><option>Telefone</option>
                 </select>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700">Mensagem enviada</label>
-                <textarea rows={4} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="Descreva o que foi enviado ou falado..." />
+                <label className="text-sm font-medium text-slate-300">Mensagem enviada</label>
+                <textarea rows={4} className="mt-1 w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="Descreva o que foi enviado ou falado..." />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowAddAbordagem(false)} className="flex-1 text-sm text-gray-600 border border-gray-200 rounded-lg py-2 hover:bg-gray-50">Cancelar</button>
+              <button onClick={() => setShowAddAbordagem(false)} className="flex-1 text-sm text-slate-300 border border-[#2a3147] rounded-lg py-2 hover:bg-[#0f1117]">Cancelar</button>
               <button onClick={() => setShowAddAbordagem(false)} className="flex-1 text-sm font-medium text-white rounded-lg py-2" style={{ backgroundColor: '#1e3a5f' }}>Registrar</button>
             </div>
           </div>
@@ -492,15 +492,15 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       {/* Modal: Registrar Resposta */}
       {showAddResposta && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowAddResposta(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#1a1f2e] rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-lg text-gray-900">Registrar Resposta</h3>
-              <button onClick={() => setShowAddResposta(false)}><X size={18} className="text-gray-400" /></button>
+              <h3 className="font-bold text-lg text-slate-100">Registrar Resposta</h3>
+              <button onClick={() => setShowAddResposta(false)}><X size={18} className="text-slate-500" /></button>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="text-sm font-medium text-gray-700">Tipo de resposta</label>
-                <select className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
+                <label className="text-sm font-medium text-slate-300">Tipo de resposta</label>
+                <select className="mt-1 w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm bg-[#1a1f2e]">
                   <option value="interesse_positivo">✅ Interesse Positivo</option>
                   <option value="pediu_mais_info">📋 Pediu Mais Info</option>
                   <option value="sem_interesse_agora">⏸ Sem Interesse Agora</option>
@@ -511,12 +511,12 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                 </select>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700">Conteúdo da resposta</label>
-                <textarea rows={3} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="Cole ou descreva o que o lead respondeu..." />
+                <label className="text-sm font-medium text-slate-300">Conteúdo da resposta</label>
+                <textarea rows={3} className="mt-1 w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="Cole ou descreva o que o lead respondeu..." />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowAddResposta(false)} className="flex-1 text-sm text-gray-600 border border-gray-200 rounded-lg py-2 hover:bg-gray-50">Cancelar</button>
+              <button onClick={() => setShowAddResposta(false)} className="flex-1 text-sm text-slate-300 border border-[#2a3147] rounded-lg py-2 hover:bg-[#0f1117]">Cancelar</button>
               <button onClick={() => setShowAddResposta(false)} className="flex-1 text-sm font-medium text-white rounded-lg py-2 bg-green-600">Registrar</button>
             </div>
           </div>
@@ -526,16 +526,16 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
       {/* Modal: Novo Follow-up */}
       {showAddFollowUp && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowAddFollowUp(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#1a1f2e] rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-lg text-gray-900">Novo Follow-up</h3>
-              <button onClick={() => setShowAddFollowUp(false)}><X size={18} className="text-gray-400" /></button>
+              <h3 className="font-bold text-lg text-slate-100">Novo Follow-up</h3>
+              <button onClick={() => setShowAddFollowUp(false)}><X size={18} className="text-slate-500" /></button>
             </div>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Tipo de ação</label>
-                  <select className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
+                  <label className="text-sm font-medium text-slate-300">Tipo de ação</label>
+                  <select className="mt-1 w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm bg-[#1a1f2e]">
                     <option value="ligar">Ligar</option>
                     <option value="enviar_mensagem">Enviar mensagem</option>
                     <option value="enviar_material">Enviar material</option>
@@ -543,23 +543,23 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Canal</label>
-                  <select className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
+                  <label className="text-sm font-medium text-slate-300">Canal</label>
+                  <select className="mt-1 w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm bg-[#1a1f2e]">
                     <option>LinkedIn</option><option>Email</option><option>WhatsApp</option><option>Telefone</option>
                   </select>
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700">Data prevista</label>
-                <input type="date" defaultValue={TODAY} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100" />
+                <label className="text-sm font-medium text-slate-300">Data prevista</label>
+                <input type="date" defaultValue={TODAY} className="mt-1 w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100" />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700">Observação</label>
-                <textarea rows={2} className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="O que precisa ser feito..." />
+                <label className="text-sm font-medium text-slate-300">Observação</label>
+                <textarea rows={2} className="mt-1 w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="O que precisa ser feito..." />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowAddFollowUp(false)} className="flex-1 text-sm text-gray-600 border border-gray-200 rounded-lg py-2 hover:bg-gray-50">Cancelar</button>
+              <button onClick={() => setShowAddFollowUp(false)} className="flex-1 text-sm text-slate-300 border border-[#2a3147] rounded-lg py-2 hover:bg-[#0f1117]">Cancelar</button>
               <button onClick={() => setShowAddFollowUp(false)} className="flex-1 text-sm font-medium text-white rounded-lg py-2" style={{ backgroundColor: '#6366f1' }}>Agendar</button>
             </div>
           </div>

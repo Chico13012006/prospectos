@@ -105,36 +105,36 @@ function daysBetween(a: string, b: string) {
 // Rótulo e ícone por tipo de interação vinda do Supabase
 const INTERACAO_TIPO: Record<string, { label: string; Icon: typeof Bot; color: string }> = {
   abordagem: { label: 'Abordagem', Icon: User, color: 'text-green-500' },
-  resposta: { label: 'Resposta recebida', Icon: MessageSquare, color: 'text-green-600' },
-  follow_up: { label: 'Follow-up registrado', Icon: CheckCircle, color: 'text-green-600' },
-  nota: { label: 'Nota', Icon: FileText, color: 'text-gray-500' },
+  resposta: { label: 'Resposta recebida', Icon: MessageSquare, color: 'text-green-400' },
+  follow_up: { label: 'Follow-up registrado', Icon: CheckCircle, color: 'text-green-400' },
+  nota: { label: 'Nota', Icon: FileText, color: 'text-slate-400' },
   reuniao: { label: 'Reunião', Icon: Bell, color: 'text-purple-500' },
 };
 
 // Badge de tipo na Central do Lead (cobre variações de follow_up: follow_up_1/2/3/4)
 function getTipoInteracaoBadge(tipo: string): { label: string; classes: string } {
-  if (tipo === 'abordagem') return { label: 'Primeiro contato enviado', classes: 'bg-blue-100 text-blue-700' };
-  if (tipo.startsWith('follow_up')) return { label: 'Follow-up enviado', classes: 'bg-purple-100 text-purple-700' };
-  if (tipo === 'resposta') return { label: 'Resposta recebida', classes: 'bg-green-100 text-green-700' };
-  if (tipo === 'nota') return { label: 'Nota', classes: 'bg-gray-100 text-gray-600' };
-  if (tipo === 'reuniao') return { label: 'Reunião', classes: 'bg-amber-100 text-amber-700' };
-  return { label: tipo, classes: 'bg-gray-100 text-gray-600' };
+  if (tipo === 'abordagem') return { label: 'Primeiro contato enviado', classes: 'bg-blue-500/20 text-blue-400' };
+  if (tipo.startsWith('follow_up')) return { label: 'Follow-up enviado', classes: 'bg-purple-500/20 text-purple-400' };
+  if (tipo === 'resposta') return { label: 'Resposta recebida', classes: 'bg-green-500/20 text-green-400' };
+  if (tipo === 'nota') return { label: 'Nota', classes: 'bg-[#252b3b] text-slate-300' };
+  if (tipo === 'reuniao') return { label: 'Reunião', classes: 'bg-amber-500/20 text-amber-400' };
+  return { label: tipo, classes: 'bg-[#252b3b] text-slate-300' };
 }
 
 // Badge de status (lado direito) derivado do tipo
 function getStatusInteracao(tipo: string): { label: string; classes: string } | null {
-  if (tipo === 'abordagem' || tipo.startsWith('follow_up')) return { label: 'Enviado', classes: 'bg-blue-50 text-blue-600' };
-  if (tipo === 'resposta') return { label: 'Respondido', classes: 'bg-green-50 text-green-600' };
-  if (tipo === 'reuniao') return { label: 'Agendado', classes: 'bg-amber-50 text-amber-600' };
+  if (tipo === 'abordagem' || tipo.startsWith('follow_up')) return { label: 'Enviado', classes: 'bg-blue-500/10 text-blue-400' };
+  if (tipo === 'resposta') return { label: 'Respondido', classes: 'bg-green-500/10 text-green-400' };
+  if (tipo === 'reuniao') return { label: 'Agendado', classes: 'bg-amber-500/10 text-amber-400' };
   return null;
 }
 
 // Rótulo, ícone e cor do canal (valores em minúsculo no Supabase)
 const CANAL_INFO: Record<string, { label: string; Icon: typeof Bot; classes: string }> = {
-  email: { label: 'Email', Icon: Mail, classes: 'bg-gray-100 text-gray-700' },
-  whatsapp: { label: 'WhatsApp', Icon: MessageSquare, classes: 'bg-green-100 text-green-700' },
-  linkedin: { label: 'LinkedIn', Icon: ExternalLink, classes: 'bg-blue-100 text-blue-700' },
-  telefone: { label: 'Telefone', Icon: Phone, classes: 'bg-purple-100 text-purple-700' },
+  email: { label: 'Email', Icon: Mail, classes: 'bg-[#252b3b] text-slate-300' },
+  whatsapp: { label: 'WhatsApp', Icon: MessageSquare, classes: 'bg-green-500/20 text-green-400' },
+  linkedin: { label: 'LinkedIn', Icon: ExternalLink, classes: 'bg-blue-500/20 text-blue-400' },
+  telefone: { label: 'Telefone', Icon: Phone, classes: 'bg-purple-500/20 text-purple-400' },
 };
 
 function scoreColor(score: number): string {
@@ -153,15 +153,15 @@ function LeadCard({ empresa, onClick }: { empresa: Empresa; onClick: () => void 
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all"
+      className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-3.5 cursor-pointer hover:shadow-none hover:border-indigo-500/30 transition-all"
     >
-      <div className="font-medium text-sm text-gray-900 leading-tight mb-2">{empresa.nome}</div>
-      <div className="text-xs text-gray-500 mb-2">{empresa.cidade}, {empresa.estado}</div>
+      <div className="font-medium text-sm text-slate-100 leading-tight mb-2">{empresa.nome}</div>
+      <div className="text-xs text-slate-400 mb-2">{empresa.cidade}, {empresa.estado}</div>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+        <span className="text-xs bg-[#252b3b] text-slate-300 px-2 py-0.5 rounded-full">
           {empresa.segmento}
         </span>
-        <span className={`text-xs ${isDelayed ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
+        <span className={`text-xs ${isDelayed ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
           {empresa.estagio_pipeline === 'novos_leads'
             ? `Adicionado há ${timeSince}d`
             : empresa.estagio_pipeline === 'aguardando_resposta'
@@ -173,7 +173,7 @@ function LeadCard({ empresa, onClick }: { empresa: Empresa; onClick: () => void 
       </div>
       <div className="flex gap-1.5 mb-3">
         {empresa.em_cadencia && <span title="LinkedIn"><ExternalLink size={11} className="text-indigo-400" /></span>}
-        <span title="Email"><Mail size={11} className="text-gray-300" /></span>
+        <span title="Email"><Mail size={11} className="text-slate-600" /></span>
         {empresa.segmento === 'Agro' && <span title="WhatsApp"><MessageSquare size={11} className="text-green-400" /></span>}
         {(empresa.segmento === 'Petróleo' || empresa.segmento === 'Mineração') ? <span title="Telefone"><Phone size={11} className="text-purple-400" /></span> : null}
       </div>
@@ -380,11 +380,11 @@ export default function PipelinePage() {
       {/* Header */}
       <div className="px-6 pt-6 pb-4 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Pipeline de Contato</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Visão Kanban com execução automática de ações</p>
+          <h1 className="text-2xl font-bold text-slate-100">Pipeline de Contato</h1>
+          <p className="text-sm text-slate-400 mt-0.5">Visão Kanban com execução automática de ações</p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 text-sm text-gray-600 border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50">
+          <button className="flex items-center gap-2 text-sm text-slate-300 border border-[#2a3147] px-3 py-2 rounded-lg hover:bg-[#0f1117]">
             <Settings size={14} /> Configurar automações
           </button>
           <button
@@ -399,32 +399,32 @@ export default function PipelinePage() {
       {/* Filter bar */}
       <div className="px-6 pb-4 flex items-center gap-2 flex-wrap">
         <div className="relative">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar empresa ou contato..."
-            className="pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg bg-white w-52 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            className="pl-8 pr-3 py-2 text-sm border border-[#2a3147] rounded-lg bg-[#1a1f2e] w-52 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
         </div>
         {['Todos os canais', 'Todos os responsáveis', 'Todos os nichos', 'Todos os status'].map(f => (
-          <select key={f} className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-600 focus:outline-none">
+          <select key={f} className="text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none">
             <option>{f}</option>
           </select>
         ))}
-        <span className="text-xs text-gray-400 ml-auto">Ordenar: Mais recentes</span>
+        <span className="text-xs text-slate-500 ml-auto">Ordenar: Mais recentes</span>
       </div>
 
       {/* Kanban */}
       <div className="overflow-x-auto px-6 pb-4">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-gray-400">
+          <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
             <Loader2 size={18} className="animate-spin" />
             <span className="text-sm">Carregando leads...</span>
           </div>
         ) : usingSupabase && supabaseLeads.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2">
-            <span className="text-sm font-medium text-gray-500">Nenhum lead encontrado.</span>
+          <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2">
+            <span className="text-sm font-medium text-slate-400">Nenhum lead encontrado.</span>
             <span className="text-xs">Importe seus contatos para começar.</span>
           </div>
         ) : (
@@ -436,9 +436,9 @@ export default function PipelinePage() {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: stage.color }} />
-                      <span className="text-sm font-semibold text-gray-700 leading-tight">{stage.label}</span>
+                      <span className="text-sm font-semibold text-slate-300 leading-tight">{stage.label}</span>
                     </div>
-                    <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                    <span className="text-xs font-bold text-slate-500 bg-[#252b3b] px-2 py-0.5 rounded-full">
                       {stageLeads.length}
                     </span>
                   </div>
@@ -453,7 +453,7 @@ export default function PipelinePage() {
                     ))}
                   </div>
 
-                  <button className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 border border-dashed border-gray-200 rounded-xl py-2.5 hover:border-gray-300 transition-colors">
+                  <button className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 border border-dashed border-[#2a3147] rounded-xl py-2.5 hover:border-[#2a3147] transition-colors">
                     <Plus size={12} /> Adicionar lead
                   </button>
                 </div>
@@ -465,8 +465,8 @@ export default function PipelinePage() {
 
       {/* Como funciona */}
       <div className="px-6 pb-5">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-gray-800 mb-5 flex items-center gap-2">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+          <h2 className="font-semibold text-slate-200 mb-5 flex items-center gap-2">
             <Zap size={16} className="text-amber-500" />
             Como funciona o processo
           </h2>
@@ -481,14 +481,14 @@ export default function PipelinePage() {
               <div key={step.n} className="flex items-start flex-1">
                 <div className="flex flex-col items-center flex-1 pr-2">
                   <div className="flex items-center w-full">
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 text-sm font-bold flex items-center justify-center shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 text-sm font-bold flex items-center justify-center shrink-0">
                       {step.n}
                     </div>
-                    {i < 4 && <div className="flex-1 h-0.5 bg-indigo-100 mx-1.5" />}
+                    {i < 4 && <div className="flex-1 h-0.5 bg-indigo-500/20 mx-1.5" />}
                   </div>
                   <div className="mt-2 w-full">
-                    <div className="text-sm font-semibold text-gray-800">{step.title}</div>
-                    <div className="text-xs text-gray-500 mt-0.5 leading-snug">{step.desc}</div>
+                    <div className="text-sm font-semibold text-slate-200">{step.title}</div>
+                    <div className="text-xs text-slate-400 mt-0.5 leading-snug">{step.desc}</div>
                   </div>
                 </div>
               </div>
@@ -499,8 +499,8 @@ export default function PipelinePage() {
 
       {/* Automações + Benefícios + Ações */}
       <div className="px-6 pb-8 grid grid-cols-3 gap-5">
-        <div className="col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-gray-800 mb-4">
+        <div className="col-span-2 bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+          <h2 className="font-semibold text-slate-200 mb-4">
             Automações que acontecem ao executar uma ação
           </h2>
           <div className="grid grid-cols-3 gap-3">
@@ -512,21 +512,21 @@ export default function PipelinePage() {
               { Icon: Bell, color: '#8b5cf6', title: 'Notifica responsável', desc: 'O responsável recebe notificação da ação executada.' },
               { Icon: BarChart2, color: '#ef4444', title: 'Atualiza métricas', desc: 'As métricas e relatórios são atualizados em tempo real.' },
             ].map(item => (
-              <div key={item.title} className="p-3 rounded-xl bg-gray-50 border border-gray-100">
+              <div key={item.title} className="p-3 rounded-xl bg-[#0f1117] border border-[#2a3147]">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2"
                   style={{ backgroundColor: `${item.color}18` }}>
                   <item.Icon size={15} style={{ color: item.color }} />
                 </div>
-                <div className="text-sm font-semibold text-gray-800 mb-0.5">{item.title}</div>
-                <div className="text-xs text-gray-500 leading-snug">{item.desc}</div>
+                <div className="text-sm font-semibold text-slate-200 mb-0.5">{item.title}</div>
+                <div className="text-xs text-slate-400 leading-snug">{item.desc}</div>
               </div>
             ))}
           </div>
         </div>
 
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-            <h2 className="font-semibold text-gray-800 mb-3 text-sm">Benefícios deste fluxo</h2>
+          <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+            <h2 className="font-semibold text-slate-200 mb-3 text-sm">Benefícios deste fluxo</h2>
             <ul className="space-y-2">
               {[
                 'Execução de ações em 1 clique',
@@ -535,15 +535,15 @@ export default function PipelinePage() {
                 'Próximas ações recomendadas pela IA',
                 'Automação 100% integrada com n8n',
               ].map(b => (
-                <li key={b} className="flex items-start gap-2 text-xs text-gray-600">
+                <li key={b} className="flex items-start gap-2 text-xs text-slate-300">
                   <CheckCircle size={12} className="text-green-500 mt-0.5 shrink-0" />
                   {b}
                 </li>
               ))}
             </ul>
           </div>
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-            <h2 className="font-semibold text-gray-800 mb-3 text-sm">Ações disponíveis no lead</h2>
+          <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+            <h2 className="font-semibold text-slate-200 mb-3 text-sm">Ações disponíveis no lead</h2>
             <ul className="space-y-2">
               {[
                 'Executar próxima ação',
@@ -553,7 +553,7 @@ export default function PipelinePage() {
                 'Marcar como perdido',
                 'Ver histórico completo',
               ].map(a => (
-                <li key={a} className="flex items-start gap-2 text-xs text-gray-600">
+                <li key={a} className="flex items-start gap-2 text-xs text-slate-300">
                   <ArrowRight size={11} className="text-indigo-400 mt-0.5 shrink-0" />
                   {a}
                 </li>
@@ -570,15 +570,15 @@ export default function PipelinePage() {
             className="fixed inset-0 bg-black/20 z-40"
             onClick={() => setSelectedId(null)}
           />
-          <div className="fixed top-0 right-0 h-full w-96 bg-white shadow-2xl z-50 flex flex-col">
+          <div className="fixed top-0 right-0 h-full w-96 bg-[#1a1f2e] shadow-2xl z-50 flex flex-col">
             {/* Panel header */}
-            <div className="px-5 py-4 border-b border-gray-100">
+            <div className="px-5 py-4 border-b border-[#2a3147]">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-start gap-3 flex-1 min-w-0 pr-3">
                   <SdrCircle name={selectedEmpresa.responsavel} />
                   <div className="min-w-0">
-                    <h2 className="font-bold text-gray-900 text-lg leading-tight">{selectedEmpresa.nome}</h2>
-                    <div className="text-sm text-gray-500 mt-0.5">
+                    <h2 className="font-bold text-slate-100 text-lg leading-tight">{selectedEmpresa.nome}</h2>
+                    <div className="text-sm text-slate-400 mt-0.5">
                       {selectedEmpresa.cidade}, {selectedEmpresa.estado}
                       {' · '}{selectedEmpresa.segmento}
                       {selectedEmpresa.funcionarios_faixa && ` · ${selectedEmpresa.funcionarios_faixa} func.`}
@@ -586,23 +586,23 @@ export default function PipelinePage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button className="text-gray-300 hover:text-amber-400 transition-colors"><Star size={16} /></button>
-                  <button onClick={() => setSelectedId(null)} className="text-gray-400 hover:text-gray-700 transition-colors"><X size={18} /></button>
+                  <button className="text-slate-600 hover:text-amber-400 transition-colors"><Star size={16} /></button>
+                  <button onClick={() => setSelectedId(null)} className="text-slate-500 hover:text-slate-300 transition-colors"><X size={18} /></button>
                 </div>
               </div>
               {selectedContato ? (
                 <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-                  <span className="text-sm font-semibold text-gray-800 truncate shrink-0">{selectedContato.nome}</span>
-                  <span className="text-gray-300 text-xs shrink-0">|</span>
-                  <span className="text-xs text-gray-500 truncate shrink-0">{selectedContato.cargo}</span>
-                  <span className="text-gray-300 text-xs shrink-0">|</span>
-                  <span className="text-xs text-gray-600 shrink-0">{selectedContato.canal_preferencial}</span>
-                  <div className="flex items-center gap-2 ml-auto shrink-0 text-gray-400">
+                  <span className="text-sm font-semibold text-slate-200 truncate shrink-0">{selectedContato.nome}</span>
+                  <span className="text-slate-600 text-xs shrink-0">|</span>
+                  <span className="text-xs text-slate-400 truncate shrink-0">{selectedContato.cargo}</span>
+                  <span className="text-slate-600 text-xs shrink-0">|</span>
+                  <span className="text-xs text-slate-300 shrink-0">{selectedContato.canal_preferencial}</span>
+                  <div className="flex items-center gap-2 ml-auto shrink-0 text-slate-500">
                     {selectedContato.email && (
-                      <a href={`mailto:${selectedContato.email}`} className="hover:text-blue-600 transition-colors" title={selectedContato.email}><Mail size={13} /></a>
+                      <a href={`mailto:${selectedContato.email}`} className="hover:text-blue-400 transition-colors" title={selectedContato.email}><Mail size={13} /></a>
                     )}
                     {selectedContato.telefone && (
-                      <a href={`tel:${selectedContato.telefone}`} className="hover:text-green-600 transition-colors" title={selectedContato.telefone}><Phone size={13} /></a>
+                      <a href={`tel:${selectedContato.telefone}`} className="hover:text-green-400 transition-colors" title={selectedContato.telefone}><Phone size={13} /></a>
                     )}
                     {selectedContato.canal_preferencial === 'WhatsApp' && selectedContato.telefone && (
                       <a href={`https://wa.me/${selectedContato.telefone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
@@ -610,15 +610,15 @@ export default function PipelinePage() {
                     )}
                     {selectedContato.linkedin_url && (
                       <a href={`https://${selectedContato.linkedin_url}`} target="_blank" rel="noopener noreferrer"
-                        className="hover:text-blue-600 transition-colors" title="LinkedIn"><ExternalLink size={13} /></a>
+                        className="hover:text-blue-400 transition-colors" title="LinkedIn"><ExternalLink size={13} /></a>
                     )}
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-3 text-gray-400">
+                <div className="flex items-center gap-3 text-slate-500">
                   {selectedEmpresa.website && (
                     <a href={selectedEmpresa.website} target="_blank" rel="noopener noreferrer"
-                      className="hover:text-blue-600 transition-colors" title="Site"><ExternalLink size={13} /></a>
+                      className="hover:text-blue-400 transition-colors" title="Site"><ExternalLink size={13} /></a>
                   )}
                 </div>
               )}
@@ -626,12 +626,12 @@ export default function PipelinePage() {
 
             <div className="flex-1 overflow-y-auto">
               {/* Status */}
-              <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+              <div className="px-5 py-3 border-b border-[#2a3147] flex items-center gap-3">
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusBadgeClasses(selectedEmpresa.status)}`}>
                   {getStatusLabel(selectedEmpresa.status)}
                 </span>
                 {selectedEmpresa.em_cadencia && (
-                  <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">
+                  <span className="text-xs text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-full">
                     Cadência ativa
                   </span>
                 )}
@@ -641,7 +641,7 @@ export default function PipelinePage() {
               </div>
 
               {/* 4 KPI cards */}
-              <div className="px-4 py-3 border-b border-gray-100 grid grid-cols-2 gap-2">
+              <div className="px-4 py-3 border-b border-[#2a3147] grid grid-cols-2 gap-2">
                 {[
                   {
                     label: 'Último contato',
@@ -668,21 +668,21 @@ export default function PipelinePage() {
                     color: '#374151',
                   },
                 ].map(card => (
-                  <div key={card.label} className="bg-gray-50 rounded-xl px-3 py-2" style={{ maxHeight: 80 }}>
-                    <div className="text-xs text-gray-400 mb-1 leading-none">{card.label}</div>
+                  <div key={card.label} className="bg-[#0f1117] rounded-xl px-3 py-2" style={{ maxHeight: 80 }}>
+                    <div className="text-xs text-slate-500 mb-1 leading-none">{card.label}</div>
                     <div className="font-bold text-sm leading-tight truncate" style={{ color: card.color }}>{card.value}</div>
-                    {card.sub && <div className="text-xs text-gray-400 mt-0.5">{card.sub}</div>}
+                    {card.sub && <div className="text-xs text-slate-500 mt-0.5">{card.sub}</div>}
                   </div>
                 ))}
               </div>
 
               {/* Próxima ação IA */}
-              <div className="px-5 py-3 border-b border-gray-100">
+              <div className="px-5 py-3 border-b border-[#2a3147]">
                 <div className="flex items-center gap-1.5 mb-2">
                   <Bot size={12} className="text-indigo-500" />
-                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Próxima ação · IA</span>
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Próxima ação · IA</span>
                   {isActionDelayed && (
-                    <span className="ml-auto text-xs font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Atrasada</span>
+                    <span className="ml-auto text-xs font-semibold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded">Atrasada</span>
                   )}
                 </div>
                 <button
@@ -690,13 +690,13 @@ export default function PipelinePage() {
                   onClick={handleExecutarAcao}
                   disabled={executando}
                   title="Executar próxima etapa da cadência"
-                  className={`w-full text-left rounded-xl px-3 py-2 mb-2 transition-colors disabled:opacity-60 ${isActionDelayed ? 'bg-red-50 hover:bg-red-100' : 'bg-indigo-50 hover:bg-indigo-100'}`}
+                  className={`w-full text-left rounded-xl px-3 py-2 mb-2 transition-colors disabled:opacity-60 ${isActionDelayed ? 'bg-red-500/10 hover:bg-red-500/20' : 'bg-indigo-500/10 hover:bg-indigo-500/20'}`}
                 >
                   <p className={`text-sm font-semibold leading-snug ${isActionDelayed ? 'text-red-900' : 'text-indigo-900'}`}>
                     {selectedEmpresa.observacoes ?? AI_ACTIONS[selectedEmpresa.id]?.action ?? 'Executar próxima etapa da cadência'}
                   </p>
                 </button>
-                <button className="w-full text-xs font-medium text-gray-600 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors mb-2">
+                <button className="w-full text-xs font-medium text-slate-300 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors mb-2">
                   Registrar ação
                 </button>
                 <div className="flex gap-2">
@@ -708,36 +708,36 @@ export default function PipelinePage() {
                   >
                     {executando ? 'Executando...' : 'Executar ação'}
                   </button>
-                  <button className="flex-1 text-xs font-medium text-gray-600 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                  <button className="flex-1 text-xs font-medium text-slate-300 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors">
                     Gerar mensagem
                   </button>
                 </div>
                 {feedbackAcao && (
-                  <p className={`text-xs mt-2 ${feedbackAcao.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>
+                  <p className={`text-xs mt-2 ${feedbackAcao.startsWith('✓') ? 'text-green-400' : 'text-red-500'}`}>
                     {feedbackAcao}
                   </p>
                 )}
               </div>
 
               {/* Resumo IA */}
-              <div className="px-5 py-3 border-b border-gray-100">
+              <div className="px-5 py-3 border-b border-[#2a3147]">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <Bot size={12} className="text-green-500" />
-                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Resumo · IA</span>
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Resumo · IA</span>
                 </div>
-                <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
+                <p className="text-xs text-slate-300 leading-relaxed line-clamp-3">
                   {AI_SUMMARIES[selectedEmpresa.id] ?? (selectedEmpresa.observacoes ?? 'Sem resumo disponível.')}
                 </p>
               </div>
 
               {/* Registrar interação */}
-              <div className="px-5 py-3 border-b border-gray-100">
-                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide block mb-2">Registrar interação</span>
+              <div className="px-5 py-3 border-b border-[#2a3147]">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-2">Registrar interação</span>
                 <div className="flex gap-2">
                   {(['Abordagem', 'Resposta', 'Follow-up'] as const).map(tipo => (
                     <button
                       key={tipo}
-                      className="flex-1 text-xs font-medium text-gray-600 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                      className="flex-1 text-xs font-medium text-slate-300 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors"
                     >
                       {tipo}
                     </button>
@@ -746,42 +746,42 @@ export default function PipelinePage() {
               </div>
 
               {/* Histórico */}
-              <div className="px-5 py-4 border-b border-gray-100">
+              <div className="px-5 py-4 border-b border-[#2a3147]">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Histórico de interações</span>
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Histórico de interações</span>
                   <button
                     type="button"
                     onClick={() => setShowAllInteracoes(true)}
-                    className="text-xs text-indigo-600 hover:underline flex items-center gap-0.5"
+                    className="text-xs text-indigo-400 hover:underline flex items-center gap-0.5"
                   >
                     Ver tudo <ArrowRight size={10} />
                   </button>
                 </div>
                 {showMockTimeline ? (
                   mockTimeline.length === 0 ? (
-                    <p className="text-xs text-gray-400">Nenhuma interação registrada.</p>
+                    <p className="text-xs text-slate-500">Nenhuma interação registrada.</p>
                   ) : (
                     <div className="space-y-2.5">
                       {mockTimeline.map((entry, i) => (
                         <div key={i} className="flex items-start gap-2.5">
-                          <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <div className="w-5 h-5 rounded-full bg-[#252b3b] flex items-center justify-center shrink-0 mt-0.5">
                             {entry.kind === 'abordagem' && (
                               entry.item.origem_acao === 'automatico'
                                 ? <Bot size={10} className="text-blue-500" />
                                 : <User size={10} className="text-green-500" />
                             )}
-                            {entry.kind === 'resposta' && <MessageSquare size={10} className="text-green-600" />}
-                            {entry.kind === 'followup' && <CheckCircle size={10} className="text-green-600" />}
+                            {entry.kind === 'resposta' && <MessageSquare size={10} className="text-green-400" />}
+                            {entry.kind === 'followup' && <CheckCircle size={10} className="text-green-400" />}
                             {entry.kind === 'webhook' && <Zap size={10} className="text-purple-500" />}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs text-gray-700">
+                            <div className="text-xs text-slate-300">
                               {entry.kind === 'abordagem' && `Abordagem via ${entry.item.canal}`}
                               {entry.kind === 'resposta' && 'Resposta recebida'}
                               {entry.kind === 'followup' && 'Follow-up registrado'}
                               {entry.kind === 'webhook' && entry.item.evento.replace(/\s*--\s*etapa\s*\d+/gi, '')}
                             </div>
-                            <div className="text-xs text-gray-400">
+                            <div className="text-xs text-slate-500">
                               {new Date(entry.date).toLocaleDateString('pt-BR')}
                               {entry.kind === 'abordagem' && (
                                 <span className="ml-1.5">
@@ -795,12 +795,12 @@ export default function PipelinePage() {
                     </div>
                   )
                 ) : loadingInteracoes ? (
-                  <div className="flex items-center gap-2 text-gray-400 py-2">
+                  <div className="flex items-center gap-2 text-slate-500 py-2">
                     <Loader2 size={13} className="animate-spin" />
                     <span className="text-xs">Carregando interações...</span>
                   </div>
                 ) : interacoes.length === 0 ? (
-                  <p className="text-xs text-gray-400">Nenhuma interação registrada ainda.</p>
+                  <p className="text-xs text-slate-500">Nenhuma interação registrada ainda.</p>
                 ) : (
                   <div className="space-y-2.5">
                     {interacoes.map(interacao => {
@@ -809,17 +809,17 @@ export default function PipelinePage() {
                       const Icon = isIA ? Bot : cfg.Icon;
                       return (
                         <div key={interacao.id} className="flex items-start gap-2.5">
-                          <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <div className="w-5 h-5 rounded-full bg-[#252b3b] flex items-center justify-center shrink-0 mt-0.5">
                             <Icon size={10} className={isIA ? 'text-blue-500' : cfg.color} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs text-gray-700">
+                            <div className="text-xs text-slate-300">
                               {interacao.descricao || cfg.label}
                               {interacao.canal && (
-                                <span className="text-gray-400"> · {interacao.canal}</span>
+                                <span className="text-slate-500"> · {interacao.canal}</span>
                               )}
                             </div>
-                            <div className="text-xs text-gray-400">
+                            <div className="text-xs text-slate-500">
                               {new Date(interacao.created_at).toLocaleDateString('pt-BR')}
                               <span className="ml-1.5">{isIA ? '· IA' : '· Manual'}</span>
                               {interacao.usuarios?.nome && (
@@ -836,49 +836,49 @@ export default function PipelinePage() {
 
               {/* Informações */}
               <div className="px-5 py-4">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-3">Informações da empresa</span>
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-3">Informações da empresa</span>
                 <div className="space-y-1.5 text-sm">
                   {selectedEmpresa.website && (
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Site</span>
+                      <span className="text-slate-400">Site</span>
                       <a href={selectedEmpresa.website} target="_blank" rel="noopener noreferrer"
-                        className="text-indigo-600 hover:underline text-xs truncate max-w-44">{selectedEmpresa.website}</a>
+                        className="text-indigo-400 hover:underline text-xs truncate max-w-44">{selectedEmpresa.website}</a>
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Segmento</span>
-                    <span className="font-medium text-gray-700">{selectedEmpresa.segmento}</span>
+                    <span className="text-slate-400">Segmento</span>
+                    <span className="font-medium text-slate-300">{selectedEmpresa.segmento}</span>
                   </div>
                   {selectedEmpresa.funcionarios_faixa && (
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Funcionários</span>
-                      <span className="font-medium text-gray-700">{selectedEmpresa.funcionarios_faixa}</span>
+                      <span className="text-slate-400">Funcionários</span>
+                      <span className="font-medium text-slate-300">{selectedEmpresa.funcionarios_faixa}</span>
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Cidade</span>
-                    <span className="font-medium text-gray-700">{selectedEmpresa.cidade}, {selectedEmpresa.estado}</span>
+                    <span className="text-slate-400">Cidade</span>
+                    <span className="font-medium text-slate-300">{selectedEmpresa.cidade}, {selectedEmpresa.estado}</span>
                   </div>
                   {selectedEmpresa.faturamento_estimado && (
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Faturamento est.</span>
-                      <span className="font-medium text-gray-700 text-xs">{selectedEmpresa.faturamento_estimado}</span>
+                      <span className="text-slate-400">Faturamento est.</span>
+                      <span className="font-medium text-slate-300 text-xs">{selectedEmpresa.faturamento_estimado}</span>
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Origem do lead</span>
-                    <span className="font-medium text-gray-700">{selectedEmpresa.origem}</span>
+                    <span className="text-slate-400">Origem do lead</span>
+                    <span className="font-medium text-slate-300">{selectedEmpresa.origem}</span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Footer */}
-            <div className="px-5 py-4 border-t border-gray-100 flex items-center gap-2.5 bg-gray-50">
+            <div className="px-5 py-4 border-t border-[#2a3147] flex items-center gap-2.5 bg-[#0f1117]">
               <select
                 value={selectedLead?.estagio ?? selectedEmpresa.estagio_pipeline ?? ''}
                 onChange={(e) => handleMoverEstagio(e.target.value)}
-                className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-600 focus:outline-none"
+                className="flex-1 text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none"
               >
                 <option value="" disabled>Mover para outro estágio</option>
                 {STAGES.map(s => (
@@ -892,7 +892,7 @@ export default function PipelinePage() {
                 className={`text-sm font-medium px-3 py-2 rounded-lg transition-colors whitespace-nowrap ${
                   confirmandoPerdido
                     ? 'bg-red-600 text-white hover:bg-red-700 border border-red-600'
-                    : 'text-red-600 border border-red-200 bg-red-50 hover:bg-red-100'
+                    : 'text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20'
                 }`}
               >
                 {confirmandoPerdido ? 'Confirmar perda?' : 'Marcar como perdido'}
@@ -907,28 +907,28 @@ export default function PipelinePage() {
               onClick={() => setShowAllInteracoes(false)}
             >
               <div
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col"
+                className="bg-[#1a1f2e] rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col"
                 onClick={e => e.stopPropagation()}
               >
                 {/* HEADER */}
-                <div className="px-6 py-5 border-b border-gray-100">
+                <div className="px-6 py-5 border-b border-[#2a3147]">
                   <div className="flex items-start justify-between">
                     <div className="min-w-0">
-                      <h2 className="text-xl font-bold text-gray-900 leading-tight">{selectedEmpresa.nome}</h2>
-                      <div className="text-sm text-gray-500 mt-0.5">
+                      <h2 className="text-xl font-bold text-slate-100 leading-tight">{selectedEmpresa.nome}</h2>
+                      <div className="text-sm text-slate-400 mt-0.5">
                         {selectedEmpresa.cidade}, {selectedEmpresa.estado} · {selectedEmpresa.segmento}
                       </div>
                       {selectedContato && (
-                        <div className="flex items-center gap-1.5 text-sm text-gray-600 mt-1">
-                          <span className="font-semibold text-gray-800">{selectedContato.nome}</span>
-                          <span className="text-gray-300">·</span>
-                          <span className="text-gray-500">{selectedContato.cargo}</span>
-                          <span className="text-gray-300">·</span>
+                        <div className="flex items-center gap-1.5 text-sm text-slate-300 mt-1">
+                          <span className="font-semibold text-slate-200">{selectedContato.nome}</span>
+                          <span className="text-slate-600">·</span>
+                          <span className="text-slate-400">{selectedContato.cargo}</span>
+                          <span className="text-slate-600">·</span>
                           {(() => {
                             const ci = selectedLead ? CANAL_INFO[selectedLead.canal_preferencial] : null;
                             const Icon = ci?.Icon ?? Mail;
                             return (
-                              <span className="inline-flex items-center gap-1 text-gray-600">
+                              <span className="inline-flex items-center gap-1 text-slate-300">
                                 <Icon size={13} /> {selectedContato.canal_preferencial}
                               </span>
                             );
@@ -938,7 +938,7 @@ export default function PipelinePage() {
                     </div>
                     <button
                       onClick={() => setShowAllInteracoes(false)}
-                      className="text-gray-400 hover:text-gray-700 transition-colors shrink-0"
+                      className="text-slate-500 hover:text-slate-300 transition-colors shrink-0"
                     >
                       <X size={20} />
                     </button>
@@ -946,37 +946,37 @@ export default function PipelinePage() {
 
                   {/* Row de badges informativos */}
                   <div className="flex flex-wrap gap-2 mt-4">
-                    <div className="flex flex-col bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Responsável</span>
-                      <span className="text-sm font-medium text-gray-700">{selectedEmpresa.responsavel || '—'}</span>
+                    <div className="flex flex-col bg-[#0f1117] rounded-lg px-3 py-1.5 border border-[#2a3147]">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Responsável</span>
+                      <span className="text-sm font-medium text-slate-300">{selectedEmpresa.responsavel || '—'}</span>
                     </div>
-                    <div className="flex flex-col bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Status</span>
-                      <span className="text-sm font-medium text-gray-700">{getEstagioPipelineLabel(selectedEmpresa.estagio_pipeline as EstagioPipeline)}</span>
+                    <div className="flex flex-col bg-[#0f1117] rounded-lg px-3 py-1.5 border border-[#2a3147]">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Status</span>
+                      <span className="text-sm font-medium text-slate-300">{getEstagioPipelineLabel(selectedEmpresa.estagio_pipeline as EstagioPipeline)}</span>
                     </div>
-                    <div className="flex flex-col bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Último contato</span>
-                      <span className="text-sm font-medium text-gray-700">{selectedLead?.ultimo_contato ? formatDate(selectedLead.ultimo_contato) : '—'}</span>
+                    <div className="flex flex-col bg-[#0f1117] rounded-lg px-3 py-1.5 border border-[#2a3147]">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Último contato</span>
+                      <span className="text-sm font-medium text-slate-300">{selectedLead?.ultimo_contato ? formatDate(selectedLead.ultimo_contato) : '—'}</span>
                     </div>
-                    <div className="flex flex-col bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100 max-w-xs">
-                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Próxima ação</span>
-                      <span className="text-sm font-medium text-gray-700 truncate">{selectedLead?.proxima_acao || '—'}</span>
+                    <div className="flex flex-col bg-[#0f1117] rounded-lg px-3 py-1.5 border border-[#2a3147] max-w-xs">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Próxima ação</span>
+                      <span className="text-sm font-medium text-slate-300 truncate">{selectedLead?.proxima_acao || '—'}</span>
                     </div>
-                    <div className="flex flex-col bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Canal preferencial</span>
-                      <span className="text-sm font-medium text-gray-700 capitalize">{selectedLead?.canal_preferencial ?? selectedContato?.canal_preferencial ?? '—'}</span>
+                    <div className="flex flex-col bg-[#0f1117] rounded-lg px-3 py-1.5 border border-[#2a3147]">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Canal preferencial</span>
+                      <span className="text-sm font-medium text-slate-300 capitalize">{selectedLead?.canal_preferencial ?? selectedContato?.canal_preferencial ?? '—'}</span>
                     </div>
-                    <div className="flex flex-col bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-                      <span className="text-[10px] text-gray-400 uppercase tracking-wide">Score</span>
+                    <div className="flex flex-col bg-[#0f1117] rounded-lg px-3 py-1.5 border border-[#2a3147]">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Score</span>
                       <span className="text-sm font-bold" style={{ color: scoreColor(selectedLead?.score ?? selectedEmpresa.score_engajamento) }}>
-                        {selectedLead?.score ?? selectedEmpresa.score_engajamento} <span className="text-gray-400 font-normal">/ 100</span>
+                        {selectedLead?.score ?? selectedEmpresa.score_engajamento} <span className="text-slate-500 font-normal">/ 100</span>
                       </span>
                     </div>
                   </div>
                 </div>
 
                 {/* TABS */}
-                <div className="px-6 border-b border-gray-100 flex gap-1">
+                <div className="px-6 border-b border-[#2a3147] flex gap-1">
                   {([
                     { id: 'timeline', label: 'Linha do tempo' },
                     { id: 'dados', label: 'Dados do lead' },
@@ -986,8 +986,8 @@ export default function PipelinePage() {
                       onClick={() => setCentralTab(tab.id)}
                       className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                         centralTab === tab.id
-                          ? 'border-indigo-500 text-indigo-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                          ? 'border-indigo-500 text-indigo-400'
+                          : 'border-transparent text-slate-400 hover:text-slate-300'
                       }`}
                     >
                       {tab.label}
@@ -1003,20 +1003,20 @@ export default function PipelinePage() {
                       <div className="mb-4">
                         <button
                           onClick={() => setShowRegistrar(v => !v)}
-                          className="flex items-center gap-1.5 text-sm font-medium text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                          className="flex items-center gap-1.5 text-sm font-medium text-indigo-400 border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 rounded-lg transition-colors"
                         >
                           <Plus size={14} /> Registrar interação
                         </button>
 
                         {showRegistrar && (
-                          <div className="mt-3 p-4 rounded-xl border border-gray-200 bg-gray-50 space-y-3">
+                          <div className="mt-3 p-4 rounded-xl border border-[#2a3147] bg-[#0f1117] space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="text-xs font-medium text-gray-500 block mb-1">Tipo</label>
+                                <label className="text-xs font-medium text-slate-400 block mb-1">Tipo</label>
                                 <select
                                   value={novaInteracao.tipo}
                                   onChange={e => setNovaInteracao(s => ({ ...s, tipo: e.target.value }))}
-                                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                  className="w-full text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                                 >
                                   <option value="abordagem">Abordagem</option>
                                   <option value="follow_up">Follow-up</option>
@@ -1026,11 +1026,11 @@ export default function PipelinePage() {
                                 </select>
                               </div>
                               <div>
-                                <label className="text-xs font-medium text-gray-500 block mb-1">Canal</label>
+                                <label className="text-xs font-medium text-slate-400 block mb-1">Canal</label>
                                 <select
                                   value={novaInteracao.canal}
                                   onChange={e => setNovaInteracao(s => ({ ...s, canal: e.target.value }))}
-                                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                  className="w-full text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                                 >
                                   <option value="email">Email</option>
                                   <option value="whatsapp">WhatsApp</option>
@@ -1040,19 +1040,19 @@ export default function PipelinePage() {
                               </div>
                             </div>
                             <div>
-                              <label className="text-xs font-medium text-gray-500 block mb-1">Descrição</label>
+                              <label className="text-xs font-medium text-slate-400 block mb-1">Descrição</label>
                               <textarea
                                 value={novaInteracao.descricao}
                                 onChange={e => setNovaInteracao(s => ({ ...s, descricao: e.target.value }))}
                                 rows={3}
                                 placeholder="Descreva a interação..."
-                                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-none"
+                                className="w-full text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-none"
                               />
                             </div>
                             <div className="flex justify-end gap-2">
                               <button
                                 onClick={() => { setShowRegistrar(false); setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' }); }}
-                                className="text-sm font-medium text-gray-600 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+                                className="text-sm font-medium text-slate-300 px-3 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#252b3b] transition-colors"
                               >
                                 Cancelar
                               </button>
@@ -1072,12 +1072,12 @@ export default function PipelinePage() {
 
                       {/* Lista da timeline */}
                       {loadingInteracoes ? (
-                        <div className="flex items-center gap-2 text-gray-400 py-6">
+                        <div className="flex items-center gap-2 text-slate-500 py-6">
                           <Loader2 size={16} className="animate-spin" />
                           <span className="text-sm">Carregando interações...</span>
                         </div>
                       ) : interacoes.length === 0 ? (
-                        <p className="text-sm text-gray-400 py-4">Nenhuma interação registrada ainda.</p>
+                        <p className="text-sm text-slate-500 py-4">Nenhuma interação registrada ainda.</p>
                       ) : (
                         <div className="space-y-3">
                           {interacoes.map(interacao => {
@@ -1086,10 +1086,10 @@ export default function PipelinePage() {
                             const canal = interacao.canal ? CANAL_INFO[interacao.canal.toLowerCase()] : null;
                             const isIA = interacao.origem_acao === 'ia';
                             return (
-                              <div key={interacao.id} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                              <div key={interacao.id} className="rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-4 shadow-none">
                                 <div className="flex items-start justify-between gap-3 mb-2">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                                    <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                                       <Clock size={11} /> {formatDateTime(interacao.created_at)}
                                     </span>
                                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${tipoBadge.classes}`}>
@@ -1101,7 +1101,7 @@ export default function PipelinePage() {
                                       </span>
                                     )}
                                     {isIA && (
-                                      <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">IA</span>
+                                      <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">IA</span>
                                     )}
                                   </div>
                                   {statusBadge && (
@@ -1111,10 +1111,10 @@ export default function PipelinePage() {
                                   )}
                                 </div>
                                 {interacao.descricao && (
-                                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{interacao.descricao}</p>
+                                  <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{interacao.descricao}</p>
                                 )}
                                 {interacao.usuarios?.nome && (
-                                  <p className="text-xs text-gray-400 mt-1.5">por {interacao.usuarios.nome}</p>
+                                  <p className="text-xs text-slate-500 mt-1.5">por {interacao.usuarios.nome}</p>
                                 )}
                               </div>
                             );
@@ -1141,23 +1141,23 @@ export default function PipelinePage() {
                         { label: 'Score', value: selectedLead ? `${selectedLead.score} / 100` : `${selectedEmpresa.score_engajamento} / 100` },
                         { label: 'Criado em', value: selectedLead?.created_at ? formatDate(selectedLead.created_at) : formatDate(selectedEmpresa.data_entrada) },
                       ].map(field => (
-                        <div key={field.label} className="border-b border-gray-100 pb-2">
-                          <span className="text-xs text-gray-400 uppercase tracking-wide block mb-0.5">{field.label}</span>
+                        <div key={field.label} className="border-b border-[#2a3147] pb-2">
+                          <span className="text-xs text-slate-500 uppercase tracking-wide block mb-0.5">{field.label}</span>
                           {field.value ? (
                             field.isLink ? (
                               <a
                                 href={field.value.startsWith('http') ? field.value : `https://${field.value}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-sm text-indigo-600 hover:underline break-all"
+                                className="text-sm text-indigo-400 hover:underline break-all"
                               >
                                 {field.value}
                               </a>
                             ) : (
-                              <span className={`text-sm font-medium text-gray-700 ${field.capitalize ? 'capitalize' : ''}`}>{field.value}</span>
+                              <span className={`text-sm font-medium text-slate-300 ${field.capitalize ? 'capitalize' : ''}`}>{field.value}</span>
                             )
                           ) : (
-                            <span className="text-sm text-gray-300">—</span>
+                            <span className="text-sm text-slate-600">—</span>
                           )}
                         </div>
                       ))}
