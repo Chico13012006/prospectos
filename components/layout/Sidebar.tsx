@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -13,12 +14,8 @@ import {
   Bot,
   ArrowRight,
   LogOut,
-  User,
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
-
-const BRAND_NAVY = '#1e3a5f';
-const BRAND_NAVY_ACTIVE = '#2d5a8e';
 
 const mainNav = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -28,12 +25,40 @@ const mainNav = [
   { href: '/templates', icon: FileText, label: 'Templates' },
 ];
 
+interface PerfilSidebar {
+  nome: string | null;
+  email: string | null;
+  avatar_url: string | null;
+}
+
+function avatarFallback(nome: string | null, email: string | null) {
+  const seed = nome || email || 'Usuário';
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(seed)}&background=4F46E5&color=fff&size=64&bold=true`;
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [perfil, setPerfil] = useState<PerfilSidebar | null>(null);
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + '/');
+
+  useEffect(() => {
+    let ativo = true;
+    fetch('/api/perfil')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (!ativo || !data) return;
+        setPerfil({
+          nome: data.perfil?.nome ?? null,
+          email: data.email ?? null,
+          avatar_url: data.perfil?.avatar_url ?? null,
+        });
+      })
+      .catch(() => {});
+    return () => { ativo = false; };
+  }, []);
 
   async function handleLogout() {
     const supabase = createSupabaseBrowserClient();
@@ -42,42 +67,32 @@ export default function Sidebar() {
     router.refresh();
   }
 
+  const navItemClasses = (active: boolean) =>
+    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border-l-[3px] ${
+      active
+        ? 'bg-white/10 text-white border-indigo-400'
+        : 'text-indigo-200 border-transparent hover:bg-white/5 hover:text-white'
+    }`;
+
   return (
-    <aside
-      className="flex flex-col w-60 min-h-screen shrink-0"
-      style={{ backgroundColor: BRAND_NAVY }}
-    >
+    <aside className="flex flex-col w-60 min-h-screen shrink-0 bg-indigo-950">
       {/* Brand */}
-      <div className="flex items-center gap-2 px-5 py-5 border-b border-white/10">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-green-500">
+      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-white/10">
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-green-500 shadow-sm">
           <Zap size={16} className="text-white" />
         </div>
         <div>
           <div className="text-white font-bold text-sm leading-tight">ProspectOS</div>
-          <div className="text-blue-200 text-xs leading-tight">InovaCode</div>
+          <div className="text-indigo-300 text-xs leading-tight">InovaCode</div>
         </div>
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
+      <nav className="flex-1 px-3 py-4 space-y-1">
         {mainNav.map(({ href, icon: Icon, label }) => {
           const active = isActive(href);
           return (
-            <Link
-              key={href}
-              href={href}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
-              style={{
-                backgroundColor: active ? BRAND_NAVY_ACTIVE : 'transparent',
-                color: active ? '#ffffff' : 'rgba(186,210,255,0.75)',
-              }}
-              onMouseEnter={e => {
-                if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.07)';
-              }}
-              onMouseLeave={e => {
-                if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-              }}
-            >
+            <Link key={href} href={href} className={navItemClasses(active)}>
               <Icon size={18} strokeWidth={1.8} />
               {label}
             </Link>
@@ -94,7 +109,7 @@ export default function Sidebar() {
             </div>
             <span className="text-xs font-semibold text-white">IA trabalhando 24/7</span>
           </div>
-          <p className="text-[11px] leading-snug text-blue-200/70 mb-2">
+          <p className="text-[11px] leading-snug text-indigo-200/70 mb-2">
             Prospectando, qualificando e gerando oportunidades para seu time.
           </p>
           <Link
@@ -107,53 +122,41 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="px-3 py-3 border-t border-white/10">
-        <Link
-          href="/perfil"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
-          style={{
-            backgroundColor: isActive('/perfil') ? BRAND_NAVY_ACTIVE : 'transparent',
-            color: isActive('/perfil') ? '#ffffff' : 'rgba(186,210,255,0.75)',
-          }}
-          onMouseEnter={e => {
-            if (!isActive('/perfil')) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.07)';
-          }}
-          onMouseLeave={e => {
-            if (!isActive('/perfil')) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-          }}
-        >
-          <User size={18} strokeWidth={1.8} />
-          Perfil
-        </Link>
-        <Link
-          href="/configuracoes"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
-          style={{
-            backgroundColor: isActive('/configuracoes') ? BRAND_NAVY_ACTIVE : 'transparent',
-            color: isActive('/configuracoes') ? '#ffffff' : 'rgba(186,210,255,0.75)',
-          }}
-          onMouseEnter={e => {
-            if (!isActive('/configuracoes')) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.07)';
-          }}
-          onMouseLeave={e => {
-            if (!isActive('/configuracoes')) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-          }}
-        >
+      {/* Configurações */}
+      <div className="px-3 pb-2 border-t border-white/10 pt-3">
+        <Link href="/configuracoes" className={navItemClasses(isActive('/configuracoes'))}>
           <Settings size={18} strokeWidth={1.8} />
           Configurações
         </Link>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors w-full mt-0.5"
-          style={{ color: 'rgba(186,210,255,0.75)' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.07)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border-l-[3px] border-transparent w-full text-[#FC8181] hover:bg-red-500/10 mt-0.5"
         >
           <LogOut size={18} strokeWidth={1.8} />
           Sair
         </button>
       </div>
+
+      {/* Usuário logado */}
+      <Link
+        href="/perfil"
+        className="flex items-center gap-3 px-4 py-3 border-t border-white/10 hover:bg-white/5 transition-colors"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={perfil?.avatar_url || avatarFallback(perfil?.nome ?? null, perfil?.email ?? null)}
+          alt={perfil?.nome || 'Usuário'}
+          className="w-8 h-8 rounded-full object-cover shrink-0"
+        />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-white truncate">
+            {perfil?.nome || 'Meu perfil'}
+          </p>
+          <p className="text-xs text-indigo-300 truncate">
+            {perfil?.email || 'Ver conta'}
+          </p>
+        </div>
+      </Link>
     </aside>
   );
 }

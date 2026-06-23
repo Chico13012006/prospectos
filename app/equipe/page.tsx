@@ -142,16 +142,16 @@ export default function EquipePage() {
   });
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 md:p-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
-            <Users size={18} className="text-indigo-600" />
+          <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+            <Users size={20} className="text-indigo-600" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Equipe</h1>
-            <p className="text-gray-500 text-xs">Gerencie sua equipe, nichos e permissões de acesso.</p>
+            <h1 className="text-2xl font-bold text-gray-900">Equipe</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Gerencie sua equipe, nichos e permissões de acesso.</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -174,22 +174,20 @@ export default function EquipePage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
         {[
-          { label: 'Administradores', value: admins.length, sub: 'Acesso total à plataforma', icon: <Shield size={20} className="text-indigo-500" />, bg: 'bg-indigo-50' },
-          { label: 'Usuários', value: usuarios.length, sub: 'Acesso ao nicho definido', icon: <Users size={20} className="text-green-500" />, bg: 'bg-green-50' },
-          { label: 'Nichos ativos', value: nichosAtivos, sub: 'Segmentos de atuação', icon: <Briefcase size={20} className="text-orange-500" />, bg: 'bg-orange-50' },
-          { label: 'Leads distribuídos', value: totalLeads.toLocaleString('pt-BR'), sub: 'Entre toda a equipe', icon: <BarChart2 size={20} className="text-purple-500" />, bg: 'bg-purple-50' },
+          { label: 'Administradores', value: admins.length, sub: 'Acesso total à plataforma', icon: <Shield size={20} className="text-indigo-600" />, bg: 'bg-indigo-50' },
+          { label: 'Usuários', value: usuarios.length, sub: 'Acesso ao nicho definido', icon: <Users size={20} className="text-green-600" />, bg: 'bg-green-50' },
+          { label: 'Nichos ativos', value: nichosAtivos, sub: 'Segmentos de atuação', icon: <Briefcase size={20} className="text-orange-600" />, bg: 'bg-orange-50' },
+          { label: 'Leads distribuídos', value: totalLeads.toLocaleString('pt-BR'), sub: 'Entre toda a equipe', icon: <BarChart2 size={20} className="text-purple-600" />, bg: 'bg-purple-50' },
         ].map(s => (
-          <div key={s.label} className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-lg ${s.bg} flex items-center justify-center flex-shrink-0`}>
+          <div key={s.label} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className={`w-10 h-10 rounded-lg ${s.bg} flex items-center justify-center mb-4`}>
               {s.icon}
             </div>
-            <div>
-              <p className="text-xl font-bold text-gray-900">{s.value}</p>
-              <p className="text-xs font-medium text-gray-700">{s.label}</p>
-              <p className="text-xs text-gray-400">{s.sub}</p>
-            </div>
+            <p className="text-3xl font-bold text-gray-900">{s.value}</p>
+            <p className="text-sm font-medium text-gray-700 mt-1">{s.label}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{s.sub}</p>
           </div>
         ))}
       </div>
@@ -251,7 +249,7 @@ export default function EquipePage() {
       )}
 
       {/* Tabela de membros */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Membros da equipe</h2>

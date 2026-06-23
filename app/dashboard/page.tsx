@@ -192,8 +192,7 @@ export default function DashboardPage() {
             Dados atualizados há 5 min
           </div>
           <button
-            className="flex items-center gap-2 text-sm font-medium text-white px-4 py-2 rounded-lg"
-            style={{ backgroundColor: '#1e3a5f' }}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
           >
             <Plus size={15} /> Nova automação
           </button>
@@ -216,18 +215,25 @@ export default function DashboardPage() {
       </div>
 
       {/* 5 KPI Cards */}
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
         {[
-          { label: 'Leads Encontrados', value: leadsEncontrados, pct: '+12%', color: '#1e3a5f' },
-          { label: 'Leads Qualificados', value: leadsQualificados, pct: '+8%', color: '#6366f1' },
-          { label: 'Mensagens Enviadas', value: mensagensEnviadas, pct: '+23%', color: '#3b82f6' },
-          { label: 'Respostas Recebidas', value: respostasRecebidas, pct: '+5%', color: '#22c55e' },
-          { label: 'Leads Encaminhados', value: leadsEncaminhados, pct: '+40%', color: '#f59e0b' },
+          { label: 'Leads Encontrados', value: leadsEncontrados, pct: '+12%', icon: Users, iconColor: 'text-indigo-600', iconBg: 'bg-indigo-50' },
+          { label: 'Leads Qualificados', value: leadsQualificados, pct: '+8%', icon: Target, iconColor: 'text-purple-600', iconBg: 'bg-purple-50' },
+          { label: 'Mensagens Enviadas', value: mensagensEnviadas, pct: '+23%', icon: MessageCircle, iconColor: 'text-blue-600', iconBg: 'bg-blue-50' },
+          { label: 'Respostas Recebidas', value: respostasRecebidas, pct: '+5%', icon: TrendingUp, iconColor: 'text-green-600', iconBg: 'bg-green-50' },
+          { label: 'Leads Encaminhados', value: leadsEncaminhados, pct: '+40%', icon: Calendar, iconColor: 'text-amber-600', iconBg: 'bg-amber-50' },
         ].map(kpi => (
-          <div key={kpi.label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-            <div className="text-xs text-gray-500 mb-2">{kpi.label}</div>
-            <div className="text-2xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
-            <div className="text-xs text-green-600 font-medium mt-1">{kpi.pct} vs. período anterior</div>
+          <div key={kpi.label} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-4">
+              <div className={`w-10 h-10 rounded-lg ${kpi.iconBg} flex items-center justify-center`}>
+                <kpi.icon size={20} className={kpi.iconColor} />
+              </div>
+              <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                {kpi.pct}
+              </span>
+            </div>
+            <p className="text-3xl font-bold text-gray-900">{kpi.value}</p>
+            <p className="text-sm text-gray-500 mt-1">{kpi.label}</p>
           </div>
         ))}
       </div>
