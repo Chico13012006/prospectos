@@ -8,7 +8,8 @@
     "start": "next start",
     "test": "vitest run",
     "test:watch": "vitest",
-    "engine:demo": "tsx lib/engine/demo.ts"
+    "engine:demo": "tsx lib/engine/demo.ts",
+    "engine:test-real": "tsx scripts/engine-test-real.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

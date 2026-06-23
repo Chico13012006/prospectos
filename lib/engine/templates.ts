@@ -4,6 +4,10 @@
 // usamos templates embutidos (puros e testáveis) com a tese comercial do lead.
 import type { Lead, Estagio, TipoInteracaoEngine } from './types'
 
+// Estágios "iniciais" (lead ainda não contatado). Aceita os dois vocabulários
+// presentes no banco: 'novos_leads' (UI deste projeto) e 'novo' (legado/referência).
+export const ESTAGIOS_INICIAIS = ['novos_leads', 'novo']
+
 // Estágios em que o lead está "na esteira" e pode receber follow-up.
 export const ESTAGIOS_EM_CADENCIA: Estagio[] = [
   'primeiro_contato',
@@ -15,6 +19,7 @@ export const ESTAGIOS_EM_CADENCIA: Estagio[] = [
 export function proximoEstagio(atual: string): Estagio {
   const mapa: Record<string, Estagio> = {
     novos_leads: 'primeiro_contato',
+    novo: 'primeiro_contato',
     primeiro_contato: 'follow_up',
     aguardando_resposta: 'follow_up',
     follow_up: 'follow_up',
@@ -24,7 +29,7 @@ export function proximoEstagio(atual: string): Estagio {
 
 // É o primeiro contato (abordagem) ou um follow-up?
 export function tipoDoEnvio(estagioAtual: string): TipoInteracaoEngine {
-  return estagioAtual === 'novos_leads' ? 'abordagem' : 'follow_up'
+  return ESTAGIOS_INICIAIS.includes(estagioAtual) ? 'abordagem' : 'follow_up'
 }
 
 // Domínio "de empresa" do lead: a coluna dominio se existir, senão o domínio do
