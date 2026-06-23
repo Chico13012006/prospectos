@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# dados de importação (não commitar leads)
+hubspot_leads.csv
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
