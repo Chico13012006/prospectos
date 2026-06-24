@@ -4,10 +4,11 @@
  *   npm run engine:test-real <lead_id>
  *
  * - Conecta no Supabase com as credenciais do .env.local (SupabaseStore real).
- * - Carrega o lead, roda executarAcao e imprime o que FARIA: destinatário,
- *   assunto/corpo do e-mail e próximo estágio.
- * - NÃO envia e-mail (MODO_ENSAIO=true → provedor simulado) e NÃO escreve no
- *   banco: as escritas são interceptadas por um wrapper dry-run que só loga.
+ * - Carrega o lead, roda executarAcao e imprime destinatário, assunto/corpo e
+ *   próximo estágio.
+ * - Respeita o MODO_ENSAIO do .env.local:
+ *     true  → provedor simulado (não envia) + wrapper dry-run (não escreve no banco).
+ *     false → GmailProvider SMTP (envia de verdade) + SupabaseStore real (escreve).
  * - Respeita a trava owner: se owner != 'engine', recusa e não faz nada.
  */
 import fs from 'node:fs'
@@ -25,8 +26,7 @@ function carregarEnvLocal() {
     if (!(k in process.env)) process.env[k] = v
   }
 }
-carregarEnvLocal()
-process.env.MODO_ENSAIO = 'true' // força ENSAIO neste script, aconteça o que acontecer
+carregarEnvLocal() // respeita o MODO_ENSAIO do .env.local (não força nada)
 
 const leadId = process.argv[2]
 if (!leadId) {
@@ -42,11 +42,15 @@ async function main() {
   const { createClient } = await import('@supabase/supabase-js')
   const { SupabaseStore } = await import('../lib/engine/store/supabaseStore')
   const { SimulatedProvider } = await import('../lib/engine/email/simulatedProvider')
+  const { GmailProvider, lerCredenciaisGmail } = await import('../lib/engine/email/gmailProvider')
   const { executarAcao } = await import('../lib/engine/flows/executarAcao')
   const { montarMensagem, proximoEstagio, tipoDoEnvio } = await import('../lib/engine/templates')
   const { engineConfig } = await import('../lib/engine/config')
   type Store = import('../lib/engine/store/store').Store
+  type EmailProvider = import('../lib/engine/email/provider').EmailProvider
   type Lead = import('../lib/engine/types').Lead
+
+  const ensaio = engineConfig.modoEnsaio
 
   // 3) Client real. Usa a service role se estiver configurada de verdade;
   //    caso contrário cai para a anon key (mesma lógica do importar-hubspot.js).
@@ -80,11 +84,36 @@ async function main() {
     },
   }
 
-  console.log(`\n${C.b}🧪 TESTE REAL (ENSAIO) — Fluxo 1: Executar Ação${C.r}`)
-  console.log(`${C.dim}Supabase: ${url}  | chave: ${usandoService ? 'service_role' : 'anon'} | MODO_ENSAIO=${engineConfig.modoEnsaio}${C.r}`)
+  // Em ENSAIO: store dry-run (não escreve) + provedor simulado (não envia).
+  // Em REAL: store real (escreve) + GmailProvider SMTP (envia de verdade).
+  let store: Store
+  let email: EmailProvider
+  if (ensaio) {
+    store = dryStore
+    email = new SimulatedProvider()
+  } else {
+    store = real
+    const cred = lerCredenciaisGmail()
+    if (!cred) {
+      console.log(`${C.red}✗ MODO_ENSAIO=false mas faltam GMAIL_USER / GMAIL_APP_PASSWORD no .env.local.${C.r}`)
+      process.exit(1)
+    }
+    email = new GmailProvider(cred)
+  }
+
+  console.log(`\n${C.b}🧪 TESTE — Fluxo 1: Executar Ação${C.r}`)
+  console.log(
+    `${C.dim}Supabase: ${url}  | chave: ${usandoService ? 'service_role' : 'anon'} | ` +
+      `MODO_ENSAIO=${ensaio}${C.r}`,
+  )
+  console.log(
+    ensaio
+      ? `${C.yel}Modo ENSAIO: nada será enviado nem escrito (dry-run).${C.r}`
+      : `${C.red}${C.b}Modo REAL: o e-mail SERÁ enviado e o banco SERÁ atualizado.${C.r}`,
+  )
   linha()
 
-  const lead = (await dryStore.buscarLead(leadId)) as Lead | null
+  const lead = (await store.buscarLead(leadId)) as Lead | null
   if (!lead) {
     console.log(`${C.red}✗ Lead ${leadId} não encontrado no Supabase.${C.r}`)
     process.exit(1)
@@ -112,22 +141,29 @@ async function main() {
   console.log(msg.corpo.split('\n').map((l) => '  ' + l).join('\n'))
   linha()
 
-  // 6) Executa de fato o fluxo (com store dry-run + e-mail simulado).
-  console.log(`${C.b}Execução de executarAcao() (ensaio):${C.r}`)
-  const email = new SimulatedProvider()
-  const r = await executarAcao(dryStore, email, { leadId })
+  // 6) Executa de fato o fluxo.
+  console.log(`${C.b}Execução de executarAcao() (${ensaio ? 'ensaio' : 'REAL'}):${C.r}`)
+  const r = await executarAcao(store, email, { leadId })
   linha()
 
+  const enviou = r.ok ? 1 : 0
   console.log(`${C.b}Resultado:${C.r} ${JSON.stringify(r)}`)
-  console.log(`  e-mails que teriam sido enviados: ${email.enviados.length}`)
-  console.log(`  escritas no banco que teriam ocorrido: ${escritas.length}`)
-  if (escritas.length) escritas.forEach((e) => console.log(`    ${C.dim}• ${e}${C.r}`))
+  if (ensaio) {
+    console.log(`  e-mails que TERIAM sido enviados: ${(email as InstanceType<typeof SimulatedProvider>).enviados.length}`)
+    console.log(`  escritas no banco que TERIAM ocorrido: ${escritas.length}`)
+    if (escritas.length) escritas.forEach((e) => console.log(`    ${C.dim}• ${e}${C.r}`))
+  } else {
+    console.log(`  e-mails ENVIADOS de verdade: ${enviou}`)
+    console.log(`  escritas no banco realizadas: ${enviou ? 2 : 0}`)
+  }
 
   linha()
   if (!r.ok && r.motivo === 'owner_nao_engine') {
     console.log(`${C.grn}🔒 TRAVA OK:${C.r} lead com owner='${lead.owner}' foi RECUSADO. Nada foi feito.`)
-  } else if (r.ok) {
+  } else if (r.ok && ensaio) {
     console.log(`${C.grn}✓ Em produção (MODO_ENSAIO=false) este e-mail seria enviado e o estágio avançaria.${C.r}`)
+  } else if (r.ok) {
+    console.log(`${C.grn}✓ E-mail ENVIADO via Gmail e estágio avançado para '${r.estagio}'.${C.r}`)
   } else {
     console.log(`${C.yel}• Fluxo não executou o envio. Motivo: ${r.motivo}.${C.r}`)
   }
