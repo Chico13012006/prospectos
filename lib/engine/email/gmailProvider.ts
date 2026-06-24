@@ -126,11 +126,14 @@ export class GmailProvider implements EmailProvider {
             processando: recentes.length,
           })
         }
-        // Baixa o source para parse MIME completo.
+        // Baixa o source para parse MIME completo. IMPORTANTE: não emitir outro
+        // comando IMAP (ex.: marcar lida) DENTRO deste laço — o imapflow não
+        // permite comandos concorrentes durante um fetch em streaming e isso
+        // trava a conexão. Coletamos os UIDs e marcamos DEPOIS do laço.
+        const uidsLidos: number[] = []
         for await (const m of client.fetch(recentes, { source: true, uid: true }, { uid: true })) {
           const parsed = await simpleParser(m.source as Buffer)
-          const de =
-            parsed.from?.value?.[0]?.address?.toLowerCase() ?? ''
+          const de = parsed.from?.value?.[0]?.address?.toLowerCase() ?? ''
           mensagens.push({
             de,
             assunto: parsed.subject ?? '',
@@ -138,11 +141,17 @@ export class GmailProvider implements EmailProvider {
             automatica: detectarAutomatica(parsed),
             em: parsed.date ?? new Date(),
           })
-          // Consome a mensagem (marca como lida) só fora do ensaio.
-          if (!engineConfig.modoEnsaio && m.uid) {
-            await client.messageFlagsAdd(String(m.uid), ['\\Seen'], { uid: true })
-          }
+          if (m.uid) uidsLidos.push(m.uid)
         }
+
+        // Consome as mensagens (marca como lidas) só fora do ensaio — agora que
+        // o fetch terminou, é seguro emitir o comando.
+        let marcadas = 0
+        if (!engineConfig.modoEnsaio && uidsLidos.length) {
+          await client.messageFlagsAdd(uidsLidos, ['\\Seen'], { uid: true })
+          marcadas = uidsLidos.length
+        }
+        log.info('Caixa lida via IMAP', { naoLidas: mensagens.length, marcadasComoLidas: marcadas })
       } finally {
         lock.release()
       }
@@ -150,10 +159,6 @@ export class GmailProvider implements EmailProvider {
       await client.logout()
     }
 
-    log.info('Caixa lida via IMAP', {
-      naoLidas: mensagens.length,
-      marcadasComoLidas: engineConfig.modoEnsaio ? 0 : mensagens.length,
-    })
     return mensagens
   }
 }
