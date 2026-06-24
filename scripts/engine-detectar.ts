@@ -86,7 +86,16 @@ async function main() {
 
   // Wrapper do provedor: imprime o que a caixa retornou antes de seguir o fluxo.
   const emailProxy: EmailProvider = {
-    enviar: (p, a, c) => gmail.enviar(p, a, c),
+    async enviar(p, a, c) {
+      // Mostra o AVISO completo que foi montado (em ensaio o provedor real só
+      // logaria para+assunto; aqui imprimimos o corpo com o contexto do lead).
+      console.log(`\n${C.b}✉️  Aviso montado para o closer:${C.r}`)
+      console.log(`  para    : ${p}`)
+      console.log(`  assunto : ${a}`)
+      console.log(`${C.dim}  ─ corpo ─${C.r}`)
+      console.log(c.split('\n').map((l) => '  ' + l).join('\n'))
+      return gmail.enviar(p, a, c)
+    },
     async lerCaixaEntrada(): Promise<MensagemRecebida[]> {
       const msgs = await gmail.lerCaixaEntrada()
       console.log(`${C.b}Mensagens NÃO LIDAS encontradas na caixa: ${msgs.length}${C.r}`)
