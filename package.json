@@ -12,7 +12,8 @@
     "engine:test-real": "tsx scripts/engine-test-real.ts",
     "engine:detectar": "tsx scripts/engine-detectar.ts",
     "engine:scheduler": "tsx scripts/engine-scheduler.ts",
-    "engine:cadencia-once": "tsx scripts/engine-cadencia-once.ts"
+    "engine:cadencia-once": "tsx scripts/engine-cadencia-once.ts",
+    "engine:cadencia-dry": "tsx scripts/engine-cadencia-dry.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
