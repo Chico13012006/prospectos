@@ -112,13 +112,26 @@ const INTERACAO_TIPO: Record<string, { label: string; Icon: typeof Bot; color: s
 };
 
 // Badge de tipo na Central do Lead (cobre variações de follow_up: follow_up_1/2/3/4)
-function getTipoInteracaoBadge(tipo: string): { label: string; classes: string } {
+function getTipoInteracaoBadge(tipo: string, descricao?: string): { label: string; classes: string } {
   if (tipo === 'abordagem') return { label: 'Primeiro contato enviado', classes: 'bg-blue-500/20 text-blue-400' };
   if (tipo.startsWith('follow_up')) return { label: 'Follow-up enviado', classes: 'bg-purple-500/20 text-purple-400' };
   if (tipo === 'resposta') return { label: 'Resposta recebida', classes: 'bg-green-500/20 text-green-400' };
+  // Handoff do motor: gravado como tipo='nota' com descrição "Encaminhado ao closer…"
+  if (tipo === 'nota' && descricao?.startsWith('Encaminhado ao closer'))
+    return { label: 'Encaminhado ao closer', classes: 'bg-amber-500/20 text-amber-400' };
   if (tipo === 'nota') return { label: 'Nota', classes: 'bg-[#252b3b] text-slate-300' };
   if (tipo === 'reuniao') return { label: 'Reunião', classes: 'bg-amber-500/20 text-amber-400' };
   return { label: tipo, classes: 'bg-[#252b3b] text-slate-300' };
+}
+
+// "Resposta a tratar": sinais que o MOTOR grava em proxima_acao quando um lead
+// responde (aguardando_closer) e quando o closer é avisado (com_closer).
+const PROXIMA_ACAO_RESPOSTA = new Set(['aguardando_closer', 'com_closer']);
+function temRespostaPendente(lead: Lead | null | undefined): boolean {
+  return !!lead?.proxima_acao && PROXIMA_ACAO_RESPOSTA.has(lead.proxima_acao);
+}
+function respostaPendenteLabel(proximaAcao?: string | null): string {
+  return proximaAcao === 'com_closer' ? 'Com o closer' : 'Resposta a tratar';
 }
 
 // Badge de status (lado direito) derivado do tipo
@@ -143,7 +156,7 @@ function scoreColor(score: number): string {
   return '#6b7280';
 }
 
-function LeadCard({ empresa, onClick }: { empresa: Empresa; onClick: () => void }) {
+function LeadCard({ empresa, onClick, respostaPendente }: { empresa: Empresa; onClick: () => void; respostaPendente?: boolean }) {
   const timeSince = empresa.ultimo_contato
     ? daysBetween(empresa.ultimo_contato, TODAY)
     : daysBetween(empresa.data_entrada, TODAY);
@@ -153,8 +166,17 @@ function LeadCard({ empresa, onClick }: { empresa: Empresa; onClick: () => void 
   return (
     <div
       onClick={onClick}
-      className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-3.5 cursor-pointer hover:shadow-none hover:border-indigo-500/30 transition-all"
+      className={`bg-[#1a1f2e] rounded-xl border shadow-none p-3.5 cursor-pointer hover:shadow-none transition-all ${
+        respostaPendente ? 'border-green-500/50 hover:border-green-500/70' : 'border-[#2a3147] hover:border-indigo-500/30'
+      }`}
     >
+      {respostaPendente && (
+        <div className="flex items-center gap-1 mb-2 text-xs font-semibold text-green-400">
+          <MessageSquare size={12} />
+          <span>Resposta a tratar</span>
+          <span className="ml-auto w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+        </div>
+      )}
       <div className="font-medium text-sm text-slate-100 leading-tight mb-2">{empresa.nome}</div>
       <div className="text-xs text-slate-400 mb-2">{empresa.cidade}, {empresa.estado}</div>
       <div className="flex items-center justify-between mb-2">
@@ -188,6 +210,7 @@ export default function PipelinePage() {
   const { empresas: mockEmpresas, contatos: mockContatos, getTimelineForEmpresa } = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [vista, setVista] = useState<'kanban' | 'respostas'>('kanban');
   const [supabaseLeads, setSupabaseLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [useFallback, setUseFallback] = useState(false);
@@ -265,6 +288,17 @@ export default function PipelinePage() {
     e.nome.toLowerCase().includes(search.toLowerCase()) ||
     e.segmento.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Leads com resposta pendente de ação do closer (sinais que o motor grava em
+  // proxima_acao), ordenados por contato mais recente. Só faz sentido no Supabase.
+  const leadsRespostas: Lead[] = usingSupabase
+    ? supabaseLeads
+        .filter(temRespostaPendente)
+        .sort((a, b) =>
+          (b.ultimo_contato ?? b.created_at).localeCompare(a.ultimo_contato ?? a.created_at),
+        )
+    : [];
+  const idsRespostaPendente = new Set(leadsRespostas.map(l => l.id));
 
   // Dados do painel lateral
   const selectedEmpresa: Empresa | null = selectedId
@@ -398,6 +432,30 @@ export default function PipelinePage() {
 
       {/* Filter bar */}
       <div className="px-6 pb-4 flex items-center gap-2 flex-wrap">
+        {/* Toggle de visão: Kanban x Respostas a tratar */}
+        <div className="flex items-center rounded-lg border border-[#2a3147] bg-[#1a1f2e] p-0.5">
+          <button
+            onClick={() => setVista('kanban')}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              vista === 'kanban' ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Kanban
+          </button>
+          <button
+            onClick={() => setVista('respostas')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              vista === 'respostas' ? 'bg-green-500/20 text-green-300' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <MessageSquare size={13} /> Respostas a tratar
+            {leadsRespostas.length > 0 && (
+              <span className="ml-1 text-xs font-bold bg-green-500 text-white rounded-full px-1.5 py-0.5 leading-none">
+                {leadsRespostas.length}
+              </span>
+            )}
+          </button>
+        </div>
         <div className="relative">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
@@ -415,7 +473,56 @@ export default function PipelinePage() {
         <span className="text-xs text-slate-500 ml-auto">Ordenar: Mais recentes</span>
       </div>
 
-      {/* Kanban */}
+      {/* Visão: Respostas a tratar (lista focada nos leads que responderam) */}
+      {vista === 'respostas' ? (
+        <div className="px-6 pb-4">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
+              <Loader2 size={18} className="animate-spin" />
+              <span className="text-sm">Carregando...</span>
+            </div>
+          ) : leadsRespostas.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2">
+              <MessageSquare size={20} className="text-slate-600" />
+              <span className="text-sm font-medium text-slate-400">Nenhuma resposta aguardando ação do closer.</span>
+              <span className="text-xs">Quando um lead responder, ele aparece aqui automaticamente.</span>
+            </div>
+          ) : (
+            <div className="space-y-2 max-w-3xl">
+              {leadsRespostas.map(lead => (
+                <button
+                  key={lead.id}
+                  onClick={() => setSelectedId(lead.id)}
+                  className="w-full text-left bg-[#1a1f2e] rounded-xl border border-green-500/40 hover:border-green-500/70 p-4 transition-colors flex items-center gap-4"
+                >
+                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm text-slate-100 truncate">{lead.empresa}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 font-medium shrink-0">
+                        {respostaPendenteLabel(lead.proxima_acao)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5 truncate">
+                      {lead.contato_nome}
+                      {lead.contato_email ? ` · ${lead.contato_email}` : ''}
+                      {` · ${lead.segmento || '—'}`}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-xs text-slate-500">último contato</div>
+                    <div className="text-sm font-medium text-slate-300">
+                      {lead.ultimo_contato ? formatDate(lead.ultimo_contato) : '—'}
+                    </div>
+                  </div>
+                  <ArrowRight size={16} className="text-slate-600 shrink-0" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+      /* Kanban */
       <div className="overflow-x-auto px-6 pb-4">
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
@@ -448,6 +555,7 @@ export default function PipelinePage() {
                       <LeadCard
                         key={empresa.id}
                         empresa={empresa}
+                        respostaPendente={idsRespostaPendente.has(empresa.id)}
                         onClick={() => setSelectedId(empresa.id)}
                       />
                     ))}
@@ -462,6 +570,7 @@ export default function PipelinePage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Como funciona */}
       <div className="px-6 pb-5">
@@ -630,6 +739,11 @@ export default function PipelinePage() {
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusBadgeClasses(selectedEmpresa.status)}`}>
                   {getStatusLabel(selectedEmpresa.status)}
                 </span>
+                {temRespostaPendente(selectedLead) && (
+                  <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-semibold bg-green-500/20 text-green-300">
+                    <MessageSquare size={11} /> {respostaPendenteLabel(selectedLead?.proxima_acao)}
+                  </span>
+                )}
                 {selectedEmpresa.em_cadencia && (
                   <span className="text-xs text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-full">
                     Cadência ativa
@@ -1081,7 +1195,7 @@ export default function PipelinePage() {
                       ) : (
                         <div className="space-y-3">
                           {interacoes.map(interacao => {
-                            const tipoBadge = getTipoInteracaoBadge(interacao.tipo);
+                            const tipoBadge = getTipoInteracaoBadge(interacao.tipo, interacao.descricao);
                             const statusBadge = getStatusInteracao(interacao.tipo);
                             const canal = interacao.canal ? CANAL_INFO[interacao.canal.toLowerCase()] : null;
                             const isIA = interacao.origem_acao === 'ia';
