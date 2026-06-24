@@ -10,7 +10,9 @@
     "test:watch": "vitest",
     "engine:demo": "tsx lib/engine/demo.ts",
     "engine:test-real": "tsx scripts/engine-test-real.ts",
-    "engine:detectar": "tsx scripts/engine-detectar.ts"
+    "engine:detectar": "tsx scripts/engine-detectar.ts",
+    "engine:scheduler": "tsx scripts/engine-scheduler.ts",
+    "engine:cadencia-once": "tsx scripts/engine-cadencia-once.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
@@ -20,6 +22,7 @@
     "lucide-react": "^1.18.0",
     "mailparser": "^3.9.11",
     "next": "16.2.9",
+    "node-cron": "^4.5.0",
     "nodemailer": "^9.0.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",

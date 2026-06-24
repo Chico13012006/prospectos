@@ -75,9 +75,29 @@ Os endpoints exigem o header `x-internal-secret: <INTERNAL_SECRET>` (ou
 3. Rode os testes: `npm test`
 4. Veja os 4 fluxos em ação (ensaio, sem rede): `npm run engine:demo`
 
-## Cron (dias úteis)
+## Scheduler (node-cron, dias úteis)
 
-Vercel Cron (`vercel.json`) — chama a cadência diária às 9h em dias úteis:
+`lib/engine/scheduler.ts` agenda a **cadência diária** (detectarResposta → fila/closer
+→ followUp) em dias úteis. Roda contra Supabase/Gmail reais e respeita `MODO_ENSAIO`
+(em ensaio o envio é só logado; as escritas no banco acontecem, restritas a
+`owner='engine'`). Usa o GmailProvider quando há credenciais, para LER a caixa real
+mesmo em ensaio.
+
+```bash
+# Deixa rodando: dispara seg–sex às 9h (America/Sao_Paulo)
+npm run engine:scheduler
+
+# Roda a cadência UMA vez agora (para teste; ignora a checagem de dia útil)
+npm run engine:cadencia-once
+
+# Teste sem enviar e-mail de verdade (escritas no banco ainda ocorrem):
+#   $env:MODO_ENSAIO='true'; npm run engine:cadencia-once   (PowerShell)
+```
+
+Configurável por env: `CRON_FOLLOWUP` (padrão `0 9 * * 1-5`) e `CRON_TZ`
+(padrão `America/Sao_Paulo`). O scheduler usa `noOverlap` (não roda concorrente).
+
+**Alternativa serverless** — Vercel Cron (`vercel.json`), chamando o endpoint:
 
 ```json
 { "crons": [{ "path": "/api/engine/follow-up", "schedule": "0 9 * * 1-5" }] }
