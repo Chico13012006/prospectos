@@ -1,17 +1,44 @@
-// Provedor Gmail REAL via SMTP (nodemailer). Implementa a mesma interface
-// EmailProvider, então os fluxos não mudam ao trocar o simulado por este.
+// Provedor Gmail REAL: ENVIO via SMTP (nodemailer) e LEITURA via IMAP (imapflow).
+// Implementa a mesma interface EmailProvider, então os fluxos não mudam ao trocar
+// o simulado por este.
 //
-// Respeita MODO_ENSAIO: enquanto ensaio=true, NÃO envia — só loga, igual ao
-// simulado. Para ativar de verdade, defina GMAIL_USER e GMAIL_APP_PASSWORD no
-// .env.local (senha de app do Gmail) e MODO_ENSAIO=false.
-//
-// A fábrica em index.ts só escolhe o Gmail quando houver credenciais E
-// MODO_ENSAIO=false.
+// Respeita MODO_ENSAIO: enquanto ensaio=true, NÃO envia (só loga) e NÃO marca
+// mensagens como lidas. Para ativar de verdade, defina GMAIL_USER e
+// GMAIL_APP_PASSWORD no .env.local (senha de app do Gmail) e MODO_ENSAIO=false.
 import nodemailer, { type Transporter } from 'nodemailer'
+import { ImapFlow } from 'imapflow'
+import { simpleParser, type ParsedMail } from 'mailparser'
 import type { EmailProvider } from './provider'
 import type { MensagemRecebida } from '../types'
 import { engineConfig } from '../config'
 import { log } from '../logger'
+
+// Padrões de assunto que indicam auto-resposta (férias/ausência/devolução).
+const ASSUNTO_AUTO = [
+  'fora do escrit', 'out of office', 'automatic reply', 'auto-reply', 'autoreply',
+  'resposta autom', 'de férias', 'em férias', 'estou ausente', 'ausência',
+  'undeliverable', 'mail delivery', 'returned mail', 'delivery status notification',
+]
+
+// Detecta auto-resposta pelos CABEÇALHOS (Auto-Submitted, X-Autoreply, Precedence)
+// e, como reforço, pelo assunto. Os fluxos não enxergam cabeçalhos — por isso o
+// provedor é o lugar certo para essa marcação.
+function detectarAutomatica(parsed: ParsedMail): boolean {
+  const h = parsed.headers
+  const autoSubmitted = String(h.get('auto-submitted') ?? '').toLowerCase()
+  if (autoSubmitted && autoSubmitted !== 'no') return true
+  if (h.has('x-autoreply') || h.has('x-autorespond') || h.has('x-auto-response-suppress')) return true
+  const precedence = String(h.get('precedence') ?? '').toLowerCase()
+  if (['auto_reply', 'bulk', 'junk'].includes(precedence)) return true
+  const assunto = (parsed.subject ?? '').toLowerCase()
+  return ASSUNTO_AUTO.some((p) => assunto.includes(p))
+}
+
+function corpoTexto(parsed: ParsedMail): string {
+  if (parsed.text && parsed.text.trim()) return parsed.text.trim()
+  if (parsed.html) return parsed.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  return ''
+}
 
 export interface GmailCredenciais {
   user: string // conta Gmail remetente (ex.: francisco@gmail.com)
@@ -56,10 +83,77 @@ export class GmailProvider implements EmailProvider {
     log.ok('E-mail enviado via Gmail (SMTP)', { para, assunto, messageId: info.messageId })
   }
 
+  // Lê as mensagens NÃO LIDAS da INBOX via IMAP (imap.gmail.com:993, SSL) e as
+  // mapeia para o formato que o Fluxo 2 (detectarResposta) espera.
+  // Em MODO_ENSAIO a leitura acontece normalmente (não é envio), mas as mensagens
+  // NÃO são marcadas como lidas — para não mexer na sua caixa durante testes.
   async lerCaixaEntrada(): Promise<MensagemRecebida[]> {
-    // TODO: leitura da caixa (IMAP) ainda não implementada. O Fluxo 2 roda com
-    // o provedor simulado até esta parte existir.
-    log.aviso('GmailProvider.lerCaixaEntrada: não implementado (TODO). Retornando vazio.')
-    return []
+    const client = new ImapFlow({
+      host: 'imap.gmail.com',
+      port: 993,
+      secure: true,
+      auth: { user: this.cred.user, pass: this.cred.appPassword },
+      logger: false,
+      greetingTimeout: 15000,
+      socketTimeout: 30000,
+    })
+    // ImapFlow emite 'error' de forma assíncrona; sem um listener, um timeout de
+    // socket viraria "unhandled error" e derrubaria o processo. Aqui só logamos —
+    // a falha de connect()/fetch() já é propagada como exceção normal.
+    client.on('error', (e: unknown) => {
+      log.aviso('IMAP erro de conexão', { erro: e instanceof Error ? e.message : String(e) })
+    })
+
+    const mensagens: MensagemRecebida[] = []
+    await client.connect()
+    try {
+      const lock = await client.getMailboxLock('INBOX')
+      try {
+        // Busca os UIDs das NÃO LIDAS; se não houver, evita o fetch.
+        const uids = await client.search({ seen: false }, { uid: true })
+        if (!uids || uids.length === 0) {
+          log.info('Caixa lida via IMAP', { naoLidas: 0, marcadasComoLidas: 0 })
+          return []
+        }
+        // Limita ao lote mais recente (UIDs maiores = mais recentes). Protege
+        // contra caixas com milhares de não lidas — baixar o source de todas
+        // estouraria o socket. Configurável via GMAIL_MAX_FETCH (padrão 50).
+        const limite = Math.max(1, Number(process.env.GMAIL_MAX_FETCH ?? '50') || 50)
+        const recentes = uids.slice(-limite)
+        if (uids.length > recentes.length) {
+          log.aviso('Muitas não lidas; processando só as mais recentes', {
+            totalNaoLidas: uids.length,
+            processando: recentes.length,
+          })
+        }
+        // Baixa o source para parse MIME completo.
+        for await (const m of client.fetch(recentes, { source: true, uid: true }, { uid: true })) {
+          const parsed = await simpleParser(m.source as Buffer)
+          const de =
+            parsed.from?.value?.[0]?.address?.toLowerCase() ?? ''
+          mensagens.push({
+            de,
+            assunto: parsed.subject ?? '',
+            corpo: corpoTexto(parsed),
+            automatica: detectarAutomatica(parsed),
+            em: parsed.date ?? new Date(),
+          })
+          // Consome a mensagem (marca como lida) só fora do ensaio.
+          if (!engineConfig.modoEnsaio && m.uid) {
+            await client.messageFlagsAdd(String(m.uid), ['\\Seen'], { uid: true })
+          }
+        }
+      } finally {
+        lock.release()
+      }
+    } finally {
+      await client.logout()
+    }
+
+    log.info('Caixa lida via IMAP', {
+      naoLidas: mensagens.length,
+      marcadasComoLidas: engineConfig.modoEnsaio ? 0 : mensagens.length,
+    })
+    return mensagens
   }
 }

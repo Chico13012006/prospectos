@@ -9,13 +9,16 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "engine:demo": "tsx lib/engine/demo.ts",
-    "engine:test-real": "tsx scripts/engine-test-real.ts"
+    "engine:test-real": "tsx scripts/engine-test-real.ts",
+    "engine:detectar": "tsx scripts/engine-detectar.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
     "clsx": "^2.1.1",
+    "imapflow": "^1.4.2",
     "lucide-react": "^1.18.0",
+    "mailparser": "^3.9.11",
     "next": "16.2.9",
     "nodemailer": "^9.0.1",
     "react": "19.2.4",
@@ -25,6 +28,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/mailparser": "^3.4.6",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^19",
