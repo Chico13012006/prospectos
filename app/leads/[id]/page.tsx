@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 import type { StatusLead } from '@/lib/types';
 
-const TODAY = '2026-06-16';
+// Data real de hoje (YYYY-MM-DD) — antes fixa, causava dias negativos na UI.
+const TODAY = new Date().toISOString().slice(0, 10);
 
 function daysBetween(a: string, b: string) {
   return Math.floor(

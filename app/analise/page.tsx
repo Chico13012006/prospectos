@@ -9,7 +9,8 @@ import { getCanalBadgeClasses } from '@/lib/utils';
 import { BarChart2, Bot, User, TrendingUp } from 'lucide-react';
 
 
-const TODAY = '2026-06-15';
+// Data real de hoje (YYYY-MM-DD) — antes fixa ('2026-06-15').
+const TODAY = new Date().toISOString().slice(0, 10);
 
 function getWeekLabel(date: Date): string {
   const d = new Date(date);

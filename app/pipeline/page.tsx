@@ -13,7 +13,9 @@ import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
 import { getLeads, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao } from '@/lib/api';
 import type { Lead, Interacao } from '@/lib/supabase';
 
-const TODAY = '2026-06-16';
+// Data real de hoje (YYYY-MM-DD). Antes era fixa ('2026-06-16'), o que gerava
+// "há -7d" para contatos posteriores a essa data.
+const TODAY = new Date().toISOString().slice(0, 10);
 
 const STAGES = [
   { id: 'novos_leads', label: 'Novos Leads', color: '#6366f1' },

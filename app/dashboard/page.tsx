@@ -15,7 +15,8 @@ import { SdrPill } from '@/components/ui/SdrAvatar';
 import { useState, useEffect } from 'react';
 import { getLeadsStats, getLeadsRecentes, getLeadsPorResponsavel } from '@/lib/api';
 
-const TODAY = '2026-06-16';
+// Data real de hoje (YYYY-MM-DD) — sem datas fixas no app.
+const TODAY = new Date().toISOString().slice(0, 10);
 
 function daysBetween(a: string, b: string) {
   return Math.floor(
