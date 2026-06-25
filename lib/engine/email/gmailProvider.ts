@@ -80,7 +80,12 @@ export class GmailProvider implements EmailProvider {
       subject: assunto,
       text: corpo,
     })
-    log.ok('E-mail enviado via Gmail (SMTP)', { para, assunto, messageId: info.messageId })
+    log.ok('E-mail enviado via Gmail (SMTP)', {
+      remetente: this.cred.user,
+      para,
+      assunto,
+      messageId: info.messageId,
+    })
   }
 
   // Lê as mensagens NÃO LIDAS da INBOX via IMAP (imap.gmail.com:993, SSL) e as
