@@ -23,6 +23,7 @@ export type Lead = {
   estagio: 'novos_leads' | 'primeiro_contato' | 'aguardando_resposta' | 'follow_up' | 'interessado' | 'reuniao_agendada' | 'perdido'
   score: number
   responsavel_id?: string
+  responsavel_nome?: string
   usuarios?: {
     id: string
     nome: string

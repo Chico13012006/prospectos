@@ -116,9 +116,12 @@ function mapearLead(row) {
   const telefone = (row['Número de telefone'] || '').trim().replace(/[^\d+]/g, '') || null;
 
   const hubspotId = (row['ID do registro.'] || row['ID do registro'] || '').trim() || null;
+  // Nome do responsável (proprietário do contato no HubSpot). Texto livre.
+  const responsavelNome = (row['Proprietário do contato'] || '').trim() || null;
 
   return {
     empresa:            empresa,
+    responsavel_nome:   responsavelNome,
     cidade:             null,
     estado:             null,
     segmento:           null,

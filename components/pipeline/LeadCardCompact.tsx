@@ -4,9 +4,9 @@ import { Mail, Phone, ExternalLink, Globe, MapPin, User, Clock, MessageSquare } 
 import type { Lead } from '@/lib/supabase'
 import { prioridadeFromScore, prioridadeClasses, diasDesde, rotuloDias } from './prioridade'
 
-// Card compacto do Kanban. Mostra SÓ o que existe — campo vazio não aparece
-// (sem traço nem vírgula solta). Fica enxuto quando faltam dados e rico quando
-// estão preenchidos.
+// Card compacto do Kanban. Mostra em TEXTO o que existe — empresa, contato e
+// e-mail aparecem como texto (não só ícones). Campo vazio é omitido, sem traço
+// nem vírgula solta. Fica cheio com o que há e mais rico quando há mais dados.
 export default function LeadCardCompact({
   lead,
   respostaPendente,
@@ -20,13 +20,18 @@ export default function LeadCardCompact({
 }) {
   const cidadeEstado = [lead.cidade, lead.estado].filter(Boolean).join(', ')
   const prioridade = prioridadeFromScore(lead.score)
-  const responsavel = lead.usuarios?.nome
+  const responsavel = lead.usuarios?.nome ?? lead.responsavel_nome ?? null
   const ultima = rotuloDias(diasDesde(lead.ultimo_contato))
 
   const linkedinHref = lead.linkedin
     ? (lead.linkedin.startsWith('http') ? lead.linkedin : `https://${lead.linkedin}`)
     : null
   const siteHref = lead.site ? (lead.site.startsWith('http') ? lead.site : `https://${lead.site}`) : null
+
+  // meta secundária (só o que existe)
+  const meta: string[] = []
+  if (cidadeEstado) meta.push(cidadeEstado)
+  if (lead.segmento) meta.push(lead.segmento)
 
   const stop = (e: React.MouseEvent) => e.stopPropagation()
 
@@ -49,47 +54,59 @@ export default function LeadCardCompact({
           </div>
         )}
 
-        <div className="font-medium text-sm text-slate-100 leading-tight truncate">{lead.empresa}</div>
+        {/* Empresa (destaque) + prioridade (só quando relevante) */}
+        <div className="flex items-start gap-2">
+          <div className="font-semibold text-sm text-slate-100 leading-tight truncate flex-1">{lead.empresa}</div>
+          {prioridade && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${prioridadeClasses[prioridade]}`}>
+              {prioridade}
+            </span>
+          )}
+        </div>
 
-        {cidadeEstado && (
-          <div className="mt-1 flex items-center gap-1 text-xs text-slate-400">
-            <MapPin size={11} className="shrink-0" /> <span className="truncate">{cidadeEstado}</span>
+        {/* Nome do contato (texto) */}
+        {lead.contato_nome && (
+          <div className="mt-0.5 text-xs text-slate-300 truncate">{lead.contato_nome}</div>
+        )}
+
+        {/* E-mail (texto, clicável) */}
+        {lead.contato_email && (
+          <a
+            href={`mailto:${lead.contato_email}`}
+            onClick={stop}
+            className="mt-0.5 flex items-center gap-1 text-xs text-slate-400 hover:text-blue-400 truncate"
+            title={lead.contato_email}
+          >
+            <Mail size={11} className="shrink-0" />
+            <span className="truncate">{lead.contato_email}</span>
+          </a>
+        )}
+
+        {/* Cidade / segmento */}
+        {meta.length > 0 && (
+          <div className="mt-1.5 flex items-center gap-1 text-[11px] text-slate-500">
+            <MapPin size={11} className="shrink-0" />
+            <span className="truncate">{meta.join(' · ')}</span>
           </div>
         )}
 
-        {(lead.segmento || prioridade) && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            {lead.segmento && (
-              <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#252b3b] text-slate-300">
-                {lead.segmento}
-              </span>
-            )}
-            {prioridade && (
-              <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${prioridadeClasses[prioridade]}`}>
-                {prioridade}
-              </span>
-            )}
+        {/* Responsável */}
+        {responsavel && (
+          <div className="mt-1 flex items-center gap-1 text-[11px] text-slate-400 truncate">
+            <User size={11} className="shrink-0" />
+            <span className="truncate">{responsavel}</span>
           </div>
         )}
 
-        {(responsavel || ultima || linkedinHref || siteHref || lead.contato_email || lead.contato_telefone) && (
+        {/* Rodapé: "há Xd" + ações rápidas */}
+        {(ultima || lead.contato_telefone || linkedinHref || siteHref) && (
           <div className="mt-2 flex items-center gap-2 text-slate-500">
-            {responsavel && (
-              <span className="flex items-center gap-1 text-[11px] text-slate-400 truncate min-w-0">
-                <User size={11} className="shrink-0" /> <span className="truncate">{responsavel}</span>
-              </span>
-            )}
             {ultima && (
-              <span className="flex items-center gap-1 text-[11px] text-slate-500 shrink-0">
+              <span className="flex items-center gap-1 text-[11px] text-slate-500">
                 <Clock size={11} /> {ultima}
               </span>
             )}
             <span className="ml-auto flex items-center gap-1.5 shrink-0">
-              {lead.contato_email && (
-                <a href={`mailto:${lead.contato_email}`} onClick={stop} title={lead.contato_email} className="hover:text-blue-400">
-                  <Mail size={13} />
-                </a>
-              )}
               {lead.contato_telefone && (
                 <a href={`tel:${lead.contato_telefone}`} onClick={stop} title={lead.contato_telefone} className="hover:text-green-400">
                   <Phone size={13} />

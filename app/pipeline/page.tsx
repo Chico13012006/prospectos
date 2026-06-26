@@ -64,7 +64,7 @@ function leadToEmpresa(lead: Lead): Empresa {
     cidade: lead.cidade,
     estado: lead.estado,
     website: lead.site ?? undefined,
-    responsavel: lead.usuarios?.nome ?? lead.responsavel_id ?? '',
+    responsavel: lead.usuarios?.nome ?? lead.responsavel_nome ?? '',
     status: 'em_prospeccao',
     estagio_pipeline: lead.estagio as Empresa['estagio_pipeline'],
     em_cadencia: false,
@@ -523,11 +523,16 @@ export default function PipelinePage() {
                   <SdrCircle name={selectedEmpresa.responsavel} />
                   <div className="min-w-0">
                     <h2 className="font-bold text-slate-100 text-lg leading-tight">{selectedEmpresa.nome}</h2>
-                    <div className="text-sm text-slate-400 mt-0.5">
-                      {selectedEmpresa.cidade}, {selectedEmpresa.estado}
-                      {' · '}{selectedEmpresa.segmento}
-                      {selectedEmpresa.funcionarios_faixa && ` · ${selectedEmpresa.funcionarios_faixa} func.`}
-                    </div>
+                    {(() => {
+                      const partes = [
+                        [selectedLead?.cidade ?? selectedEmpresa.cidade, selectedLead?.estado ?? selectedEmpresa.estado].filter(Boolean).join(', '),
+                        selectedLead?.segmento ?? selectedEmpresa.segmento,
+                        selectedEmpresa.funcionarios_faixa ? `${selectedEmpresa.funcionarios_faixa} func.` : '',
+                      ].filter(Boolean)
+                      return partes.length > 0 ? (
+                        <div className="text-sm text-slate-400 mt-0.5">{partes.join(' · ')}</div>
+                      ) : null
+                    })()}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -537,11 +542,19 @@ export default function PipelinePage() {
               </div>
               {selectedContato ? (
                 <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-                  <span className="text-sm font-semibold text-slate-200 truncate shrink-0">{selectedContato.nome}</span>
-                  <span className="text-slate-600 text-xs shrink-0">|</span>
-                  <span className="text-xs text-slate-400 truncate shrink-0">{selectedContato.cargo}</span>
-                  <span className="text-slate-600 text-xs shrink-0">|</span>
-                  <span className="text-xs text-slate-300 shrink-0">{selectedContato.canal_preferencial}</span>
+                  <span className="text-sm font-semibold text-slate-200 truncate">{selectedContato.nome}</span>
+                  {selectedContato.cargo && (
+                    <>
+                      <span className="text-slate-600 text-xs shrink-0">|</span>
+                      <span className="text-xs text-slate-400 truncate">{selectedContato.cargo}</span>
+                    </>
+                  )}
+                  {selectedContato.canal_preferencial && (
+                    <>
+                      <span className="text-slate-600 text-xs shrink-0">|</span>
+                      <span className="text-xs text-slate-300 shrink-0">{selectedContato.canal_preferencial}</span>
+                    </>
+                  )}
                   <div className="flex items-center gap-2 ml-auto shrink-0 text-slate-500">
                     {selectedContato.email && (
                       <a href={`mailto:${selectedContato.email}`} className="hover:text-blue-400 transition-colors" title={selectedContato.email}><Mail size={13} /></a>

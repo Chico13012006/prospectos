@@ -2,10 +2,14 @@
 
 export type Prioridade = 'Alta' | 'Média' | 'Baixa'
 
-// Deriva a prioridade do score. Se não houver score (0/ausente), retorna null
-// para o card ESCONDER o badge — fica bonito mesmo sem o dado.
+// Score padrão do import — enquanto o lead estiver com ele, não há prioridade
+// "real", então o badge fica escondido (evita "Média" em todo lead = ruído).
+export const SCORE_PADRAO = 50
+
+// Deriva a prioridade do score. Retorna null (esconde o badge) quando não há
+// score, quando é 0, ou quando ainda é o valor padrão do import.
 export function prioridadeFromScore(score?: number | null): Prioridade | null {
-  if (!score || score <= 0) return null
+  if (!score || score <= 0 || score === SCORE_PADRAO) return null
   if (score >= 70) return 'Alta'
   if (score >= 40) return 'Média'
   return 'Baixa'
