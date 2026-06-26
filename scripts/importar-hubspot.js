@@ -26,38 +26,92 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 // Ler como utf-8 corromperia acentos (Gonçalves, Assaí, etc).
 const CSV_ENCODING = 'latin1';
 
-// Parser CSV com suporte a ponto e vírgula (formato HubSpot BR)
+// Parser CSV (formato HubSpot BR: separador ';'). Respeita aspas: um campo entre
+// aspas pode conter ';', quebras de linha e aspas escapadas (""). Isso evita o
+// desalinhamento de colunas que o split(';') ingênuo causava.
 function parseCSV(content) {
-  // Remover BOM se existir
-  const cleaned = content.replace(/^﻿/, '');
-  const lines = cleaned.trim().split(/\r?\n/);
-  const headers = lines[0].split(';').map(h => h.trim().replace(/^"|"$/g, ''));
-  return lines.slice(1).map(line => {
-    const values = line.split(';').map(v => v.trim().replace(/^"|"$/g, ''));
-    const obj = {};
-    headers.forEach((h, i) => { obj[h] = (values[i] || '').trim(); });
-    return obj;
-  }).filter(row => Object.values(row).some(v => v));
+  const text = content.replace(/^﻿/, '').replace(/\r\n?/g, '\n'); // sem BOM, fim de linha normalizado
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; } // "" → aspas literal
+        else inQuotes = false;
+      } else field += c;
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ';') {
+      row.push(field); field = '';
+    } else if (c === '\n') {
+      row.push(field); rows.push(row); row = []; field = '';
+    } else {
+      field += c;
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+
+  const headers = (rows.shift() || []).map(h => h.trim());
+  return rows
+    .filter(r => r.some(v => v && v.trim()))
+    .map(r => {
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = (r[i] || '').trim(); });
+      return obj;
+    });
+}
+
+// Provedores de e-mail PESSOAL: o prefixo do domínio NÃO é nome de empresa.
+const PROVEDORES_PESSOAIS = new Set([
+  'gmail', 'hotmail', 'outlook', 'yahoo', 'icloud', 'live', 'bol', 'uol', 'terra', 'msn', 'aol',
+]);
+
+// "tribecaeventos" -> "Tribeca Eventos" (só para domínios corporativos).
+function tituloCase(s) {
+  return s
+    .replace(/[._-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map(w => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(' ');
 }
 
 // Mapeamento para as colunas REAIS da tabela `leads` no Supabase.
 // (coluna é `linkedin`, não `linkedin_url`; existe `hubspot_id`)
 function mapearLead(row) {
-  const email = row['E-mail'] || row['Email'] || '';
-  if (!email || !email.includes('@')) return null;
+  const email = (row['E-mail'] || row['Email'] || '').trim().toLowerCase();
+  // Sem e-mail válido (regex real) → fora da importação.
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
 
   const nome = row['Nome'] || '';
   const sobrenome = row['Sobrenome'] || '';
-  const fullName = [nome, sobrenome].filter(Boolean).join(' ') || null;
+  const fullName = [nome, sobrenome].filter(Boolean).join(' ').trim() || null;
 
-  // Empresa: usar Associated Company se disponível, senão domínio do email
-  const empresa = row['Associated Company'] ||
-                  email.split('@')[1]?.split('.')[0] ||
-                  'Sem nome';
+  const prefixoDominio = (email.split('@')[1] || '').split('.')[0] || '';
+  const associada = (row['Associated Company'] || '').trim();
+  const ehPessoal = PROVEDORES_PESSOAIS.has(prefixoDominio);
+
+  // Empresa: NUNCA fabricar a partir de domínio pessoal.
+  //  - Associated Company presente  -> usa o nome real do HubSpot
+  //  - domínio corporativo sem nome -> deriva do prefixo, já formatado
+  //  - e-mail pessoal sem empresa   -> empresa=null e marca como descartado (perdido)
+  let empresa = null;
+  let perdido = false;
+  let perdidoMotivo = null;
+  if (associada) {
+    empresa = associada;
+  } else if (!ehPessoal) {
+    empresa = tituloCase(prefixoDominio);
+  } else {
+    empresa = null;
+    perdido = true;
+    perdidoMotivo = 'import: e-mail pessoal, sem empresa';
+  }
 
   // Telefone: remover prefixos estranhos (ex: "?+5515..."), manter dígitos e +
-  const telefoneBruto = (row['Número de telefone'] || '').trim();
-  const telefone = telefoneBruto.replace(/[^\d+]/g, '') || null;
+  const telefone = (row['Número de telefone'] || '').trim().replace(/[^\d+]/g, '') || null;
 
   const hubspotId = (row['ID do registro.'] || row['ID do registro'] || '').trim() || null;
 
@@ -70,12 +124,14 @@ function mapearLead(row) {
     linkedin:           null,
     contato_nome:       fullName,
     contato_cargo:      null,
-    contato_email:      email.toLowerCase(),
+    contato_email:      email,
     contato_telefone:   telefone,
     canal_preferencial: 'email',
     origem:             'hubspot',
     hubspot_id:         hubspotId,
-    estagio:            'novos_leads',
+    estagio:            perdido ? 'perdido' : 'novos_leads',
+    perdido:            perdido,
+    perdido_motivo:     perdidoMotivo,
     score:              50,
   };
 }
@@ -179,4 +235,10 @@ async function main() {
   console.log('   Estágio: novos_leads | Origem: hubspot');
 }
 
-main().catch(console.error);
+// Exporta as funções puras para preview/teste sem executar a importação.
+module.exports = { parseCSV, mapearLead };
+
+// Só roda a importação quando chamado diretamente (node scripts/importar-hubspot.js).
+if (require.main === module) {
+  main().catch(console.error);
+}

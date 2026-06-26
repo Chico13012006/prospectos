@@ -42,3 +42,6 @@ hubspot_leads.csv
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Backups locais (contem PII de leads)
+backups/
