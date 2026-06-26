@@ -20,7 +20,7 @@ export type Lead = {
   contato_email: string
   contato_telefone?: string
   canal_preferencial: 'email' | 'whatsapp' | 'linkedin' | 'telefone'
-  estagio: 'novos_leads' | 'primeiro_contato' | 'aguardando_resposta' | 'follow_up' | 'interessado' | 'reuniao_agendada' | 'perdido'
+  estagio: 'novos_leads' | 'novo' | 'primeiro_contato' | 'aguardando_resposta' | 'follow_up' | 'follow_up_1' | 'follow_up_2' | 'interessado' | 'respondeu' | 'com_closer' | 'reuniao_agendada' | 'ganho' | 'perdido' | 'sem_resposta'
   score: number
   responsavel_id?: string
   responsavel_nome?: string

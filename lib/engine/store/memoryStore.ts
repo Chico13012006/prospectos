@@ -88,6 +88,25 @@ export class MemoryStore implements Store {
     return elegiveis
   }
 
+  async leadsEsgotadosSemResposta(): Promise<Lead[]> {
+    const agora = Date.now()
+    const intervaloMs = engineConfig.horasEntreFollowups * 3600_000
+    const esgotados: Lead[] = []
+    for (const lead of this.leads) {
+      if (lead.owner !== OWNER_ENGINE) continue
+      if (lead.perdido) continue
+      if (!ESTAGIOS_EM_CADENCIA.includes(lead.estagio as never)) continue
+      const enviados = await this.contarInteracoes(lead.id, 'follow_up')
+      if (enviados < engineConfig.maxFollowups) continue
+      let venceu = false
+      if (lead.proxima_acao_data) venceu = new Date(lead.proxima_acao_data).getTime() <= agora
+      else if (lead.ultimo_contato) venceu = new Date(lead.ultimo_contato).getTime() + intervaloMs <= agora
+      if (!venceu) continue
+      esgotados.push(lead)
+    }
+    return esgotados
+  }
+
   async buscarUsuario(id: string): Promise<UsuarioBasico | null> {
     return this.usuarios.find((u) => u.id === id) ?? null
   }

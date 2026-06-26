@@ -10,10 +10,12 @@ import {
 import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatDate, formatDateTime } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
 import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
-import { getLeads, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao } from '@/lib/api';
+import { getLeadById, getLeadsPorColuna, getLeadsOffboard, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao } from '@/lib/api';
 import type { Lead, Interacao } from '@/lib/supabase';
 import KanbanColumn from '@/components/pipeline/KanbanColumn';
+import ReservoirColumn from '@/components/pipeline/ReservoirColumn';
 import GlobalFilters, { type GlobalFilterState } from '@/components/pipeline/GlobalFilters';
+import { COLUNAS, ESTAGIOS_TEMPO_REAL, ESTAGIOS_MANUAIS, OFFBOARD, type OffboardId } from '@/lib/pipeline-stages';
 
 // Data real de hoje (YYYY-MM-DD). Antes era fixa ('2026-06-16'), o que gerava
 // "há -7d" para contatos posteriores a essa data.
@@ -166,8 +168,12 @@ export default function PipelinePage() {
   const { empresas: mockEmpresas, contatos: mockContatos, getTimelineForEmpresa } = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<GlobalFilterState>({ search: '', responsavel: '', segmento: '', canal: '' });
-  const [vista, setVista] = useState<'kanban' | 'respostas'>('kanban');
-  const [supabaseLeads, setSupabaseLeads] = useState<Lead[]>([]);
+  const [supabaseLeads, setSupabaseLeads] = useState<Lead[]>([]); // colunas de TEMPO REAL (board)
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [offboard, setOffboard] = useState<OffboardId | null>(null);
+  const [offboardData, setOffboardData] = useState<Lead[]>([]);
+  const [offboardTotal, setOffboardTotal] = useState(0);
+  const [offboardLoading, setOffboardLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [useFallback, setUseFallback] = useState(false);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
@@ -183,10 +189,11 @@ export default function PipelinePage() {
   const [executando, setExecutando] = useState(false);
   const [feedbackAcao, setFeedbackAcao] = useState<string | null>(null);
 
-  // Carrega (ou recarrega) os leads do kanban
+  // Carrega as colunas de TEMPO REAL (board). O reservatório "Novos Leads" é
+  // carregado server-side pelo próprio ReservoirColumn (paginado).
   const carregarLeads = useCallback(async () => {
     try {
-      const data = await getLeads();
+      const data = await getLeadsPorColuna(ESTAGIOS_TEMPO_REAL);
       setSupabaseLeads(data);
     } catch (err) {
       console.error('Erro ao carregar leads:', err);
@@ -199,6 +206,22 @@ export default function PipelinePage() {
   useEffect(() => {
     carregarLeads();
   }, [carregarLeads]);
+
+  // Carrega a lista paginada do terminal fora do board (Perdido / Sem resposta).
+  const carregarOffboard = useCallback(async (tipo: OffboardId) => {
+    setOffboardLoading(true);
+    try {
+      const { data, total } = await getLeadsOffboard(tipo, { limit: 100 });
+      setOffboardData(data);
+      setOffboardTotal(total);
+    } finally {
+      setOffboardLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (offboard) carregarOffboard(offboard);
+  }, [offboard, carregarOffboard]);
 
   // Supabase é fonte ativa quando carregou sem erro (mesmo que vazio)
   const usingSupabase = !useFallback && !loading;
@@ -231,6 +254,12 @@ export default function PipelinePage() {
     setConfirmandoPerdido(false);
     setFeedbackAcao(null);
     setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' });
+    // Carrega o lead selecionado por id (funciona p/ board E reservatório).
+    if (selectedId) {
+      getLeadById(selectedId).then(setSelectedLead).catch(() => setSelectedLead(null));
+    } else {
+      setSelectedLead(null);
+    }
     carregarInteracoes();
   }, [selectedId, usingSupabase, carregarInteracoes]);
 
@@ -253,34 +282,14 @@ export default function PipelinePage() {
     return true;
   });
 
-  // Leads com resposta pendente de ação do closer (sinais que o motor grava em
-  // proxima_acao), ordenados por contato mais recente. Só faz sentido no Supabase.
-  const leadsRespostas: Lead[] = usingSupabase
-    ? supabaseLeads
-        .filter(temRespostaPendente)
-        .sort((a, b) =>
-          (b.ultimo_contato ?? b.created_at).localeCompare(a.ultimo_contato ?? a.created_at),
-        )
-    : [];
-  const idsRespostaPendente = new Set(leadsRespostas.map(l => l.id));
+  // Respostas pendentes de ação do closer → destaca o pill na coluna "Respondeu".
+  const idsRespostaPendente = new Set(
+    supabaseLeads.filter(temRespostaPendente).map(l => l.id),
+  );
 
-  // Dados do painel lateral
-  const selectedEmpresa: Empresa | null = selectedId
-    ? (usingSupabase
-        ? (() => { const l = supabaseLeads.find(l => l.id === selectedId); return l ? leadToEmpresa(l) : null; })()
-        : mockEmpresas.find(e => e.id === selectedId) ?? null)
-    : null;
-
-  const selectedContato: Contato | null = selectedId
-    ? (usingSupabase
-        ? (() => { const l = supabaseLeads.find(l => l.id === selectedId); return l ? leadToContato(l) : null; })()
-        : mockContatos.find(c => c.empresa_id === selectedId && c.principal) ?? null)
-    : null;
-
-  // Lead bruto do Supabase para a Central do Lead (dados 100% reais)
-  const selectedLead: Lead | null = usingSupabase && selectedId
-    ? supabaseLeads.find(l => l.id === selectedId) ?? null
-    : null;
+  // Painel lateral — derivado do lead carregado por id (board OU reservatório).
+  const selectedEmpresa: Empresa | null = selectedLead ? leadToEmpresa(selectedLead) : null;
+  const selectedContato: Contato | null = selectedLead ? leadToContato(selectedLead) : null;
 
   // Salva uma nova interação manual e recarrega a timeline
   async function handleRegistrarInteracao() {
@@ -304,13 +313,17 @@ export default function PipelinePage() {
     }
   }
 
-  // Move o lead para outro estágio, registra a nota e atualiza a UI
+  // Move o lead para outro estágio (movimentação MANUAL do closer), registra a
+  // nota e atualiza a UI (board + lead selecionado + offboard, se aberto).
   async function handleMoverEstagio(novoEstagio: string) {
     if (!selectedId || !novoEstagio) return;
     try {
       await atualizarEstagio(selectedId, novoEstagio);
       await registrarNota(selectedId, `Estágio alterado manualmente para: ${novoEstagio}`);
       await carregarLeads();
+      const atualizado = await getLeadById(selectedId).catch(() => null);
+      setSelectedLead(atualizado);
+      if (offboard) await carregarOffboard(offboard);
       await carregarInteracoes();
     } catch (err) {
       console.error('Erro ao mover estágio:', err);
@@ -394,30 +407,28 @@ export default function PipelinePage() {
         </div>
       </div>
 
-      {/* Filtros globais + alternância de visão */}
+      {/* Filtros globais + seletor de visão (board x terminais fora do board) */}
       <div className="px-6 pb-3 flex items-center gap-2 flex-wrap shrink-0">
         <div className="flex items-center rounded-lg border border-[#2a3147] bg-[#1a1f2e] p-0.5">
           <button
-            onClick={() => setVista('kanban')}
+            onClick={() => setOffboard(null)}
             className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              vista === 'kanban' ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:text-slate-200'
+              offboard === null ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            Kanban
+            Board
           </button>
-          <button
-            onClick={() => setVista('respostas')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              vista === 'respostas' ? 'bg-green-500/20 text-green-300' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <MessageSquare size={13} /> Respostas a tratar
-            {leadsRespostas.length > 0 && (
-              <span className="ml-1 text-xs font-bold bg-green-500 text-white rounded-full px-1.5 py-0.5 leading-none">
-                {leadsRespostas.length}
-              </span>
-            )}
-          </button>
+          {(Object.keys(OFFBOARD) as OffboardId[]).map(id => (
+            <button
+              key={id}
+              onClick={() => setOffboard(id)}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                offboard === id ? 'bg-slate-500/20 text-slate-200' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {OFFBOARD[id].label}
+            </button>
+          ))}
         </div>
         <GlobalFilters
           value={filtros}
@@ -430,50 +441,39 @@ export default function PipelinePage() {
 
       {/* Área principal — ocupa o resto da altura; o scroll é por coluna */}
       <div className="flex-1 min-h-0">
-        {vista === 'respostas' ? (
+        {offboard ? (
+          /* Terminal fora do board (Perdido / Sem resposta), paginado */
           <div className="h-full overflow-y-auto px-6 pb-4">
-            {loading ? (
+            {offboardLoading ? (
               <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
-                <Loader2 size={18} className="animate-spin" />
-                <span className="text-sm">Carregando...</span>
+                <Loader2 size={18} className="animate-spin" /><span className="text-sm">Carregando...</span>
               </div>
-            ) : leadsRespostas.length === 0 ? (
+            ) : offboardData.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2">
-                <MessageSquare size={20} className="text-slate-600" />
-                <span className="text-sm font-medium text-slate-400">Nenhuma resposta aguardando ação do closer.</span>
-                <span className="text-xs">Quando um lead responder, ele aparece aqui automaticamente.</span>
+                <span className="text-sm font-medium text-slate-400">Nenhum lead em &ldquo;{OFFBOARD[offboard].label}&rdquo;.</span>
               </div>
             ) : (
               <div className="space-y-2 max-w-3xl">
-                {leadsRespostas.map(lead => (
+                <div className="text-xs text-slate-500 mb-1">{offboardTotal.toLocaleString('pt-BR')} em &ldquo;{OFFBOARD[offboard].label}&rdquo;</div>
+                {offboardData.map(lead => (
                   <button
                     key={lead.id}
                     onClick={() => setSelectedId(lead.id)}
-                    className="w-full text-left bg-[#1a1f2e] rounded-xl border border-green-500/40 hover:border-green-500/70 p-4 transition-colors flex items-center gap-4"
+                    className="w-full text-left bg-[#1a1f2e] rounded-xl border border-[#2a3147] hover:border-indigo-500/40 p-3 transition-colors flex items-center gap-3"
                   >
-                    <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm text-slate-100 truncate">{lead.empresa}</span>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 font-medium shrink-0">
-                          {respostaPendenteLabel(lead.proxima_acao)}
-                        </span>
-                      </div>
+                      <div className="font-medium text-sm text-slate-100 truncate">{lead.empresa}</div>
                       <div className="text-xs text-slate-400 mt-0.5 truncate">
-                        {lead.contato_nome}
-                        {lead.contato_email ? ` · ${lead.contato_email}` : ''}
-                        {lead.segmento ? ` · ${lead.segmento}` : ''}
+                        {[lead.contato_nome, lead.contato_email].filter(Boolean).join(' · ')}
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-xs text-slate-500">último contato</div>
-                      <div className="text-sm font-medium text-slate-300">
-                        {lead.ultimo_contato ? formatDate(lead.ultimo_contato) : '—'}
-                      </div>
-                    </div>
-                    <ArrowRight size={16} className="text-slate-600 shrink-0" />
+                    {lead.perdido_motivo && <span className="text-xs text-slate-500 shrink-0 truncate max-w-48">{lead.perdido_motivo}</span>}
+                    <ArrowRight size={15} className="text-slate-600 shrink-0" />
                   </button>
                 ))}
+                {offboardData.length < offboardTotal && (
+                  <div className="text-center text-xs text-slate-500 py-2">{offboardData.length} de {offboardTotal.toLocaleString('pt-BR')}</div>
+                )}
               </div>
             )}
           </div>
@@ -487,23 +487,28 @@ export default function PipelinePage() {
             <span className="text-sm font-medium text-slate-400">Sem conexão com os dados.</span>
             <span className="text-xs">Verifique a conexão com o Supabase.</span>
           </div>
-        ) : supabaseLeads.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2">
-            <span className="text-sm font-medium text-slate-400">Nenhum lead encontrado.</span>
-            <span className="text-xs">Importe seus contatos para começar.</span>
-          </div>
         ) : (
           <div className="h-full flex gap-4 overflow-x-auto px-6 pb-4">
-            {STAGES.map(stage => (
-              <KanbanColumn
-                key={stage.id}
-                stage={stage}
-                leads={filteredLeads.filter(l => l.estagio === stage.id)}
-                respostaPendenteIds={idsRespostaPendente}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-              />
-            ))}
+            {COLUNAS.map(col =>
+              col.tipo === 'reservatorio' ? (
+                <ReservoirColumn
+                  key={col.id}
+                  stage={col}
+                  filtros={filtros}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                />
+              ) : (
+                <KanbanColumn
+                  key={col.id}
+                  stage={col}
+                  leads={filteredLeads.filter(l => col.estagios.includes(l.estagio))}
+                  respostaPendenteIds={idsRespostaPendente}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                />
+              ),
+            )}
           </div>
         )}
       </div>
@@ -867,10 +872,9 @@ export default function PipelinePage() {
                 className="flex-1 text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none"
               >
                 <option value="" disabled>Mover para outro estágio</option>
-                {STAGES.map(s => (
-                  <option key={s.id} value={s.id}>{s.label}</option>
+                {ESTAGIOS_MANUAIS.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
-                <option value="perdido">Perdido</option>
               </select>
               <button
                 onClick={handleMarcarPerdido}

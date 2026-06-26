@@ -218,6 +218,31 @@ describe('Fluxo 4 — followUp', () => {
     expect(r.elegiveis).toBe(0)
   })
 
+  it('SAÍDA AUTOMÁTICA: esgotou os follow-ups + tempo vencido → sem_resposta', async () => {
+    const lead = makeLead({ estagio: 'follow_up', proxima_acao_data: ONTEM })
+    const store = new MemoryStore([lead])
+    for (let i = 0; i < 3; i++) {
+      await store.registrarInteracao({ lead_id: lead.id, tipo: 'follow_up', canal: 'email', descricao: 'x', origem_acao: 'ia' })
+    }
+    const r = await followUp(store, email)
+    expect(r.encerrados).toBe(1)
+    expect(r.enviados).toBe(0)
+    expect(email.enviados).toHaveLength(0)
+    expect((await store.buscarLead(lead.id))!.estagio).toBe('sem_resposta')
+  })
+
+  it('NÃO encerra antes de esgotar ou se o tempo não venceu', async () => {
+    // Esgotou os 3, mas o tempo ainda não venceu (proxima_acao_data no futuro).
+    const lead = makeLead({ estagio: 'follow_up', proxima_acao_data: AMANHA })
+    const store = new MemoryStore([lead])
+    for (let i = 0; i < 3; i++) {
+      await store.registrarInteracao({ lead_id: lead.id, tipo: 'follow_up', canal: 'email', descricao: 'x', origem_acao: 'ia' })
+    }
+    const r = await followUp(store, email)
+    expect(r.encerrados).toBe(0)
+    expect((await store.buscarLead(lead.id))!.estagio).toBe('follow_up')
+  })
+
   it('LIMITE DIÁRIO trava o lote de follow-ups', async () => {
     // MAX_ENVIOS_DIA=2. Três leads elegíveis → só 2 saem hoje.
     const leads = [1, 2, 3].map((n) =>

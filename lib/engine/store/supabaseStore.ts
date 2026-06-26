@@ -127,6 +127,33 @@ export class SupabaseStore implements Store {
     return elegiveis
   }
 
+  async leadsEsgotadosSemResposta(): Promise<Lead[]> {
+    const agora = Date.now()
+    const intervaloMs = engineConfig.horasEntreFollowups * 3600_000
+    const { data, error } = await this.db
+      .from('leads')
+      .select('*')
+      .eq('owner', OWNER_ENGINE)
+      .eq('perdido', false)
+      .in('estagio', ESTAGIOS_EM_CADENCIA)
+    if (error) throw error
+
+    const candidatos = (data as Lead[]) ?? []
+    const esgotados: Lead[] = []
+    for (const lead of candidatos) {
+      // Só os que ESGOTARAM os follow-ups.
+      const enviados = await this.contarInteracoes(lead.id, 'follow_up')
+      if (enviados < engineConfig.maxFollowups) continue
+      // E cujo tempo de espera do último follow-up já passou.
+      let venceu = false
+      if (lead.proxima_acao_data) venceu = new Date(lead.proxima_acao_data).getTime() <= agora
+      else if (lead.ultimo_contato) venceu = new Date(lead.ultimo_contato).getTime() + intervaloMs <= agora
+      if (!venceu) continue
+      esgotados.push(lead)
+    }
+    return esgotados
+  }
+
   async buscarUsuario(id: string): Promise<UsuarioBasico | null> {
     const { data, error } = await this.db
       .from('usuarios')

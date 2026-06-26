@@ -18,6 +18,9 @@ export interface Store {
   enviosHoje(): Promise<number>
   // Leads owner='engine' elegíveis para follow-up agora.
   leadsParaFollowup(): Promise<Lead[]>
+  // Leads owner='engine' que ESGOTARAM os follow-ups (>= MAX) sem responder e
+  // cujo tempo de espera já passou — candidatos a sair para 'sem_resposta'.
+  leadsEsgotadosSemResposta(): Promise<Lead[]>
   // Dados do responsável/closer do lead (para notificação do Fluxo 3).
   buscarUsuario(id: string): Promise<UsuarioBasico | null>
 }

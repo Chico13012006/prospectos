@@ -14,11 +14,29 @@ import type { Store } from '../store/store'
 export async function followUp(
   store: Store,
   email: EmailProvider,
-): Promise<{ enviados: number; elegiveis: number }> {
+): Promise<{ enviados: number; elegiveis: number; encerrados: number }> {
+  // Saída automática: quem esgotou os follow-ups (>= MAX) sem responder e já
+  // passou do tempo de espera sai da esteira para 'sem_resposta' (terminal,
+  // fora do board ativo). Reversível por ação manual. O motor PARA aqui — nunca
+  // leva além de "Respondeu".
+  const esgotados = await store.leadsEsgotadosSemResposta()
+  for (const lead of esgotados) {
+    await store.atualizarLead(lead.id, { estagio: 'sem_resposta', proxima_acao: null, proxima_acao_data: null })
+    await store.registrarInteracao({
+      lead_id: lead.id,
+      tipo: 'nota',
+      canal: 'sistema',
+      descricao: `Sem resposta após ${engineConfig.maxFollowups} follow-ups. Movido para 'sem_resposta'.`,
+      origem_acao: 'ia',
+      responsavel_id: lead.responsavel_id ?? null,
+    })
+    log.ok('Lead encerrado por falta de resposta', { leadId: lead.id, empresa: lead.empresa })
+  }
+
   const elegiveis = await store.leadsParaFollowup()
   if (elegiveis.length === 0) {
     log.info('Follow-up: nenhum lead elegível agora.')
-    return { enviados: 0, elegiveis: 0 }
+    return { enviados: 0, elegiveis: 0, encerrados: esgotados.length }
   }
 
   log.info('Follow-up: leads elegíveis.', { quantidade: elegiveis.length })
@@ -64,5 +82,5 @@ export async function followUp(
     })
   }
 
-  return { enviados, elegiveis: elegiveis.length }
+  return { enviados, elegiveis: elegiveis.length, encerrados: esgotados.length }
 }

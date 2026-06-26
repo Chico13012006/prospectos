@@ -1,4 +1,5 @@
 import { supabase, Lead, Interacao, Usuario, Template } from './supabase'
+import { ESTAGIOS_RESERVATORIO } from './pipeline-stages'
 
 // --- LEADS ---
 
@@ -19,6 +20,75 @@ export async function getLeads() {
     return []
   }
   return data || []
+}
+
+// Colunas de TEMPO REAL (pequenas): carrega todos os leads dos estágios dados,
+// com teto de segurança. Inclui o nome do responsável (join usuarios).
+export async function getLeadsPorColuna(estagios: string[]): Promise<Lead[]> {
+  const { data, error } = await supabase
+    .from('leads')
+    .select('*, usuarios:responsavel_id (id, nome)')
+    .in('estagio', estagios)
+    .order('ultimo_contato', { ascending: false, nullsFirst: false })
+    .limit(1000)
+  if (error) {
+    console.error('getLeadsPorColuna:', error)
+    return []
+  }
+  return (data ?? []) as Lead[]
+}
+
+// RESERVATÓRIO "Novos Leads": NUNCA busca tudo. Página com limite/offset,
+// filtro de data (default últimos 30 dias), busca e filtros globais. Devolve a
+// página + o total (count exato) para o contador.
+export async function getNovosLeads(opts: {
+  desde?: string | null
+  busca?: string
+  responsavel?: string
+  segmento?: string
+  canal?: string
+  limit?: number
+  offset?: number
+}): Promise<{ data: Lead[]; total: number }> {
+  const { desde, busca, responsavel, segmento, canal, limit = 50, offset = 0 } = opts
+  let q = supabase
+    .from('leads')
+    .select('*, usuarios:responsavel_id (id, nome)', { count: 'exact' })
+    .in('estagio', ESTAGIOS_RESERVATORIO)
+  if (desde) q = q.gte('created_at', desde)
+  if (responsavel) q = q.eq('responsavel_nome', responsavel)
+  if (segmento) q = q.eq('segmento', segmento)
+  if (canal) q = q.eq('canal_preferencial', canal)
+  if (busca && busca.trim()) {
+    const t = busca.trim().replace(/[%,()]/g, ' ')
+    q = q.or(`empresa.ilike.%${t}%,contato_nome.ilike.%${t}%,contato_email.ilike.%${t}%`)
+  }
+  const { data, error, count } = await q
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1)
+  if (error) {
+    console.error('getNovosLeads:', error)
+    return { data: [], total: 0 }
+  }
+  return { data: (data ?? []) as Lead[], total: count ?? 0 }
+}
+
+// Terminais fora do board (Perdido / Sem resposta), paginado.
+export async function getLeadsOffboard(
+  tipo: 'perdido' | 'sem_resposta',
+  opts: { limit?: number; offset?: number } = {},
+): Promise<{ data: Lead[]; total: number }> {
+  const { limit = 50, offset = 0 } = opts
+  let q = supabase.from('leads').select('*, usuarios:responsavel_id (id, nome)', { count: 'exact' })
+  q = tipo === 'perdido' ? q.or('perdido.eq.true,estagio.eq.perdido') : q.eq('estagio', 'sem_resposta')
+  const { data, error, count } = await q
+    .order('updated_at', { ascending: false })
+    .range(offset, offset + limit - 1)
+  if (error) {
+    console.error('getLeadsOffboard:', error)
+    return { data: [], total: 0 }
+  }
+  return { data: (data ?? []) as Lead[], total: count ?? 0 }
 }
 
 export async function getLeadById(id: string): Promise<Lead | null> {

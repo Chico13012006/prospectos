@@ -72,6 +72,7 @@ async function main() {
     contarInteracoes: (id, t) => real.contarInteracoes(id, t),
     enviosHoje: () => real.enviosHoje(),
     leadsParaFollowup: () => real.leadsParaFollowup(),
+    leadsEsgotadosSemResposta: () => real.leadsEsgotadosSemResposta(),
     buscarUsuario: (id) => real.buscarUsuario(id),
     async atualizarLead(id, patch) {
       escritas.push('UPDATE leads ' + JSON.stringify(patch) + ' WHERE id=' + id)
