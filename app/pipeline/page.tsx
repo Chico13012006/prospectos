@@ -387,7 +387,7 @@ export default function PipelinePage() {
      selectedEmpresa.estagio_pipeline === 'follow_up');
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
       <div className="px-6 pt-6 pb-3 flex items-start justify-between shrink-0">
         <div>
