@@ -105,7 +105,9 @@ function mapearLead(row) {
   } else if (!ehPessoal) {
     empresa = tituloCase(prefixoDominio);
   } else {
-    empresa = null;
+    // Coluna empresa é NOT NULL: usa um marcador claro (não é nome fabricado) e
+    // sinaliza o descarte. Assim não inventamos "gmail"/"hotmail" como empresa.
+    empresa = '(sem empresa)';
     perdido = true;
     perdidoMotivo = 'import: e-mail pessoal, sem empresa';
   }
