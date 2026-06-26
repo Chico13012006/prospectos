@@ -3,15 +3,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import {
-  Settings, Plus, Search, X, Star, ExternalLink, Mail, Phone,
+  Settings, Plus, X, Star, ExternalLink, Mail, Phone,
   MessageSquare, Bot, User, ArrowRight, CheckCircle,
-  Zap, FileText, Bell, BarChart2, Loader2, Clock,
+  Zap, FileText, Bell, Loader2, Clock,
 } from 'lucide-react';
 import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatDate, formatDateTime } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
 import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
 import { getLeads, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao } from '@/lib/api';
 import type { Lead, Interacao } from '@/lib/supabase';
+import KanbanColumn from '@/components/pipeline/KanbanColumn';
+import GlobalFilters, { type GlobalFilterState } from '@/components/pipeline/GlobalFilters';
 
 // Data real de hoje (YYYY-MM-DD). Antes era fixa ('2026-06-16'), o que gerava
 // "há -7d" para contatos posteriores a essa data.
@@ -158,60 +160,12 @@ function scoreColor(score: number): string {
   return '#6b7280';
 }
 
-function LeadCard({ empresa, onClick, respostaPendente }: { empresa: Empresa; onClick: () => void; respostaPendente?: boolean }) {
-  const timeSince = empresa.ultimo_contato
-    ? daysBetween(empresa.ultimo_contato, TODAY)
-    : daysBetween(empresa.data_entrada, TODAY);
-
-  const isDelayed = timeSince > 5 && empresa.estagio_pipeline === 'aguardando_resposta';
-
-  return (
-    <div
-      onClick={onClick}
-      className={`bg-[#1a1f2e] rounded-xl border shadow-none p-3.5 cursor-pointer hover:shadow-none transition-all ${
-        respostaPendente ? 'border-green-500/50 hover:border-green-500/70' : 'border-[#2a3147] hover:border-indigo-500/30'
-      }`}
-    >
-      {respostaPendente && (
-        <div className="flex items-center gap-1 mb-2 text-xs font-semibold text-green-400">
-          <MessageSquare size={12} />
-          <span>Resposta a tratar</span>
-          <span className="ml-auto w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-        </div>
-      )}
-      <div className="font-medium text-sm text-slate-100 leading-tight mb-2">{empresa.nome}</div>
-      <div className="text-xs text-slate-400 mb-2">{empresa.cidade}, {empresa.estado}</div>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs bg-[#252b3b] text-slate-300 px-2 py-0.5 rounded-full">
-          {empresa.segmento}
-        </span>
-        <span className={`text-xs ${isDelayed ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
-          {empresa.estagio_pipeline === 'novos_leads'
-            ? `Adicionado há ${timeSince}d`
-            : empresa.estagio_pipeline === 'aguardando_resposta'
-            ? `${timeSince}d sem resposta`
-            : empresa.estagio_pipeline === 'primeiro_contato'
-            ? `Enviado há ${timeSince}d`
-            : `${timeSince}d atrás`}
-        </span>
-      </div>
-      <div className="flex gap-1.5 mb-3">
-        {empresa.em_cadencia && <span title="LinkedIn"><ExternalLink size={11} className="text-indigo-400" /></span>}
-        <span title="Email"><Mail size={11} className="text-slate-600" /></span>
-        {empresa.segmento === 'Agro' && <span title="WhatsApp"><MessageSquare size={11} className="text-green-400" /></span>}
-        {(empresa.segmento === 'Petróleo' || empresa.segmento === 'Mineração') ? <span title="Telefone"><Phone size={11} className="text-purple-400" /></span> : null}
-      </div>
-      <div style={{ borderTop: '0.5px solid #EBEBEB', paddingTop: 8 }}>
-        <SdrPill name={empresa.responsavel} />
-      </div>
-    </div>
-  );
-}
+// O card do Kanban agora é o componente compacto components/pipeline/LeadCardCompact.
 
 export default function PipelinePage() {
   const { empresas: mockEmpresas, contatos: mockContatos, getTimelineForEmpresa } = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const [filtros, setFiltros] = useState<GlobalFilterState>({ search: '', responsavel: '', segmento: '', canal: '' });
   const [vista, setVista] = useState<'kanban' | 'respostas'>('kanban');
   const [supabaseLeads, setSupabaseLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -280,16 +234,24 @@ export default function PipelinePage() {
     carregarInteracoes();
   }, [selectedId, usingSupabase, carregarInteracoes]);
 
-  // Lista de empresas para o Kanban
-  const activeLeads: Empresa[] = usingSupabase
-    ? supabaseLeads.map(leadToEmpresa)
-    : mockEmpresas.filter(e => !e.blacklist && e.status !== 'descartado');
+  // Opções dos filtros globais (a partir dos leads reais).
+  const responsaveis = [...new Set(supabaseLeads.map(l => l.usuarios?.nome).filter(Boolean))].sort() as string[];
+  const segmentos = [...new Set(supabaseLeads.map(l => l.segmento).filter(Boolean))].sort() as string[];
+  const canais = [...new Set(supabaseLeads.map(l => l.canal_preferencial).filter(Boolean))].sort() as string[];
 
-  const filtered = activeLeads.filter(e =>
-    !search ||
-    e.nome.toLowerCase().includes(search.toLowerCase()) ||
-    e.segmento.toLowerCase().includes(search.toLowerCase())
-  );
+  // Filtro GLOBAL: aplica a TODO o pipeline (antes de dividir por coluna).
+  const buscaGlobal = filtros.search.trim().toLowerCase();
+  const filteredLeads: Lead[] = (usingSupabase ? supabaseLeads : []).filter(l => {
+    if (filtros.responsavel && (l.usuarios?.nome ?? '') !== filtros.responsavel) return false;
+    if (filtros.segmento && (l.segmento ?? '') !== filtros.segmento) return false;
+    if (filtros.canal && (l.canal_preferencial ?? '') !== filtros.canal) return false;
+    if (buscaGlobal) {
+      const hay = [l.empresa, l.contato_nome, l.contato_email, l.segmento, l.cidade]
+        .filter(Boolean).map(v => String(v).toLowerCase());
+      if (!hay.some(v => v.includes(buscaGlobal))) return false;
+    }
+    return true;
+  });
 
   // Leads com resposta pendente de ação do closer (sinais que o motor grava em
   // proxima_acao), ordenados por contato mais recente. Só faz sentido no Supabase.
@@ -412,12 +374,12 @@ export default function PipelinePage() {
      selectedEmpresa.estagio_pipeline === 'follow_up');
 
   return (
-    <div className="flex flex-col" style={{ minHeight: '100vh' }}>
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="px-6 pt-6 pb-4 flex items-start justify-between">
+      <div className="px-6 pt-6 pb-3 flex items-start justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Pipeline de Contato</h1>
-          <p className="text-sm text-slate-400 mt-0.5">Visão Kanban com execução automática de ações</p>
+          <p className="text-sm text-slate-400 mt-0.5">CRM de prospecção — Kanban por etapa</p>
         </div>
         <div className="flex gap-3">
           <button className="flex items-center gap-2 text-sm text-slate-300 border border-[#2a3147] px-3 py-2 rounded-lg hover:bg-[#0f1117]">
@@ -432,9 +394,8 @@ export default function PipelinePage() {
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div className="px-6 pb-4 flex items-center gap-2 flex-wrap">
-        {/* Toggle de visão: Kanban x Respostas a tratar */}
+      {/* Filtros globais + alternância de visão */}
+      <div className="px-6 pb-3 flex items-center gap-2 flex-wrap shrink-0">
         <div className="flex items-center rounded-lg border border-[#2a3147] bg-[#1a1f2e] p-0.5">
           <button
             onClick={() => setVista('kanban')}
@@ -458,220 +419,93 @@ export default function PipelinePage() {
             )}
           </button>
         </div>
-        <div className="relative">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar empresa ou contato..."
-            className="pl-8 pr-3 py-2 text-sm border border-[#2a3147] rounded-lg bg-[#1a1f2e] w-52 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-          />
-        </div>
-        {['Todos os canais', 'Todos os responsáveis', 'Todos os nichos', 'Todos os status'].map(f => (
-          <select key={f} className="text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none">
-            <option>{f}</option>
-          </select>
-        ))}
-        <span className="text-xs text-slate-500 ml-auto">Ordenar: Mais recentes</span>
+        <GlobalFilters
+          value={filtros}
+          onChange={setFiltros}
+          responsaveis={responsaveis}
+          segmentos={segmentos}
+          canais={canais}
+        />
       </div>
 
-      {/* Visão: Respostas a tratar (lista focada nos leads que responderam) */}
-      {vista === 'respostas' ? (
-        <div className="px-6 pb-4">
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
-              <Loader2 size={18} className="animate-spin" />
-              <span className="text-sm">Carregando...</span>
-            </div>
-          ) : leadsRespostas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2">
-              <MessageSquare size={20} className="text-slate-600" />
-              <span className="text-sm font-medium text-slate-400">Nenhuma resposta aguardando ação do closer.</span>
-              <span className="text-xs">Quando um lead responder, ele aparece aqui automaticamente.</span>
-            </div>
-          ) : (
-            <div className="space-y-2 max-w-3xl">
-              {leadsRespostas.map(lead => (
-                <button
-                  key={lead.id}
-                  onClick={() => setSelectedId(lead.id)}
-                  className="w-full text-left bg-[#1a1f2e] rounded-xl border border-green-500/40 hover:border-green-500/70 p-4 transition-colors flex items-center gap-4"
-                >
-                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm text-slate-100 truncate">{lead.empresa}</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 font-medium shrink-0">
-                        {respostaPendenteLabel(lead.proxima_acao)}
-                      </span>
+      {/* Área principal — ocupa o resto da altura; o scroll é por coluna */}
+      <div className="flex-1 min-h-0">
+        {vista === 'respostas' ? (
+          <div className="h-full overflow-y-auto px-6 pb-4">
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
+                <Loader2 size={18} className="animate-spin" />
+                <span className="text-sm">Carregando...</span>
+              </div>
+            ) : leadsRespostas.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2">
+                <MessageSquare size={20} className="text-slate-600" />
+                <span className="text-sm font-medium text-slate-400">Nenhuma resposta aguardando ação do closer.</span>
+                <span className="text-xs">Quando um lead responder, ele aparece aqui automaticamente.</span>
+              </div>
+            ) : (
+              <div className="space-y-2 max-w-3xl">
+                {leadsRespostas.map(lead => (
+                  <button
+                    key={lead.id}
+                    onClick={() => setSelectedId(lead.id)}
+                    className="w-full text-left bg-[#1a1f2e] rounded-xl border border-green-500/40 hover:border-green-500/70 p-4 transition-colors flex items-center gap-4"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm text-slate-100 truncate">{lead.empresa}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 font-medium shrink-0">
+                          {respostaPendenteLabel(lead.proxima_acao)}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-400 mt-0.5 truncate">
+                        {lead.contato_nome}
+                        {lead.contato_email ? ` · ${lead.contato_email}` : ''}
+                        {lead.segmento ? ` · ${lead.segmento}` : ''}
+                      </div>
                     </div>
-                    <div className="text-xs text-slate-400 mt-0.5 truncate">
-                      {lead.contato_nome}
-                      {lead.contato_email ? ` · ${lead.contato_email}` : ''}
-                      {` · ${lead.segmento || '—'}`}
+                    <div className="text-right shrink-0">
+                      <div className="text-xs text-slate-500">último contato</div>
+                      <div className="text-sm font-medium text-slate-300">
+                        {lead.ultimo_contato ? formatDate(lead.ultimo_contato) : '—'}
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-xs text-slate-500">último contato</div>
-                    <div className="text-sm font-medium text-slate-300">
-                      {lead.ultimo_contato ? formatDate(lead.ultimo_contato) : '—'}
-                    </div>
-                  </div>
-                  <ArrowRight size={16} className="text-slate-600 shrink-0" />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-      /* Kanban */
-      <div className="overflow-x-auto px-6 pb-4">
-        {loading ? (
+                    <ArrowRight size={16} className="text-slate-600 shrink-0" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : loading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
             <Loader2 size={18} className="animate-spin" />
             <span className="text-sm">Carregando leads...</span>
           </div>
-        ) : usingSupabase && supabaseLeads.length === 0 ? (
+        ) : !usingSupabase ? (
+          <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2">
+            <span className="text-sm font-medium text-slate-400">Sem conexão com os dados.</span>
+            <span className="text-xs">Verifique a conexão com o Supabase.</span>
+          </div>
+        ) : supabaseLeads.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2">
             <span className="text-sm font-medium text-slate-400">Nenhum lead encontrado.</span>
             <span className="text-xs">Importe seus contatos para começar.</span>
           </div>
         ) : (
-          <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
-            {STAGES.map(stage => {
-              const stageLeads = filtered.filter(e => e.estagio_pipeline === stage.id);
-              return (
-                <div key={stage.id} style={{ width: 240 }} className="flex flex-col">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: stage.color }} />
-                      <span className="text-sm font-semibold text-slate-300 leading-tight">{stage.label}</span>
-                    </div>
-                    <span className="text-xs font-bold text-slate-500 bg-[#252b3b] px-2 py-0.5 rounded-full">
-                      {stageLeads.length}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2.5 flex-1" style={{ minHeight: 120 }}>
-                    {stageLeads.map(empresa => (
-                      <LeadCard
-                        key={empresa.id}
-                        empresa={empresa}
-                        respostaPendente={idsRespostaPendente.has(empresa.id)}
-                        onClick={() => setSelectedId(empresa.id)}
-                      />
-                    ))}
-                  </div>
-
-                  <button className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 border border-dashed border-[#2a3147] rounded-xl py-2.5 hover:border-[#2a3147] transition-colors">
-                    <Plus size={12} /> Adicionar lead
-                  </button>
-                </div>
-              );
-            })}
+          <div className="h-full flex gap-4 overflow-x-auto px-6 pb-4">
+            {STAGES.map(stage => (
+              <KanbanColumn
+                key={stage.id}
+                stage={stage}
+                leads={filteredLeads.filter(l => l.estagio === stage.id)}
+                respostaPendenteIds={idsRespostaPendente}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+              />
+            ))}
           </div>
         )}
-      </div>
-      )}
-
-      {/* Como funciona */}
-      <div className="px-6 pb-5">
-        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
-          <h2 className="font-semibold text-slate-200 mb-5 flex items-center gap-2">
-            <Zap size={16} className="text-amber-500" />
-            Como funciona o processo
-          </h2>
-          <div className="flex items-start">
-            {[
-              { n: '1', title: 'Lead no Kanban', desc: 'Lead está no estágio aguardando a próxima ação.' },
-              { n: '2', title: 'Abrir lead', desc: 'Clique no card para abrir o painel com todas as informações.' },
-              { n: '3', title: 'Executar ação', desc: "Clique em 'Executar ação' para disparar o follow-up recomendado pela IA." },
-              { n: '4', title: 'Ação é executada', desc: 'O sistema dispara a automação via n8n e registra no histórico.' },
-              { n: '5', title: 'Kanban é atualizado', desc: 'O lead é movido automaticamente para o próximo estágio.' },
-            ].map((step, i) => (
-              <div key={step.n} className="flex items-start flex-1">
-                <div className="flex flex-col items-center flex-1 pr-2">
-                  <div className="flex items-center w-full">
-                    <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 text-sm font-bold flex items-center justify-center shrink-0">
-                      {step.n}
-                    </div>
-                    {i < 4 && <div className="flex-1 h-0.5 bg-indigo-500/20 mx-1.5" />}
-                  </div>
-                  <div className="mt-2 w-full">
-                    <div className="text-sm font-semibold text-slate-200">{step.title}</div>
-                    <div className="text-xs text-slate-400 mt-0.5 leading-snug">{step.desc}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Automações + Benefícios + Ações */}
-      <div className="px-6 pb-8 grid grid-cols-3 gap-5">
-        <div className="col-span-2 bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
-          <h2 className="font-semibold text-slate-200 mb-4">
-            Automações que acontecem ao executar uma ação
-          </h2>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { Icon: MessageSquare, color: '#6366f1', title: 'Dispara mensagem', desc: 'A IA gera a mensagem e dispara no canal selecionado.' },
-              { Icon: FileText, color: '#3b82f6', title: 'Registra interação', desc: 'A interação é registrada no histórico com data e hora.' },
-              { Icon: Zap, color: '#f59e0b', title: 'Atualiza próxima ação', desc: 'A próxima ação e a data são recalculadas automaticamente.' },
-              { Icon: BarChart2, color: '#22c55e', title: 'Move no Kanban', desc: 'O lead é movido automaticamente para o próximo estágio.' },
-              { Icon: Bell, color: '#8b5cf6', title: 'Notifica responsável', desc: 'O responsável recebe notificação da ação executada.' },
-              { Icon: BarChart2, color: '#ef4444', title: 'Atualiza métricas', desc: 'As métricas e relatórios são atualizados em tempo real.' },
-            ].map(item => (
-              <div key={item.title} className="p-3 rounded-xl bg-[#0f1117] border border-[#2a3147]">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2"
-                  style={{ backgroundColor: `${item.color}18` }}>
-                  <item.Icon size={15} style={{ color: item.color }} />
-                </div>
-                <div className="text-sm font-semibold text-slate-200 mb-0.5">{item.title}</div>
-                <div className="text-xs text-slate-400 leading-snug">{item.desc}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
-            <h2 className="font-semibold text-slate-200 mb-3 text-sm">Benefícios deste fluxo</h2>
-            <ul className="space-y-2">
-              {[
-                'Execução de ações em 1 clique',
-                'Kanban sempre atualizado automaticamente',
-                'Histórico completo de todas as interações',
-                'Próximas ações recomendadas pela IA',
-                'Automação 100% integrada com n8n',
-              ].map(b => (
-                <li key={b} className="flex items-start gap-2 text-xs text-slate-300">
-                  <CheckCircle size={12} className="text-green-500 mt-0.5 shrink-0" />
-                  {b}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
-            <h2 className="font-semibold text-slate-200 mb-3 text-sm">Ações disponíveis no lead</h2>
-            <ul className="space-y-2">
-              {[
-                'Executar próxima ação',
-                'Gerar nova mensagem com IA',
-                'Mover para outro estágio',
-                'Atribuir responsável',
-                'Marcar como perdido',
-                'Ver histórico completo',
-              ].map(a => (
-                <li key={a} className="flex items-start gap-2 text-xs text-slate-300">
-                  <ArrowRight size={11} className="text-indigo-400 mt-0.5 shrink-0" />
-                  {a}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
       </div>
 
       {/* Right panel */}
@@ -950,43 +784,66 @@ export default function PipelinePage() {
                 )}
               </div>
 
-              {/* Informações */}
-              <div className="px-5 py-4">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-3">Informações da empresa</span>
-                <div className="space-y-1.5 text-sm">
-                  {selectedEmpresa.website && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Site</span>
-                      <a href={selectedEmpresa.website} target="_blank" rel="noopener noreferrer"
-                        className="text-indigo-400 hover:underline text-xs truncate max-w-44">{selectedEmpresa.website}</a>
+              {/* Informações completas — esconde campos vazios */}
+              {(() => {
+                type Linha = { label: string; value?: string | null; href?: string; link?: boolean; cap?: boolean };
+                const L = selectedLead;
+                const cidadeEstado = [L?.cidade ?? selectedEmpresa.cidade, L?.estado ?? selectedEmpresa.estado]
+                  .filter(Boolean).join(', ');
+                const siteRaw = L?.site ?? selectedEmpresa.website;
+                const site = siteRaw ? (siteRaw.startsWith('http') ? siteRaw : `https://${siteRaw}`) : null;
+                const linkedin = L?.linkedin ? (L.linkedin.startsWith('http') ? L.linkedin : `https://${L.linkedin}`) : null;
+                const score = L?.score ?? selectedEmpresa.score_engajamento;
+                const criado = L?.created_at ?? selectedEmpresa.data_entrada;
+
+                const contato: Linha[] = [
+                  { label: 'Contato', value: L?.contato_nome ?? selectedContato?.nome },
+                  { label: 'Cargo', value: L?.contato_cargo ?? selectedContato?.cargo },
+                  { label: 'E-mail', value: L?.contato_email ?? selectedContato?.email, href: 'mailto:' },
+                  { label: 'Telefone', value: L?.contato_telefone ?? selectedContato?.telefone, href: 'tel:' },
+                  { label: 'Canal preferencial', value: L?.canal_preferencial ?? selectedContato?.canal_preferencial, cap: true },
+                ];
+                const empresa: Linha[] = [
+                  { label: 'Segmento / nicho', value: L?.segmento ?? selectedEmpresa.segmento },
+                  { label: 'Cidade', value: cidadeEstado },
+                  { label: 'Funcionários', value: L?.faixa_funcionarios ?? selectedEmpresa.funcionarios_faixa },
+                  { label: 'Responsável', value: L?.usuarios?.nome ?? selectedEmpresa.responsavel },
+                  { label: 'Origem', value: L?.origem ?? selectedEmpresa.origem },
+                  { label: 'Score', value: score ? `${score} / 100` : null },
+                  { label: 'Criado em', value: criado ? formatDate(criado) : null },
+                  { label: 'Site', value: site, link: true },
+                  { label: 'LinkedIn', value: linkedin, link: true },
+                ];
+                const render = (linhas: Linha[]) =>
+                  linhas.filter(l => l.value).map(l => {
+                    const v = l.value as string;
+                    return (
+                      <div key={l.label} className="flex justify-between gap-3">
+                        <span className="text-slate-400 shrink-0">{l.label}</span>
+                        {l.href ? (
+                          <a href={`${l.href}${v}`} className="text-indigo-400 hover:underline text-xs truncate max-w-44">{v}</a>
+                        ) : l.link ? (
+                          <a href={v} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline text-xs truncate max-w-44">{v}</a>
+                        ) : (
+                          <span className={`font-medium text-slate-300 text-right truncate max-w-44 ${l.cap ? 'capitalize' : ''}`}>{v}</span>
+                        )}
+                      </div>
+                    );
+                  });
+
+                return (
+                  <div className="px-5 py-4 space-y-4">
+                    <div>
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-2">Dados do contato</span>
+                      <div className="space-y-1.5 text-sm">{render(contato)}</div>
                     </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Segmento</span>
-                    <span className="font-medium text-slate-300">{selectedEmpresa.segmento}</span>
-                  </div>
-                  {selectedEmpresa.funcionarios_faixa && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Funcionários</span>
-                      <span className="font-medium text-slate-300">{selectedEmpresa.funcionarios_faixa}</span>
+                    <div>
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-2">Informações da empresa</span>
+                      <div className="space-y-1.5 text-sm">{render(empresa)}</div>
                     </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Cidade</span>
-                    <span className="font-medium text-slate-300">{selectedEmpresa.cidade}, {selectedEmpresa.estado}</span>
                   </div>
-                  {selectedEmpresa.faturamento_estimado && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Faturamento est.</span>
-                      <span className="font-medium text-slate-300 text-xs">{selectedEmpresa.faturamento_estimado}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Origem do lead</span>
-                    <span className="font-medium text-slate-300">{selectedEmpresa.origem}</span>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
 
             {/* Footer */}
