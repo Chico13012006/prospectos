@@ -110,19 +110,57 @@ export async function getPipelineFiltrosOpcoes(): Promise<{
   return { responsaveis, segmentos, canais: CANAIS_FIXOS }
 }
 
-// Terminais fora do board (Perdido / Sem resposta), paginado.
-export async function getLeadsOffboard(
-  tipo: 'perdido' | 'sem_resposta',
+// BASE DE LEADS: banco geral de TODOS os leads (qualquer estado). Paginado no
+// servidor (range), COUNT exato, busca e filtros server-side. NUNCA busca tudo.
+export interface BaseLeadsFiltros {
+  busca?: string
+  responsavel?: string
+  segmento?: string
+  estagio?: string          // status comercial exato
+  followups?: number | { gte: number }
+  cidade?: string
+  estado?: string
+  cadastroDe?: string | null   // created_at >=
+  cadastroAte?: string | null  // created_at <=
+  interacaoDe?: string | null  // ultimo_contato >=
+  interacaoAte?: string | null // ultimo_contato <=
+  atalho?: 'responderam' | 'sem_resposta' | 'arquivados' | 'reativacao'
+}
+
+export async function getTodosLeads(
+  filtros: BaseLeadsFiltros = {},
   opts: { limit?: number; offset?: number } = {},
 ): Promise<{ data: Lead[]; total: number }> {
   const { limit = 50, offset = 0 } = opts
+  const f = filtros
   let q = supabase.from('leads').select('*, usuarios:responsavel_id (id, nome)', { count: 'exact' })
-  q = tipo === 'perdido' ? q.or('perdido.eq.true,estagio.eq.perdido') : q.eq('estagio', 'sem_resposta')
+
+  if (f.busca && f.busca.trim()) {
+    const t = f.busca.trim().replace(/[%,()]/g, ' ')
+    q = q.or(`empresa.ilike.%${t}%,contato_nome.ilike.%${t}%,contato_email.ilike.%${t}%`)
+  }
+  if (f.responsavel) q = q.eq('responsavel_nome', f.responsavel)
+  if (f.segmento) q = q.eq('segmento', f.segmento)
+  if (f.estagio) q = q.eq('estagio', f.estagio)
+  if (typeof f.followups === 'number') q = q.eq('followups_enviados', f.followups)
+  else if (f.followups) q = q.gte('followups_enviados', f.followups.gte)
+  if (f.cidade && f.cidade.trim()) q = q.ilike('cidade', `%${f.cidade.trim()}%`)
+  if (f.estado && f.estado.trim()) q = q.ilike('estado', f.estado.trim())
+  if (f.cadastroDe) q = q.gte('created_at', f.cadastroDe)
+  if (f.cadastroAte) q = q.lte('created_at', f.cadastroAte)
+  if (f.interacaoDe) q = q.gte('ultimo_contato', f.interacaoDe)
+  if (f.interacaoAte) q = q.lte('ultimo_contato', f.interacaoAte)
+
+  // Atalhos rápidos (chips) → restrições por estágio.
+  if (f.atalho === 'responderam') q = q.in('estagio', ['interessado', 'respondeu', 'com_closer'])
+  else if (f.atalho === 'sem_resposta' || f.atalho === 'reativacao') q = q.eq('estagio', 'sem_resposta')
+  else if (f.atalho === 'arquivados') q = q.or('perdido.eq.true,estagio.eq.perdido,estagio.eq.descartado')
+
   const { data, error, count } = await q
-    .order('updated_at', { ascending: false })
+    .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
   if (error) {
-    console.error('getLeadsOffboard:', error)
+    console.error('getTodosLeads:', error)
     return { data: [], total: 0 }
   }
   return { data: (data ?? []) as Lead[], total: count ?? 0 }

@@ -55,12 +55,43 @@ export const COLUNAS_CADENCIA: ColunaCadenciaDef[] = [
   { id: 'cad_sem_resposta', label: 'Sem Resposta / Reativar', color: '#94a3b8', estagios: ['sem_resposta'], chip: 'sem_resposta' },
 ]
 
-// Terminais fora do board (acessíveis por filtro).
-export const OFFBOARD = {
-  perdido: { label: 'Perdido', estagio: 'perdido' as const },
-  sem_resposta: { label: 'Sem resposta', estagio: 'sem_resposta' as const },
+// Rótulo de QUALQUER estágio (a UI da Base de Leads mostra todos os estados,
+// inclusive os que getEstagioPipelineLabel não cobre: perdido, sem_resposta…).
+export const ESTAGIO_LABELS: Record<string, string> = {
+  novos_leads: 'Novos Leads',
+  novo: 'Novos Leads',
+  primeiro_contato: 'Primeiro Contato',
+  aguardando_resposta: 'Aguardando Resposta',
+  follow_up: 'Em Follow-up',
+  follow_up_1: 'Em Follow-up',
+  follow_up_2: 'Em Follow-up',
+  interessado: 'Respondeu',
+  respondeu: 'Respondeu',
+  com_closer: 'Com o Closer',
+  reuniao_agendada: 'Reunião Agendada',
+  ganho: 'Ganho',
+  perdido: 'Perdido',
+  descartado: 'Descartado',
+  sem_resposta: 'Sem Resposta',
 }
-export type OffboardId = keyof typeof OFFBOARD
+export function labelEstagio(estagio?: string | null): string {
+  if (!estagio) return '—'
+  return ESTAGIO_LABELS[estagio] ?? estagio
+}
+
+// Opções do filtro "Status comercial" na Base de Leads (valor cru → rótulo).
+export const STATUS_COMERCIAL_OPCOES: { value: string; label: string }[] = [
+  { value: 'novos_leads', label: 'Novos Leads' },
+  { value: 'primeiro_contato', label: 'Primeiro Contato' },
+  { value: 'aguardando_resposta', label: 'Aguardando Resposta' },
+  { value: 'follow_up', label: 'Em Follow-up' },
+  { value: 'interessado', label: 'Respondeu' },
+  { value: 'com_closer', label: 'Com o Closer' },
+  { value: 'reuniao_agendada', label: 'Reunião Agendada' },
+  { value: 'ganho', label: 'Ganho' },
+  { value: 'sem_resposta', label: 'Sem Resposta' },
+  { value: 'perdido', label: 'Perdido' },
+]
 
 // Estágios-alvo que o CLOSER pode setar manualmente (de "Respondeu" em diante).
 // O motor NUNCA seta estes — é movimentação humana.

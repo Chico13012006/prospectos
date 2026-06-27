@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Kanban,
+  Database,
   BrainCircuit,
   Users,
   FileText,
@@ -20,6 +21,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 const mainNav = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/pipeline', icon: Kanban, label: 'Pipeline de Contato' },
+  { href: '/base-leads', icon: Database, label: 'Base de Leads' },
   { href: '/inteligencia-comercial', icon: BrainCircuit, label: 'Inteligência Comercial' },
   { href: '/equipe', icon: Users, label: 'Equipe' },
   { href: '/templates', icon: FileText, label: 'Templates' },
