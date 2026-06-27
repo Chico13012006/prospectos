@@ -28,6 +28,8 @@ export interface PipelineColFiltros {
   canal?: string
   busca?: string
   desde?: string | null
+  // Visão Cadência: nº de follow-ups enviados — exato (1,2,3) ou cap ({ gte: 4 }).
+  followups?: number | { gte: number }
 }
 
 // CORAÇÃO DA ESCALA: cada coluna do board usa esta query — NUNCA busca tudo.
@@ -41,11 +43,13 @@ export async function getLeadsPorEstagioPaginado(
   opts: { limit?: number; offset?: number; ordenarPor?: 'created_at' | 'ultimo_contato' } = {},
 ): Promise<{ data: Lead[]; total: number }> {
   const { limit = 50, offset = 0, ordenarPor = 'ultimo_contato' } = opts
-  const { responsavel, segmento, canal, busca, desde } = filtros
+  const { responsavel, segmento, canal, busca, desde, followups } = filtros
   let q = supabase
     .from('leads')
     .select('*, usuarios:responsavel_id (id, nome)', { count: 'exact' })
     .in('estagio', estagios)
+  if (typeof followups === 'number') q = q.eq('followups_enviados', followups)
+  else if (followups) q = q.gte('followups_enviados', followups.gte)
   if (desde) q = q.gte('created_at', desde)
   if (responsavel) q = q.eq('responsavel_nome', responsavel)
   if (segmento) q = q.eq('segmento', segmento)

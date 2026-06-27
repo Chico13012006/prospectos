@@ -51,12 +51,15 @@ export async function executarAcao(
     log.aviso('Primeiro contato já enviado antes. Não reenviar.', { leadId: lead.id })
     return { ok: false, motivo: 'ja_enviado' }
   }
+  // Cache do nº de follow-ups (migration 0003): só muda quando o envio é follow-up.
+  let followupsEnviados = lead.followups_enviados ?? 0
   if (tipo === 'follow_up') {
     const enviados = await store.contarInteracoes(lead.id, 'follow_up')
     if (enviados >= engineConfig.maxFollowups) {
       log.aviso('Máximo de follow-ups atingido.', { leadId: lead.id, enviados })
       return { ok: false, motivo: 'max_followups' }
     }
+    followupsEnviados = enviados + 1
   }
 
   // Limite diário (protege a reputação do domínio).
@@ -86,6 +89,7 @@ export async function executarAcao(
     ultimo_contato: agora.toISOString(),
     proxima_acao: 'follow_up',
     proxima_acao_data: proxima.toISOString(),
+    followups_enviados: followupsEnviados,
   })
 
   log.ok('Ação executada', { leadId: lead.id, de: lead.estagio, para: destino, tipo })

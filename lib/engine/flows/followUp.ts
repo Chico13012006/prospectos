@@ -71,6 +71,8 @@ export async function followUp(
       ultimo_contato: agora.toISOString(),
       proxima_acao: 'follow_up',
       proxima_acao_data: proxima.toISOString(),
+      // Mantém o cache (migration 0003) em dia: este envio é o follow-up nº jaEnviados+1.
+      followups_enviados: jaEnviados + 1,
     })
 
     enviados++

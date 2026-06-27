@@ -14,7 +14,7 @@ import { getLeadById, getLeadsOffboard, getPipelineFiltrosOpcoes, getInteracoesB
 import type { Lead, Interacao } from '@/lib/supabase';
 import PipelineColumn from '@/components/pipeline/PipelineColumn';
 import GlobalFilters, { type GlobalFilterState } from '@/components/pipeline/GlobalFilters';
-import { COLUNAS, ESTAGIOS_MANUAIS, OFFBOARD, type OffboardId } from '@/lib/pipeline-stages';
+import { COLUNAS, COLUNAS_CADENCIA, ESTAGIOS_MANUAIS, OFFBOARD, type OffboardId } from '@/lib/pipeline-stages';
 
 // Data real de hoje (YYYY-MM-DD). Antes era fixa ('2026-06-16'), o que gerava
 // "há -7d" para contatos posteriores a essa data.
@@ -167,6 +167,7 @@ export default function PipelinePage() {
   const { empresas: mockEmpresas, contatos: mockContatos, getTimelineForEmpresa } = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<GlobalFilterState>({ search: '', responsavel: '', segmento: '', canal: '' });
+  const [vista, setVista] = useState<'comercial' | 'cadencia'>('comercial'); // aba do board
   const [filtroOpcoes, setFiltroOpcoes] = useState<{ responsaveis: string[]; segmentos: string[]; canais: string[] }>({ responsaveis: [], segmentos: [], canais: [] });
   const [reloadKey, setReloadKey] = useState(0); // bump -> colunas refazem o fetch (após mutação)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -376,29 +377,50 @@ export default function PipelinePage() {
         </div>
       </div>
 
-      {/* Filtros globais + seletor de visão (board x terminais fora do board) */}
+      {/* Filtros globais + abas (Comercial x Cadência) + terminais fora do board */}
       <div className="px-6 pb-3 flex items-center gap-2 flex-wrap shrink-0">
+        {/* Aba: forma de AGRUPAR os mesmos leads (não muda os estágios do motor) */}
         <div className="flex items-center rounded-lg border border-[#2a3147] bg-[#1a1f2e] p-0.5">
-          <button
-            onClick={() => setOffboard(null)}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              offboard === null ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Board
-          </button>
-          {(Object.keys(OFFBOARD) as OffboardId[]).map(id => (
+          {([
+            { id: 'comercial', label: 'Comercial' },
+            { id: 'cadencia', label: 'Cadência' },
+          ] as const).map(v => (
             <button
-              key={id}
-              onClick={() => setOffboard(id)}
+              key={v.id}
+              onClick={() => { setVista(v.id); setOffboard(null); }}
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                offboard === id ? 'bg-slate-500/20 text-slate-200' : 'text-slate-400 hover:text-slate-200'
+                vista === v.id ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {OFFBOARD[id].label}
+              {v.label}
             </button>
           ))}
         </div>
+
+        {/* Terminais fora do board (Perdido / Sem resposta) — só no Comercial */}
+        {vista === 'comercial' && (
+          <div className="flex items-center rounded-lg border border-[#2a3147] bg-[#1a1f2e] p-0.5">
+            <button
+              onClick={() => setOffboard(null)}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                offboard === null ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Board
+            </button>
+            {(Object.keys(OFFBOARD) as OffboardId[]).map(id => (
+              <button
+                key={id}
+                onClick={() => setOffboard(id)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  offboard === id ? 'bg-slate-500/20 text-slate-200' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {OFFBOARD[id].label}
+              </button>
+            ))}
+          </div>
+        )}
         <GlobalFilters
           value={filtros}
           onChange={setFiltros}
@@ -410,7 +432,32 @@ export default function PipelinePage() {
 
       {/* Área principal — ocupa o resto da altura; o scroll é por coluna */}
       <div className="flex-1 min-h-0">
-        {offboard ? (
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
+            <Loader2 size={18} className="animate-spin" />
+            <span className="text-sm">Carregando leads...</span>
+          </div>
+        ) : !usingSupabase ? (
+          <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2">
+            <span className="text-sm font-medium text-slate-400">Sem conexão com os dados.</span>
+            <span className="text-xs">Verifique a conexão com o Supabase.</span>
+          </div>
+        ) : vista === 'cadencia' ? (
+          /* Visão CADÊNCIA: mesmos leads, agrupados por nº de follow-up */
+          <div className="h-full flex gap-4 overflow-x-auto px-6 pb-4">
+            {COLUNAS_CADENCIA.map(col => (
+              <PipelineColumn
+                key={col.id}
+                stage={col}
+                filtros={filtros}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                reloadKey={reloadKey}
+                chipKind={col.chip}
+              />
+            ))}
+          </div>
+        ) : offboard ? (
           /* Terminal fora do board (Perdido / Sem resposta), paginado */
           <div className="h-full overflow-y-auto px-6 pb-4">
             {offboardLoading ? (
@@ -445,16 +492,6 @@ export default function PipelinePage() {
                 )}
               </div>
             )}
-          </div>
-        ) : loading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
-            <Loader2 size={18} className="animate-spin" />
-            <span className="text-sm">Carregando leads...</span>
-          </div>
-        ) : !usingSupabase ? (
-          <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2">
-            <span className="text-sm font-medium text-slate-400">Sem conexão com os dados.</span>
-            <span className="text-xs">Verifique a conexão com o Supabase.</span>
           </div>
         ) : (
           <div className="h-full flex gap-4 overflow-x-auto px-6 pb-4">

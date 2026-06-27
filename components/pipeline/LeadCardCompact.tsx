@@ -7,14 +7,19 @@ import { prioridadeFromScore, prioridadeClasses, diasDesde, rotuloDias } from '.
 // Card compacto do Kanban. Mostra em TEXTO o que existe — empresa, contato e
 // e-mail aparecem como texto (não só ícones). Campo vazio é omitido, sem traço
 // nem vírgula solta. Fica cheio com o que há e mais rico quando há mais dados.
+// Chip de status usado na visão Cadência (no comercial não é passado).
+export type StatusChip = { label: string; classes: string }
+
 export default function LeadCardCompact({
   lead,
   respostaPendente,
+  statusChip,
   selected,
   onClick,
 }: {
   lead: Lead
   respostaPendente?: boolean
+  statusChip?: StatusChip
   selected?: boolean
   onClick: () => void
 }) {
@@ -95,6 +100,15 @@ export default function LeadCardCompact({
           <div className="mt-1 flex items-center gap-1 text-[11px] text-slate-400 truncate">
             <User size={11} className="shrink-0" />
             <span className="truncate">{responsavel}</span>
+          </div>
+        )}
+
+        {/* Chip de status (visão Cadência) */}
+        {statusChip && (
+          <div className="mt-1.5">
+            <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-full font-medium ${statusChip.classes}`}>
+              {statusChip.label}
+            </span>
           </div>
         )}
 

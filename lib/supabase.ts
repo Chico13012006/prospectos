@@ -31,6 +31,9 @@ export type Lead = {
   ultimo_contato?: string
   proxima_acao?: string
   proxima_acao_data?: string
+  // Cache do nº de follow-ups enviados pelo motor (fonte: interacoes). Mantido
+  // pelo engine; usado p/ agrupar a visão Cadência por 1º/2º/3º/4º follow-up.
+  followups_enviados?: number
   origem: string
   hubspot_id?: string
   perdido: boolean

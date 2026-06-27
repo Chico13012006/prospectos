@@ -5,11 +5,18 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { Search, Loader2 } from 'lucide-react'
 import type { Lead } from '@/lib/supabase'
 import { getLeadsPorEstagioPaginado } from '@/lib/api'
-import type { ColunaDef } from '@/lib/pipeline-stages'
+import type { ChipCadencia } from '@/lib/pipeline-stages'
 import type { GlobalFilterState } from './GlobalFilters'
-import LeadCardCompact from './LeadCardCompact'
+import LeadCardCompact, { type StatusChip } from './LeadCardCompact'
 
 const PAGE = 50
+
+// Chips de status da visão Cadência.
+const CHIP_MAP: Record<ChipCadencia, StatusChip> = {
+  enviado: { label: 'E-mail enviado', classes: 'bg-blue-500/20 text-blue-300' },
+  respondeu: { label: 'Respondeu', classes: 'bg-green-500/20 text-green-300' },
+  sem_resposta: { label: 'Sem resposta', classes: 'bg-slate-500/20 text-slate-300' },
+}
 
 const OPCOES_DATA = [
   { label: 'Últimos 30 dias', dias: 30 },
@@ -35,13 +42,16 @@ export default function PipelineColumn({
   onSelect,
   reloadKey,
   comFiltroData = false,
+  chipKind,
 }: {
-  stage: ColunaDef
+  stage: { id: string; label: string; color: string; estagios: string[]; followups?: number | { gte: number } }
   filtros: GlobalFilterState
   selectedId: string | null
   onSelect: (id: string) => void
   reloadKey: number
   comFiltroData?: boolean
+  // Visão Cadência: chip de status mostrado em cada card desta coluna.
+  chipKind?: ChipCadencia
 }) {
   const [dias, setDias] = useState(30)
   const [busca, setBusca] = useState('')
@@ -75,6 +85,7 @@ export default function PipelineColumn({
           responsavel: filtros.responsavel || undefined,
           segmento: filtros.segmento || undefined,
           canal: filtros.canal || undefined,
+          followups: stage.followups,
         },
         { limit: PAGE, offset, ordenarPor: comFiltroData ? 'created_at' : 'ultimo_contato' },
       )
@@ -84,7 +95,7 @@ export default function PipelineColumn({
       setLoading(false)
       carregandoRef.current = false
     },
-    [stage.estagios, comFiltroData, desde, buscaEfetiva, filtros.responsavel, filtros.segmento, filtros.canal],
+    [stage.estagios, stage.followups, comFiltroData, desde, buscaEfetiva, filtros.responsavel, filtros.segmento, filtros.canal],
   )
 
   // Recarrega do zero quando muda data/busca/filtros (debounce p/ a busca) ou
@@ -169,7 +180,8 @@ export default function PipelineColumn({
                   >
                     <LeadCardCompact
                       lead={lead}
-                      respostaPendente={temRespostaPendente(lead)}
+                      respostaPendente={!chipKind && temRespostaPendente(lead)}
+                      statusChip={chipKind ? CHIP_MAP[chipKind] : undefined}
                       selected={selectedId === lead.id}
                       onClick={() => onSelect(lead.id)}
                     />
