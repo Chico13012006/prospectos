@@ -22,25 +22,53 @@ export async function getLeads() {
   return data || []
 }
 
-// Colunas de TEMPO REAL (pequenas): carrega todos os leads dos estágios dados,
-// com teto de segurança. Inclui o nome do responsável (join usuarios).
-export async function getLeadsPorColuna(estagios: string[]): Promise<Lead[]> {
-  const { data, error } = await supabase
-    .from('leads')
-    .select('*, usuarios:responsavel_id (id, nome)')
-    .in('estagio', estagios)
-    .order('ultimo_contato', { ascending: false, nullsFirst: false })
-    .limit(1000)
-  if (error) {
-    console.error('getLeadsPorColuna:', error)
-    return []
-  }
-  return (data ?? []) as Lead[]
+export interface PipelineColFiltros {
+  responsavel?: string
+  segmento?: string
+  canal?: string
+  busca?: string
+  desde?: string | null
 }
 
-// RESERVATÓRIO "Novos Leads": NUNCA busca tudo. Página com limite/offset,
-// filtro de data (default últimos 30 dias), busca e filtros globais. Devolve a
-// página + o total (count exato) para o contador.
+// CORAÇÃO DA ESCALA: cada coluna do board usa esta query — NUNCA busca tudo.
+// Página com limite/offset (range), filtros server-side e `count: 'exact'`, que
+// devolve o TOTAL REAL do(s) estágio(s) mesmo lendo só uma página (p/ o contador
+// "Em Prospecção — 1.240"). `ordenarPor`: 'created_at' p/ o reservatório (mais
+// novos primeiro), 'ultimo_contato' p/ as colunas de tempo real.
+export async function getLeadsPorEstagioPaginado(
+  estagios: string[],
+  filtros: PipelineColFiltros = {},
+  opts: { limit?: number; offset?: number; ordenarPor?: 'created_at' | 'ultimo_contato' } = {},
+): Promise<{ data: Lead[]; total: number }> {
+  const { limit = 50, offset = 0, ordenarPor = 'ultimo_contato' } = opts
+  const { responsavel, segmento, canal, busca, desde } = filtros
+  let q = supabase
+    .from('leads')
+    .select('*, usuarios:responsavel_id (id, nome)', { count: 'exact' })
+    .in('estagio', estagios)
+  if (desde) q = q.gte('created_at', desde)
+  if (responsavel) q = q.eq('responsavel_nome', responsavel)
+  if (segmento) q = q.eq('segmento', segmento)
+  if (canal) q = q.eq('canal_preferencial', canal)
+  if (busca && busca.trim()) {
+    const t = busca.trim().replace(/[%,()]/g, ' ')
+    q = q.or(`empresa.ilike.%${t}%,contato_nome.ilike.%${t}%,contato_email.ilike.%${t}%`)
+  }
+  if (ordenarPor === 'created_at') {
+    q = q.order('created_at', { ascending: false })
+  } else {
+    q = q.order('ultimo_contato', { ascending: false, nullsFirst: false })
+  }
+  const { data, error, count } = await q.range(offset, offset + limit - 1)
+  if (error) {
+    console.error('getLeadsPorEstagioPaginado:', error)
+    return { data: [], total: 0 }
+  }
+  return { data: (data ?? []) as Lead[], total: count ?? 0 }
+}
+
+// RESERVATÓRIO "Novos Leads": caso particular do paginado, com filtro de data
+// (default últimos 30 dias) e ordenação por data de entrada.
 export async function getNovosLeads(opts: {
   desde?: string | null
   busca?: string
@@ -51,26 +79,31 @@ export async function getNovosLeads(opts: {
   offset?: number
 }): Promise<{ data: Lead[]; total: number }> {
   const { desde, busca, responsavel, segmento, canal, limit = 50, offset = 0 } = opts
-  let q = supabase
-    .from('leads')
-    .select('*, usuarios:responsavel_id (id, nome)', { count: 'exact' })
-    .in('estagio', ESTAGIOS_RESERVATORIO)
-  if (desde) q = q.gte('created_at', desde)
-  if (responsavel) q = q.eq('responsavel_nome', responsavel)
-  if (segmento) q = q.eq('segmento', segmento)
-  if (canal) q = q.eq('canal_preferencial', canal)
-  if (busca && busca.trim()) {
-    const t = busca.trim().replace(/[%,()]/g, ' ')
-    q = q.or(`empresa.ilike.%${t}%,contato_nome.ilike.%${t}%,contato_email.ilike.%${t}%`)
-  }
-  const { data, error, count } = await q
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1)
-  if (error) {
-    console.error('getNovosLeads:', error)
-    return { data: [], total: 0 }
-  }
-  return { data: (data ?? []) as Lead[], total: count ?? 0 }
+  return getLeadsPorEstagioPaginado(
+    ESTAGIOS_RESERVATORIO,
+    { desde, busca, responsavel, segmento, canal },
+    { limit, offset, ordenarPor: 'created_at' },
+  )
+}
+
+// Opções dos filtros globais (responsável / nicho / canal). Não derivamos mais
+// dos leads carregados (não carregamos todos). Responsáveis vêm de `usuarios`
+// (tabela pequena); canais são um enum fixo; segmentos saem de um distinct leve.
+const CANAIS_FIXOS = ['email', 'whatsapp', 'linkedin', 'telefone']
+export async function getPipelineFiltrosOpcoes(): Promise<{
+  responsaveis: string[]
+  segmentos: string[]
+  canais: string[]
+}> {
+  const [usuariosRes, segRes] = await Promise.all([
+    supabase.from('usuarios').select('nome').eq('ativo', true),
+    supabase.from('leads').select('segmento').not('segmento', 'is', null),
+  ])
+  if (usuariosRes.error) throw usuariosRes.error
+  if (segRes.error) throw segRes.error
+  const responsaveis = [...new Set((usuariosRes.data ?? []).map(u => u.nome).filter(Boolean))].sort() as string[]
+  const segmentos = [...new Set((segRes.data ?? []).map(s => s.segmento).filter(Boolean))].sort() as string[]
+  return { responsaveis, segmentos, canais: CANAIS_FIXOS }
 }
 
 // Terminais fora do board (Perdido / Sem resposta), paginado.

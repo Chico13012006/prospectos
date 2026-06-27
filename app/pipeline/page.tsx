@@ -10,12 +10,11 @@ import {
 import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatDate, formatDateTime } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
 import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
-import { getLeadById, getLeadsPorColuna, getLeadsOffboard, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao } from '@/lib/api';
+import { getLeadById, getLeadsOffboard, getPipelineFiltrosOpcoes, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao } from '@/lib/api';
 import type { Lead, Interacao } from '@/lib/supabase';
-import KanbanColumn from '@/components/pipeline/KanbanColumn';
-import ReservoirColumn from '@/components/pipeline/ReservoirColumn';
+import PipelineColumn from '@/components/pipeline/PipelineColumn';
 import GlobalFilters, { type GlobalFilterState } from '@/components/pipeline/GlobalFilters';
-import { COLUNAS, ESTAGIOS_TEMPO_REAL, ESTAGIOS_MANUAIS, OFFBOARD, type OffboardId } from '@/lib/pipeline-stages';
+import { COLUNAS, ESTAGIOS_MANUAIS, OFFBOARD, type OffboardId } from '@/lib/pipeline-stages';
 
 // Data real de hoje (YYYY-MM-DD). Antes era fixa ('2026-06-16'), o que gerava
 // "há -7d" para contatos posteriores a essa data.
@@ -168,7 +167,8 @@ export default function PipelinePage() {
   const { empresas: mockEmpresas, contatos: mockContatos, getTimelineForEmpresa } = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<GlobalFilterState>({ search: '', responsavel: '', segmento: '', canal: '' });
-  const [supabaseLeads, setSupabaseLeads] = useState<Lead[]>([]); // colunas de TEMPO REAL (board)
+  const [filtroOpcoes, setFiltroOpcoes] = useState<{ responsaveis: string[]; segmentos: string[]; canais: string[] }>({ responsaveis: [], segmentos: [], canais: [] });
+  const [reloadKey, setReloadKey] = useState(0); // bump -> colunas refazem o fetch (após mutação)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [offboard, setOffboard] = useState<OffboardId | null>(null);
   const [offboardData, setOffboardData] = useState<Lead[]>([]);
@@ -189,23 +189,16 @@ export default function PipelinePage() {
   const [executando, setExecutando] = useState(false);
   const [feedbackAcao, setFeedbackAcao] = useState<string | null>(null);
 
-  // Carrega as colunas de TEMPO REAL (board). O reservatório "Novos Leads" é
-  // carregado server-side pelo próprio ReservoirColumn (paginado).
-  const carregarLeads = useCallback(async () => {
-    try {
-      const data = await getLeadsPorColuna(ESTAGIOS_TEMPO_REAL);
-      setSupabaseLeads(data);
-    } catch (err) {
-      console.error('Erro ao carregar leads:', err);
-      setUseFallback(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Não carregamos mais o board inteiro: cada PipelineColumn busca os seus leads
+  // server-side (paginado + COUNT). No mount só fazemos uma sonda leve — carregar
+  // as opções dos filtros — que também serve de teste de conexão com o Supabase.
+  const bumpReload = useCallback(() => setReloadKey(k => k + 1), []);
 
   useEffect(() => {
-    carregarLeads();
-  }, [carregarLeads]);
+    getPipelineFiltrosOpcoes()
+      .then(opts => { setFiltroOpcoes(opts); setLoading(false); })
+      .catch(err => { console.error('Erro ao carregar pipeline:', err); setUseFallback(true); setLoading(false); });
+  }, []);
 
   // Carrega a lista paginada do terminal fora do board (Perdido / Sem resposta).
   const carregarOffboard = useCallback(async (tipo: OffboardId) => {
@@ -263,30 +256,6 @@ export default function PipelinePage() {
     carregarInteracoes();
   }, [selectedId, usingSupabase, carregarInteracoes]);
 
-  // Opções dos filtros globais (a partir dos leads reais).
-  const responsaveis = [...new Set(supabaseLeads.map(l => l.usuarios?.nome).filter(Boolean))].sort() as string[];
-  const segmentos = [...new Set(supabaseLeads.map(l => l.segmento).filter(Boolean))].sort() as string[];
-  const canais = [...new Set(supabaseLeads.map(l => l.canal_preferencial).filter(Boolean))].sort() as string[];
-
-  // Filtro GLOBAL: aplica a TODO o pipeline (antes de dividir por coluna).
-  const buscaGlobal = filtros.search.trim().toLowerCase();
-  const filteredLeads: Lead[] = (usingSupabase ? supabaseLeads : []).filter(l => {
-    if (filtros.responsavel && (l.usuarios?.nome ?? '') !== filtros.responsavel) return false;
-    if (filtros.segmento && (l.segmento ?? '') !== filtros.segmento) return false;
-    if (filtros.canal && (l.canal_preferencial ?? '') !== filtros.canal) return false;
-    if (buscaGlobal) {
-      const hay = [l.empresa, l.contato_nome, l.contato_email, l.segmento, l.cidade]
-        .filter(Boolean).map(v => String(v).toLowerCase());
-      if (!hay.some(v => v.includes(buscaGlobal))) return false;
-    }
-    return true;
-  });
-
-  // Respostas pendentes de ação do closer → destaca o pill na coluna "Respondeu".
-  const idsRespostaPendente = new Set(
-    supabaseLeads.filter(temRespostaPendente).map(l => l.id),
-  );
-
   // Painel lateral — derivado do lead carregado por id (board OU reservatório).
   const selectedEmpresa: Empresa | null = selectedLead ? leadToEmpresa(selectedLead) : null;
   const selectedContato: Contato | null = selectedLead ? leadToContato(selectedLead) : null;
@@ -320,7 +289,7 @@ export default function PipelinePage() {
     try {
       await atualizarEstagio(selectedId, novoEstagio);
       await registrarNota(selectedId, `Estágio alterado manualmente para: ${novoEstagio}`);
-      await carregarLeads();
+      bumpReload();
       const atualizado = await getLeadById(selectedId).catch(() => null);
       setSelectedLead(atualizado);
       if (offboard) await carregarOffboard(offboard);
@@ -342,7 +311,7 @@ export default function PipelinePage() {
       await atualizarEstagio(selectedId, 'perdido');
       await registrarNota(selectedId, 'Lead marcado como perdido manualmente.');
       setConfirmandoPerdido(false);
-      await carregarLeads();
+      bumpReload();
       setSelectedId(null);
     } catch (err) {
       console.error('Erro ao marcar como perdido:', err);
@@ -359,7 +328,7 @@ export default function PipelinePage() {
     try {
       const result = await executarAcao(selectedId);
       setFeedbackAcao(`✓ Ação executada! Estágio: ${result.estagio ?? 'atualizado'}`);
-      await carregarLeads();
+      bumpReload();
       await carregarInteracoes();
     } catch (err) {
       console.error('Erro ao executar ação:', err);
@@ -433,9 +402,9 @@ export default function PipelinePage() {
         <GlobalFilters
           value={filtros}
           onChange={setFiltros}
-          responsaveis={responsaveis}
-          segmentos={segmentos}
-          canais={canais}
+          responsaveis={filtroOpcoes.responsaveis}
+          segmentos={filtroOpcoes.segmentos}
+          canais={filtroOpcoes.canais}
         />
       </div>
 
@@ -489,26 +458,17 @@ export default function PipelinePage() {
           </div>
         ) : (
           <div className="h-full flex gap-4 overflow-x-auto px-6 pb-4">
-            {COLUNAS.map(col =>
-              col.tipo === 'reservatorio' ? (
-                <ReservoirColumn
-                  key={col.id}
-                  stage={col}
-                  filtros={filtros}
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
-                />
-              ) : (
-                <KanbanColumn
-                  key={col.id}
-                  stage={col}
-                  leads={filteredLeads.filter(l => col.estagios.includes(l.estagio))}
-                  respostaPendenteIds={idsRespostaPendente}
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
-                />
-              ),
-            )}
+            {COLUNAS.map(col => (
+              <PipelineColumn
+                key={col.id}
+                stage={col}
+                filtros={filtros}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                reloadKey={reloadKey}
+                comFiltroData={col.tipo === 'reservatorio'}
+              />
+            ))}
           </div>
         )}
       </div>
