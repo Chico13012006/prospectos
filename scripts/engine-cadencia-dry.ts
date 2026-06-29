@@ -46,6 +46,7 @@ async function main() {
     leadsParaFollowup: () => real.leadsParaFollowup(),
     leadsEsgotadosSemResposta: () => real.leadsEsgotadosSemResposta(),
     buscarUsuario: (id) => real.buscarUsuario(id),
+    buscarTemplateEmail: (n, t) => real.buscarTemplateEmail(n, t),
     async atualizarLead(id, patch) {
       escritas.push(`UPDATE leads ${JSON.stringify(patch)} WHERE id=${id}`)
       console.log(`${C.yel}  [DRY-RUN] NÃO escrito → atualizarLead(${id}):${C.r} ${JSON.stringify(patch)}`)

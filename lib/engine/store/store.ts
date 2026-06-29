@@ -3,6 +3,12 @@
 // MemoryStore sem tocar na rede.
 import type { Lead, NovaInteracao, TipoInteracaoEngine, UsuarioBasico } from '../types'
 
+// Template de e-mail selecionável pelo motor (subconjunto da tabela `templates`).
+export interface TemplateEmail {
+  assunto: string | null
+  corpo: string
+}
+
 export interface Store {
   buscarLead(id: string): Promise<Lead | null>
   // Casa pelo e-mail EXATO do contato (case-insensitive).
@@ -23,4 +29,7 @@ export interface Store {
   leadsEsgotadosSemResposta(): Promise<Lead[]>
   // Dados do responsável/closer do lead (para notificação do Fluxo 3).
   buscarUsuario(id: string): Promise<UsuarioBasico | null>
+  // Template de e-mail ATIVO por (nicho, tipo). nicho=null busca o GENÉRICO.
+  // Usado pela seleção com fallback em lib/engine/mensagem.ts.
+  buscarTemplateEmail(nicho: string | null, tipo: string): Promise<TemplateEmail | null>
 }

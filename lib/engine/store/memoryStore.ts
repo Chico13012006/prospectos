@@ -2,8 +2,9 @@
 // SupabaseStore (incluindo a trava owner='engine' nas leituras de lote), sem rede.
 import { engineConfig, OWNER_ENGINE } from '../config'
 import { ESTAGIOS_EM_CADENCIA, dominioDoLead } from '../templates'
+import { SEED_TEMPLATES } from '../templates-seed'
 import type { Lead, NovaInteracao, TipoInteracaoEngine, UsuarioBasico } from '../types'
-import type { Store } from './store'
+import type { Store, TemplateEmail } from './store'
 
 interface InteracaoMem extends NovaInteracao {
   id: string
@@ -109,5 +110,13 @@ export class MemoryStore implements Store {
 
   async buscarUsuario(id: string): Promise<UsuarioBasico | null> {
     return this.usuarios.find((u) => u.id === id) ?? null
+  }
+
+  // Lê do mesmo seed que popula a tabela `templates` (mantém os testes offline).
+  async buscarTemplateEmail(nicho: string | null, tipo: string): Promise<TemplateEmail | null> {
+    const t = SEED_TEMPLATES.find(
+      (x) => x.canal === 'email' && x.tipo === tipo && (x.nicho ?? null) === nicho,
+    )
+    return t ? { assunto: t.assunto, corpo: t.corpo } : null
   }
 }

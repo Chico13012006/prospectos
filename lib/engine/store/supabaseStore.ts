@@ -6,7 +6,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { engineConfig, OWNER_ENGINE } from '../config'
 import { ESTAGIOS_EM_CADENCIA, dominioDoLead } from '../templates'
 import type { Lead, NovaInteracao, TipoInteracaoEngine, UsuarioBasico } from '../types'
-import type { Store } from './store'
+import type { Store, TemplateEmail } from './store'
 
 export class SupabaseStore implements Store {
   private db: SupabaseClient
@@ -162,5 +162,19 @@ export class SupabaseStore implements Store {
       .maybeSingle()
     if (error) throw error
     return (data as UsuarioBasico) ?? null
+  }
+
+  async buscarTemplateEmail(nicho: string | null, tipo: string): Promise<TemplateEmail | null> {
+    let q = this.db
+      .from('templates')
+      .select('assunto, corpo')
+      .eq('canal', 'email')
+      .eq('tipo', tipo)
+      .eq('ativo', true)
+      .limit(1)
+    q = nicho === null ? q.is('nicho', null) : q.eq('nicho', nicho)
+    const { data, error } = await q
+    if (error) throw error
+    return (data?.[0] as TemplateEmail) ?? null
   }
 }

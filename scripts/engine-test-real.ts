@@ -44,7 +44,8 @@ async function main() {
   const { SimulatedProvider } = await import('../lib/engine/email/simulatedProvider')
   const { GmailProvider, lerCredenciaisGmail } = await import('../lib/engine/email/gmailProvider')
   const { executarAcao } = await import('../lib/engine/flows/executarAcao')
-  const { montarMensagem, proximoEstagio, tipoDoEnvio } = await import('../lib/engine/templates')
+  const { proximoEstagio, tipoDoEnvio } = await import('../lib/engine/templates')
+  const { montarEmail } = await import('../lib/engine/mensagem')
   const { engineConfig } = await import('../lib/engine/config')
   type Store = import('../lib/engine/store/store').Store
   type EmailProvider = import('../lib/engine/email/provider').EmailProvider
@@ -73,6 +74,7 @@ async function main() {
     leadsParaFollowup: () => real.leadsParaFollowup(),
     leadsEsgotadosSemResposta: () => real.leadsEsgotadosSemResposta(),
     buscarUsuario: (id) => real.buscarUsuario(id),
+    buscarTemplateEmail: (n, t) => real.buscarTemplateEmail(n, t),
     async atualizarLead(id, patch) {
       escritas.push('UPDATE leads ' + JSON.stringify(patch) + ' WHERE id=' + id)
       console.log(`${C.yel}  [DRY-RUN] NÃO escrito → atualizarLead:${C.r} ${JSON.stringify(patch)}`)
@@ -132,7 +134,8 @@ async function main() {
   // 5) Prévia do que o motor montaria (independente do resultado).
   const tipo = tipoDoEnvio(lead.estagio)
   const destino = proximoEstagio(lead.estagio)
-  const msg = montarMensagem(lead, destino)
+  const numero = tipo === 'follow_up' ? (await store.contarInteracoes(lead.id, 'follow_up')) + 1 : undefined
+  const msg = await montarEmail(store, lead, { tipo, numero })
   console.log(`${C.b}O que o motor FARIA (prévia):${C.r}`)
   console.log(`  tipo de envio  : ${tipo}`)
   console.log(`  transição      : ${lead.estagio} ${C.cyan}→${C.r} ${destino}`)

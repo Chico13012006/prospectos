@@ -2,7 +2,7 @@
 // Vocabulário de estágio é o DESTE projeto (igual à UI do pipeline).
 // Em produção dá para puxar o corpo da tabela `templates` do Supabase; aqui
 // usamos templates embutidos (puros e testáveis) com a tese comercial do lead.
-import type { Lead, Estagio, TipoInteracaoEngine } from './types'
+import type { Lead, Estagio } from './types'
 
 // Estágios "iniciais" (lead ainda não contatado). Aceita os dois vocabulários
 // presentes no banco: 'novos_leads' (UI deste projeto) e 'novo' (legado/referência).
@@ -28,7 +28,7 @@ export function proximoEstagio(atual: string): Estagio {
 }
 
 // É o primeiro contato (abordagem) ou um follow-up?
-export function tipoDoEnvio(estagioAtual: string): TipoInteracaoEngine {
+export function tipoDoEnvio(estagioAtual: string): 'abordagem' | 'follow_up' {
   return ESTAGIOS_INICIAIS.includes(estagioAtual) ? 'abordagem' : 'follow_up'
 }
 
@@ -46,30 +46,6 @@ export function dominioDoLead(lead: Pick<Lead, 'dominio' | 'contato_email'>): st
   return d
 }
 
-export function montarMensagem(
-  lead: Lead,
-  estagioDestino: Estagio,
-): { assunto: string; corpo: string } {
-  const nome = lead.contato_nome?.split(' ')[0] || 'tudo bem'
-  const tese =
-    lead.tese_comercial?.trim() ||
-    `acredito que faz sentido conversarmos sobre ${lead.segmento || 'o seu setor'}`
-
-  switch (estagioDestino) {
-    case 'primeiro_contato':
-      return {
-        assunto: `${lead.empresa} + iNOVACODE`,
-        corpo: `Olá ${nome}, ${tese}. Faz sentido uma conversa rápida de 15 minutos?\n\nAbraço,\nFrancisco | iNOVACODE`,
-      }
-    case 'follow_up':
-      return {
-        assunto: `Re: ${lead.empresa} + iNOVACODE`,
-        corpo: `Olá ${nome}, só retomando meu contato anterior — conseguiu dar uma olhada? Se for o momento, te mostro em 15 minutos como ajudamos empresas parecidas.\n\nAbraço,\nFrancisco | iNOVACODE`,
-      }
-    default:
-      return {
-        assunto: `${lead.empresa} + iNOVACODE`,
-        corpo: `Olá ${nome}.`,
-      }
-  }
-}
+// A montagem de mensagem (seleção de template por nicho/estágio + preenchimento
+// de variáveis + threading de assunto) vive agora em lib/engine/mensagem.ts, que
+// lê os templates da tabela `templates` via Store (fonte única, editável na UI).

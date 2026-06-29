@@ -7,7 +7,8 @@
 // (estagio='interessado'), e leadsParaFollowup só devolve estágios em cadência.
 import { engineConfig } from '../config'
 import { log } from '../logger'
-import { montarMensagem, proximoEstagio } from '../templates'
+import { proximoEstagio } from '../templates'
+import { montarEmail } from '../mensagem'
 import type { EmailProvider } from '../email/provider'
 import type { Store } from '../store/store'
 
@@ -53,7 +54,7 @@ export async function followUp(
     if (jaEnviados >= engineConfig.maxFollowups) continue
 
     const destino = proximoEstagio(lead.estagio)
-    const msg = montarMensagem(lead, destino)
+    const msg = await montarEmail(store, lead, { tipo: 'follow_up', numero: jaEnviados + 1 })
     await email.enviar(lead.contato_email, msg.assunto, msg.corpo)
     await store.registrarInteracao({
       lead_id: lead.id,

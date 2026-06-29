@@ -5,7 +5,8 @@
 // diário e idempotência (nunca reenvia o mesmo estágio ao mesmo lead).
 import { OWNER_ENGINE, engineConfig } from '../config'
 import { log } from '../logger'
-import { montarMensagem, proximoEstagio, tipoDoEnvio } from '../templates'
+import { proximoEstagio, tipoDoEnvio } from '../templates'
+import { montarEmail } from '../mensagem'
 import type { EmailProvider } from '../email/provider'
 import type { Store } from '../store/store'
 
@@ -71,7 +72,10 @@ export async function executarAcao(
     return { ok: false, motivo: 'limite_diario' }
   }
 
-  const msg = montarMensagem(lead, destino)
+  const msg = await montarEmail(store, lead, {
+    tipo,
+    numero: tipo === 'follow_up' ? followupsEnviados : undefined,
+  })
   await email.enviar(lead.contato_email, msg.assunto, msg.corpo)
   await store.registrarInteracao({
     lead_id: lead.id,
