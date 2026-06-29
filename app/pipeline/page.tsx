@@ -5,7 +5,7 @@ import { Settings, Plus, Loader2 } from 'lucide-react';
 import { getPipelineFiltrosOpcoes } from '@/lib/api';
 import PipelineColumn from '@/components/pipeline/PipelineColumn';
 import GlobalFilters, { type GlobalFilterState } from '@/components/pipeline/GlobalFilters';
-import LeadPanel from '@/components/pipeline/LeadPanel';
+import LeadPanel from '@/components/leads/LeadPanel';
 import { COLUNAS, COLUNAS_CADENCIA } from '@/lib/pipeline-stages';
 
 export default function PipelinePage() {
@@ -130,6 +130,7 @@ export default function PipelinePage() {
         onClose={() => setSelectedId(null)}
         onChanged={bumpReload}
         usingSupabase={usingSupabase}
+        contexto="pipeline"
       />
     </div>
   );

@@ -162,16 +162,22 @@ function scoreColor(score: number): string {
 // Dono do próprio estado: carrega o lead por id, as interações reais e executa
 // as ações (mover estágio, marcar perdido, executar cadência, registrar nota).
 // Compartilhado entre o Pipeline e a Base de Leads — NÃO recriar.
+//
+// `contexto` decide os controles terminais do rodapé: no Pipeline os estados
+// Perdido/Sem resposta não são geridos aqui (vivem só na Base), então some o
+// botão "Marcar como perdido" e a opção "Perdido" do seletor de estágio.
 export default function LeadPanel({
   leadId,
   onClose,
   onChanged,
   usingSupabase = true,
+  contexto = 'base',
 }: {
   leadId: string | null;
   onClose: () => void;
   onChanged?: () => void;
   usingSupabase?: boolean;
+  contexto?: 'pipeline' | 'base';
 }) {
   const { getTimelineForEmpresa } = useApp();
   const selectedId = leadId;
@@ -681,21 +687,25 @@ export default function LeadPanel({
             className="flex-1 text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none"
           >
             <option value="" disabled>Mover para outro estágio</option>
-            {ESTAGIOS_MANUAIS.map(s => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
+            {ESTAGIOS_MANUAIS
+              .filter(s => contexto !== 'pipeline' || s.value !== 'perdido')
+              .map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
           </select>
-          <button
-            onClick={handleMarcarPerdido}
-            onBlur={() => setConfirmandoPerdido(false)}
-            className={`text-sm font-medium px-3 py-2 rounded-lg transition-colors whitespace-nowrap ${
-              confirmandoPerdido
-                ? 'bg-red-600 text-white hover:bg-red-700 border border-red-600'
-                : 'text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20'
-            }`}
-          >
-            {confirmandoPerdido ? 'Confirmar perda?' : 'Marcar como perdido'}
-          </button>
+          {contexto !== 'pipeline' && (
+            <button
+              onClick={handleMarcarPerdido}
+              onBlur={() => setConfirmandoPerdido(false)}
+              className={`text-sm font-medium px-3 py-2 rounded-lg transition-colors whitespace-nowrap ${
+                confirmandoPerdido
+                  ? 'bg-red-600 text-white hover:bg-red-700 border border-red-600'
+                  : 'text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20'
+              }`}
+            >
+              {confirmandoPerdido ? 'Confirmar perda?' : 'Marcar como perdido'}
+            </button>
+          )}
         </div>
       </div>
 

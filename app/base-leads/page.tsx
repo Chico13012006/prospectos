@@ -6,7 +6,7 @@ import { formatDate } from '@/lib/utils';
 import { labelEstagio } from '@/lib/pipeline-stages';
 import { getTodosLeads, getPipelineFiltrosOpcoes, type BaseLeadsFiltros } from '@/lib/api';
 import type { Lead } from '@/lib/supabase';
-import LeadPanel from '@/components/pipeline/LeadPanel';
+import LeadPanel from '@/components/leads/LeadPanel';
 import FiltrosBase, { FILTRO_VAZIO, type BaseFiltroForm } from '@/components/base/FiltrosBase';
 
 const PAGE = 50;
@@ -173,12 +173,13 @@ export default function BaseLeadsPage() {
         </div>
       </div>
 
-      {/* Painel lateral completo (REUSO do componente do Pipeline) */}
+      {/* Painel lateral completo (componente compartilhado em components/leads) */}
       <LeadPanel
         leadId={selectedId}
         onClose={() => setSelectedId(null)}
         onChanged={() => setReloadKey(k => k + 1)}
         usingSupabase={!useFallback}
+        contexto="base"
       />
     </div>
   );
