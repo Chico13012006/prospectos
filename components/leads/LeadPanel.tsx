@@ -305,7 +305,17 @@ export default function LeadPanel({
       await carregarInteracoes();
     } catch (err) {
       console.error('Erro ao executar ação:', err);
-      setFeedbackAcao('✗ Erro ao executar ação. Tente novamente.');
+      const motivo = err instanceof Error ? err.message : null;
+      const traducao: Record<string, string> = {
+        owner_nao_engine: 'Este lead ainda não foi migrado para o motor (owner != engine).',
+        ja_enviado: 'Este contato já foi enviado antes — o motor não reenvia (idempotência).',
+        max_followups: 'Este lead já atingiu o máximo de follow-ups.',
+        limite_diario: 'Limite diário de envios atingido. Tente novamente amanhã.',
+        sem_proximo_estagio: 'Não há próxima etapa a executar para este estágio.',
+        perdido: 'Este lead está marcado como perdido.',
+        nao_encontrado: 'Lead não encontrado.',
+      };
+      setFeedbackAcao(`✗ ${motivo && traducao[motivo] ? traducao[motivo] : motivo ?? 'Erro ao executar ação. Tente novamente.'}`);
     } finally {
       setExecutando(false);
     }
