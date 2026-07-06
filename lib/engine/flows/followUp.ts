@@ -12,7 +12,13 @@ import { montarEmail } from '../mensagem'
 import type { EmailProvider } from '../email/provider'
 import type { Store } from '../store/store'
 
-const esperar = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+// IMPORTANTE: NÃO espaçar envios aqui com um sleep bloqueante. Este fluxo é
+// chamado pelo endpoint /api/engine/follow-up, invocado pelo Vercel Cron —
+// funções serverless têm tempo de execução limitado (segundos), e uma espera
+// de minutos derruba a execução no meio, deixando o lote incompleto sem
+// avisar. O espaçamento entre envios (INTERVALO_ENVIO_MIN) continua existindo
+// só no script local do piloto (scripts/piloto-disparo-lote.ts), que roda
+// como processo de longa duração na sua máquina, não numa function com prazo.
 
 export async function followUp(
   store: Store,
@@ -44,16 +50,8 @@ export async function followUp(
 
   log.info('Follow-up: leads elegíveis.', { quantidade: elegiveis.length })
   let enviados = 0
-  const intervaloMs = engineConfig.intervaloEntreEnviosMin * 60_000
 
-  for (const [indice, lead] of elegiveis.entries()) {
-    // Espaçamento entre envios (protege reputação do domínio): espera antes de
-    // cada envio a partir do 2º, exceto se INTERVALO_ENVIO_MIN=0 (padrão).
-    if (indice > 0 && intervaloMs > 0) {
-      log.info(`Aguardando ${engineConfig.intervaloEntreEnviosMin}min antes do próximo envio (espaçamento).`)
-      await esperar(intervaloMs)
-    }
-
+  for (const lead of elegiveis) {
     if ((await store.enviosHoje()) >= engineConfig.maxEnviosDia) {
       log.aviso('Limite diário atingido. Demais follow-ups ficam para o próximo dia útil.')
       break
