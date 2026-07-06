@@ -10,6 +10,7 @@
     "test:watch": "vitest",
     "engine:demo": "tsx lib/engine/demo.ts",
     "engine:test-real": "tsx scripts/engine-test-real.ts",
+    "engine:piloto-lote": "tsx scripts/piloto-disparo-lote.ts",
     "engine:detectar": "tsx scripts/engine-detectar.ts",
     "engine:scheduler": "tsx scripts/engine-scheduler.ts",
     "engine:cadencia-once": "tsx scripts/engine-cadencia-once.ts",

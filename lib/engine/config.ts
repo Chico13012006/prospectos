@@ -32,6 +32,14 @@ export const engineConfig = {
     return num(process.env.MAX_FOLLOWUPS, 3)
   },
 
+  // Espaçamento entre envios dentro de um mesmo lote (minutos). Protege a
+  // reputação do domínio evitando rajada de e-mails idênticos de uma vez.
+  // 0 (padrão) = sem espera, comportamento antigo. Usado por followUp() e
+  // pelo script de disparo em lote do piloto.
+  get intervaloEntreEnviosMin(): number {
+    return num(process.env.INTERVALO_ENVIO_MIN, 0)
+  },
+
   // E-mail de fallback do closer, caso o lead não tenha responsável definido.
   get closerEmailFallback(): string {
     return process.env.CLOSER_EMAIL ?? ''

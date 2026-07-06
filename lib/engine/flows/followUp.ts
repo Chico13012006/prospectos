@@ -12,6 +12,8 @@ import { montarEmail } from '../mensagem'
 import type { EmailProvider } from '../email/provider'
 import type { Store } from '../store/store'
 
+const esperar = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 export async function followUp(
   store: Store,
   email: EmailProvider,
@@ -42,8 +44,16 @@ export async function followUp(
 
   log.info('Follow-up: leads elegíveis.', { quantidade: elegiveis.length })
   let enviados = 0
+  const intervaloMs = engineConfig.intervaloEntreEnviosMin * 60_000
 
-  for (const lead of elegiveis) {
+  for (const [indice, lead] of elegiveis.entries()) {
+    // Espaçamento entre envios (protege reputação do domínio): espera antes de
+    // cada envio a partir do 2º, exceto se INTERVALO_ENVIO_MIN=0 (padrão).
+    if (indice > 0 && intervaloMs > 0) {
+      log.info(`Aguardando ${engineConfig.intervaloEntreEnviosMin}min antes do próximo envio (espaçamento).`)
+      await esperar(intervaloMs)
+    }
+
     if ((await store.enviosHoje()) >= engineConfig.maxEnviosDia) {
       log.aviso('Limite diário atingido. Demais follow-ups ficam para o próximo dia útil.')
       break
