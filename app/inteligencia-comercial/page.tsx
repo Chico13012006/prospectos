@@ -170,7 +170,7 @@ export default function InteligenciaComercialPage() {
   return (
     <div className="p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between animate-in stagger-1">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Inteligência Comercial</h1>
           <p className="text-sm text-slate-400 mt-0.5">
@@ -192,7 +192,7 @@ export default function InteligenciaComercialPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap animate-in stagger-2">
         {['Período', 'Nicho', 'Canal', 'Responsável', 'Campanha', 'Região'].map(f => (
           <select key={f} className="text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none">
             <option>{f}</option>
@@ -213,8 +213,8 @@ export default function InteligenciaComercialPage() {
           { label: 'Interesses Positivos', value: interessados, pct: '+50%', color: '#f59e0b' },
           { label: 'Reuniões Agendadas', value: reunioes, pct: '0%', color: '#8b5cf6' },
           { label: 'Taxa de Conversão', value: taxaConversao, pct: '+2,1 p.p.', color: '#ef4444' },
-        ].map(kpi => (
-          <div key={kpi.label} className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-3.5">
+        ].map((kpi, idx) => (
+          <div key={kpi.label} className={`bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-3.5 card-hover animate-in stagger-${idx + 3}`}>
             <div className="text-xs text-slate-400 mb-2 leading-tight">{kpi.label}</div>
             <div className="text-xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
             <div className="text-xs text-green-400 font-medium mt-1">{kpi.pct} vs. anterior</div>
@@ -223,7 +223,7 @@ export default function InteligenciaComercialPage() {
       </div>
 
       {/* Performance por Canal */}
-      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-9">
         <h2 className="font-semibold text-slate-200 mb-4">Performance por Canal</h2>
         <table className="w-full text-sm">
           <thead>
@@ -245,7 +245,7 @@ export default function InteligenciaComercialPage() {
                 <td className="py-2.5 px-3">
                   <div className="flex items-center gap-2">
                     <div className="w-24 bg-[#252b3b] rounded-full h-1.5">
-                      <div className="h-1.5 rounded-full" style={{ width: `${Math.min(c.conv, 100)}%`, backgroundColor: CANAL_COLORS[c.canal] ?? '#6366f1' }} />
+                      <div className="h-1.5 rounded-full bar-grow" style={{ width: `${Math.min(c.conv, 100)}%`, backgroundColor: CANAL_COLORS[c.canal] ?? '#6366f1' }} />
                     </div>
                     <span className="text-xs font-semibold text-slate-300">{c.taxa}%</span>
                   </div>
@@ -266,8 +266,8 @@ export default function InteligenciaComercialPage() {
       </div>
 
       {/* Respostas por Follow-up + Motivos Não Interesse */}
-      <div className="grid grid-cols-2 gap-5">
-        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+      <div className="grid grid-cols-2 gap-5 animate-in stagger-10">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover">
           <h2 className="font-semibold text-slate-200 mb-1">Respostas por Follow-up</h2>
           <p className="text-xs text-indigo-400 font-medium mb-4">
             Insight: 63% das respostas foram recebidas após o primeiro follow-up.
@@ -286,7 +286,7 @@ export default function InteligenciaComercialPage() {
               <div key={f.label} className="flex items-center gap-2">
                 <span className="text-xs text-slate-400 w-28 truncate">{f.label}</span>
                 <div className="flex-1 bg-[#252b3b] rounded-full h-1.5">
-                  <div className="h-1.5 rounded-full bg-indigo-400" style={{ width: `${f.pct}%` }} />
+                  <div className="h-1.5 rounded-full bg-indigo-400 bar-grow" style={{ width: `${f.pct}%` }} />
                 </div>
                 <span className="text-xs font-semibold text-indigo-400 w-8 text-right">{f.pct}%</span>
               </div>
@@ -294,7 +294,7 @@ export default function InteligenciaComercialPage() {
           </div>
         </div>
 
-        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover">
           <h2 className="font-semibold text-slate-200 mb-4">Motivos de Não Interesse</h2>
           <div className="flex gap-4">
             <ResponsiveContainer width="50%" height={180}>
@@ -320,7 +320,7 @@ export default function InteligenciaComercialPage() {
       </div>
 
       {/* Taxa de Conversão por Segmento */}
-      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-10">
         <h2 className="font-semibold text-slate-200 mb-4">Taxa de Conversão por Segmento</h2>
         <table className="w-full text-sm">
           <thead>
@@ -341,7 +341,7 @@ export default function InteligenciaComercialPage() {
                 <td className="py-2.5 px-3">
                   <div className="flex items-center gap-2">
                     <div className="w-28 bg-[#252b3b] rounded-full h-1.5">
-                      <div className="h-1.5 rounded-full bg-green-500" style={{ width: `${Math.min(s.conversao * 20, 100)}%` }} />
+                      <div className="h-1.5 rounded-full bg-green-500 bar-grow" style={{ width: `${Math.min(s.conversao * 20, 100)}%` }} />
                     </div>
                     <span className="text-xs font-semibold text-green-400">{s.conversao.toFixed(2)}%</span>
                   </div>
@@ -353,8 +353,8 @@ export default function InteligenciaComercialPage() {
       </div>
 
       {/* Heatmap + Distribuição Geográfica */}
-      <div className="grid grid-cols-2 gap-5">
-        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+      <div className="grid grid-cols-2 gap-5 animate-in stagger-10">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover">
           <h2 className="font-semibold text-slate-200 mb-1">Melhores Horários para Resposta</h2>
           <p className="text-xs text-indigo-400 font-medium mb-4">
             Insight: O período entre 08h e 11h apresenta a maior taxa de resposta.
@@ -375,7 +375,7 @@ export default function InteligenciaComercialPage() {
                     <div
                       key={hour}
                       title={`${day} ${hour}: ${v} respostas`}
-                      className="w-7 h-6 rounded text-center text-xs flex items-center justify-center"
+                      className="w-7 h-6 rounded text-center text-xs flex items-center justify-center hover-pop"
                       style={{ backgroundColor: heatColor(v), color: v >= 5 ? 'white' : 'transparent' }}
                     >
                       {v >= 7 ? v : ''}
@@ -394,7 +394,7 @@ export default function InteligenciaComercialPage() {
           </div>
         </div>
 
-        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover">
           <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
             <MapPin size={16} className="text-indigo-500" />
             Distribuição Geográfica
@@ -402,7 +402,7 @@ export default function InteligenciaComercialPage() {
           <div className="grid grid-cols-3 gap-2 mb-4">
             {activeGeoData.filter(g => g.estado !== 'Outros').slice(0, 6).map(g => (
               <div key={g.estado}
-                className="rounded-xl border border-[#2a3147] p-3 text-center"
+                className="rounded-xl border border-[#2a3147] p-3 text-center hover-pop"
                 style={{ backgroundColor: g.respostas > 2 ? '#eff6ff' : g.respostas > 0 ? '#f0fdf4' : '#f9fafb' }}>
                 <div className="text-lg font-bold" style={{ color: g.respostas > 2 ? '#1e3a5f' : g.respostas > 0 ? '#16a34a' : '#9ca3af' }}>
                   {g.estado}
@@ -431,7 +431,7 @@ export default function InteligenciaComercialPage() {
       </div>
 
       {/* Performance de Templates Top 5 */}
-      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-10">
         <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
           <TrendingUp size={16} className="text-green-500" />
           Performance de Templates (Top 5)
@@ -460,7 +460,7 @@ export default function InteligenciaComercialPage() {
                 <td className="py-2.5 px-3 text-right">
                   <div className="flex items-center justify-end gap-2">
                     <div className="w-20 bg-[#252b3b] rounded-full h-1.5">
-                      <div className="h-1.5 rounded-full bg-green-500" style={{ width: `${t.taxa_resposta}%` }} />
+                      <div className="h-1.5 rounded-full bg-green-500 bar-grow" style={{ width: `${t.taxa_resposta}%` }} />
                     </div>
                   </div>
                 </td>
@@ -471,8 +471,8 @@ export default function InteligenciaComercialPage() {
       </div>
 
       {/* Insights + Recomendações */}
-      <div className="grid grid-cols-2 gap-5">
-        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+      <div className="grid grid-cols-2 gap-5 animate-in stagger-10">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover">
           <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
             <Brain size={16} className="text-indigo-500" />
             Insights da IA
@@ -496,7 +496,7 @@ export default function InteligenciaComercialPage() {
           </ul>
         </div>
 
-        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover">
           <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
             <Lightbulb size={16} className="text-amber-500" />
             Recomendações da IA
@@ -509,7 +509,7 @@ export default function InteligenciaComercialPage() {
               { text: 'Priorizar WhatsApp para empresas do setor Agro.', color: '#22c55e', bg: '#f0fdf4' },
               { text: 'Concentrar envios entre 08h e 11h para maximizar taxa de resposta.', color: '#f59e0b', bg: '#fffbeb' },
             ].map((rec, i) => (
-              <div key={i} className="flex items-start gap-2.5 p-3 rounded-xl border" style={{ backgroundColor: rec.bg, borderColor: `${rec.color}30` }}>
+              <div key={i} className="flex items-start gap-2.5 p-3 rounded-xl border hover-pop" style={{ backgroundColor: rec.bg, borderColor: `${rec.color}30` }}>
                 <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: rec.color }} />
                 <p className="text-sm text-slate-300 leading-snug">{rec.text}</p>
               </div>
@@ -519,7 +519,7 @@ export default function InteligenciaComercialPage() {
       </div>
 
       {/* Evolução da Conversão */}
-      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-10">
         <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
           <TrendingUp size={16} className="text-indigo-500" />
           Evolução da Conversão — últimos 45 dias

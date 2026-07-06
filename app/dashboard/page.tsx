@@ -248,7 +248,7 @@ export default function DashboardPage() {
   return (
     <div className="p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between animate-in stagger-1">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Dashboard</h1>
           <p className="text-sm text-slate-400 mt-0.5">
@@ -269,7 +269,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap animate-in stagger-2">
         {['Últimos 30 dias', 'Todos os nichos', 'Todos os status'].map((label, i) => (
           <select
             key={i}
@@ -294,7 +294,7 @@ export default function DashboardPage() {
         ].map((kpi, idx) => {
           const gid = `spark-${idx}`;
           return (
-            <div key={kpi.label} className="card card-hover p-5 flex flex-col gap-3">
+            <div key={kpi.label} className={`card card-hover p-5 flex flex-col gap-3 animate-in stagger-${idx + 3}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className={`w-8 h-8 rounded-lg ${kpi.iconBg} flex items-center justify-center`}>
@@ -336,7 +336,7 @@ export default function DashboardPage() {
       {/* Funil + Eficiência Follow-up */}
       <div className="grid grid-cols-5 gap-5">
         {/* Funil da IA */}
-        <div className="col-span-3 bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <div className="col-span-3 bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-5">
           <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
             <Zap size={16} className="text-indigo-500" />
             Funil da IA
@@ -348,9 +348,9 @@ export default function DashboardPage() {
           </div>
           <div>
             {activeFunnelSteps.map(step => (
-              <div key={step.label} className="flex items-center gap-3 py-2 border-b border-[#2a3147] last:border-0">
+              <div key={step.label} className="flex items-center gap-3 py-2 border-b border-[#2a3147] last:border-0 hover:bg-[#0f1117] rounded-md transition-colors">
                 <div
-                  className="w-12 h-7 rounded-md flex items-center justify-center text-sm font-bold text-white shrink-0"
+                  className="w-12 h-7 rounded-md flex items-center justify-center text-sm font-bold text-white shrink-0 hover-pop"
                   style={{ backgroundColor: step.color }}
                 >
                   {step.value}
@@ -366,7 +366,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Eficiência de Follow-up */}
-        <div className="col-span-2 bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <div className="col-span-2 bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-6">
           <h2 className="font-semibold text-slate-200 mb-3 flex items-center gap-2">
             <Calendar size={16} className="text-green-500" />
             Eficiência de Follow-up
@@ -378,7 +378,7 @@ export default function DashboardPage() {
               { label: 'Taxa resp. 3º follow-up', value: '9,2%', delta: '↑ 0,8 p.p.' },
               { label: 'Respostas por follow-up', value: '34', delta: '↑ 19,3%' },
             ].map(item => (
-              <div key={item.label} className="bg-[#0f1117] rounded-lg p-2.5">
+              <div key={item.label} className="bg-[#0f1117] rounded-lg p-2.5 hover-pop">
                 <div className="text-xs text-slate-400 leading-tight mb-1">{item.label}</div>
                 <div className="text-lg font-bold text-slate-200">{item.value}</div>
                 <div className="text-xs text-green-400 font-medium">{item.delta}</div>
@@ -400,7 +400,7 @@ export default function DashboardPage() {
       {/* Nicho + Leads interesse + Alertas */}
       <div className="grid grid-cols-3 gap-5">
         {/* Distribuição por nicho */}
-        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-7">
           <h2 className="font-semibold text-slate-200 mb-3 flex items-center gap-2">
             <Target size={16} className="text-indigo-500" />
             Distribuição por nicho
@@ -418,7 +418,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Fila de leads com interesse */}
-        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-8">
           <h2 className="font-semibold text-slate-200 mb-3 flex items-center gap-2">
             <Users size={16} className="text-green-500" />
             Fila de leads com interesse
@@ -451,25 +451,25 @@ export default function DashboardPage() {
         </div>
 
         {/* Alertas da automação */}
-        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-9">
           <h2 className="font-semibold text-slate-200 mb-3 flex items-center gap-2">
             <AlertTriangle size={16} className="text-amber-500" />
             Alertas da automação
           </h2>
           <div className="space-y-2.5">
-            <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20">
+            <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 hover-pop">
               <span className="shrink-0">⚠️</span>
               <p className="text-sm text-red-400">
                 {atrasados} automações com baixa taxa de resposta
               </p>
             </div>
-            <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+            <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 hover-pop">
               <span className="shrink-0">🟡</span>
               <p className="text-sm text-amber-400">
                 12 leads com interesse identificado aguardando ação
               </p>
             </div>
-            <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
+            <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 hover-pop">
               <span className="shrink-0">🔵</span>
               <p className="text-sm text-blue-400">1 nicho sem responsável definido</p>
             </div>
@@ -481,7 +481,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Evolução de prospecções */}
-      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-10">
         <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
           <TrendingUp size={16} className="text-indigo-500" />
           Evolução de prospecções — últimos 30 dias
@@ -513,7 +513,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Desempenho por SDR */}
-      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-10">
         <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
           <Users size={16} className="text-indigo-500" />
           Desempenho por SDR
@@ -545,7 +545,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Meta do mês */}
-      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-10">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-slate-200 flex items-center gap-2">
             <Target size={16} className="text-indigo-500" />
@@ -558,13 +558,13 @@ export default function DashboardPage() {
           <span>Meta: <span className="font-bold text-slate-200">50</span></span>
         </div>
         <div className="w-full bg-[#252b3b] rounded-full h-3">
-          <div className="h-3 rounded-full bg-indigo-500 transition-all" style={{ width: '78%' }} />
+          <div className="h-3 rounded-full bg-indigo-500 bar-grow" style={{ width: '78%' }} />
         </div>
         <p className="text-xs text-slate-500 mt-2">78% da meta atingida — faltam 11 reuniões para bater o objetivo mensal.</p>
       </div>
 
       {/* IA card */}
-      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 flex items-center justify-between">
+      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 flex items-center justify-between card-hover animate-in stagger-10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
             <Bot size={20} className="text-green-400" />

@@ -35,11 +35,67 @@ body {
 }
 
 .card-hover {
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 .card-hover:hover {
-  box-shadow: 0 4px 24px rgba(99, 102, 241, 0.08);
-  border-color: rgba(99, 102, 241, 0.3);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(99, 102, 241, 0.14);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+/* Animações de entrada (carregamento da página) */
+@keyframes fade-slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+  animation: fade-slide-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--anim-delay, 0s);
+}
+
+.stagger-1 { --anim-delay: 0.05s; }
+.stagger-2 { --anim-delay: 0.12s; }
+.stagger-3 { --anim-delay: 0.19s; }
+.stagger-4 { --anim-delay: 0.26s; }
+.stagger-5 { --anim-delay: 0.33s; }
+.stagger-6 { --anim-delay: 0.40s; }
+.stagger-7 { --anim-delay: 0.47s; }
+.stagger-8 { --anim-delay: 0.54s; }
+.stagger-9 { --anim-delay: 0.61s; }
+.stagger-10 { --anim-delay: 0.68s; }
+
+/* Barras de progresso que crescem até a largura definida inline */
+@keyframes bar-grow {
+  from { width: 0; }
+}
+.bar-grow {
+  animation: bar-grow 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--anim-delay, 0s) + 0.25s);
+}
+
+/* Hover com elevação para blocos menores (células, mini-cards) */
+.hover-pop {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.hover-pop:hover {
+  transform: scale(1.06);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in,
+  .bar-grow {
+    animation: none;
+  }
+  .card-hover,
+  .hover-pop {
+    transition: none;
+  }
+  .card-hover:hover,
+  .hover-pop:hover {
+    transform: none;
+  }
 }
 
 .text-primary { color: var(--text-primary); }
