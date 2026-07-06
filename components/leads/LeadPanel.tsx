@@ -293,7 +293,7 @@ export default function LeadPanel({
     }
   }
 
-  // Dispara o n8n para executar a próxima etapa da cadência do lead
+  // Dispara o motor (lib/engine) para executar a próxima etapa da cadência do lead
   async function handleExecutarAcao() {
     if (!selectedId) return;
     setExecutando(true);

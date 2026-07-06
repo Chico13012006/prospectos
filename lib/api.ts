@@ -217,21 +217,25 @@ export async function atualizarEstagio(leadId: string, novoEstagio: string): Pro
   if (error) throw error
 }
 
-// Dispara o n8n (via proxy server-side) para executar a próxima etapa da cadência do lead
+// Dispara o MOTOR (lib/engine, não mais o n8n) para executar a próxima etapa
+// da cadência do lead. Trocado de /api/executar-acao (proxy do n8n, parado)
+// para /api/engine/executar-acao em 06/07/2026. O endpoint do motor exige o
+// header de autorização interna — por isso o NEXT_PUBLIC_INTERNAL_SECRET.
 export async function executarAcao(
   leadId: string
-): Promise<{ ok: boolean; estagio?: string; erro?: string }> {
-  const res = await fetch('/api/executar-acao', {
+): Promise<{ ok: boolean; estagio?: string; erro?: string; motivo?: string }> {
+  const res = await fetch('/api/engine/executar-acao', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'x-internal-secret': process.env.NEXT_PUBLIC_INTERNAL_SECRET ?? '',
     },
     body: JSON.stringify({ lead_id: leadId }),
   })
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.erro ?? `Erro ${res.status}`)
+    throw new Error(err.erro ?? err.motivo ?? `Erro ${res.status}`)
   }
 
   return res.json()
