@@ -45,3 +45,6 @@ next-env.d.ts
 
 # Backups locais (contem PII de leads)
 backups/
+
+# Cache local da prospeccao free-tier (candidatos da RF + status por CNPJ)
+data/prospeccao/
