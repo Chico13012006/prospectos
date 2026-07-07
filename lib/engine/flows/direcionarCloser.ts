@@ -6,7 +6,7 @@
 // Nota de modelagem: a UI agrupa o pipeline por `estagio`; mantemos
 // estagio='interessado' (posição correta no funil) e gravamos o marcador de
 // ciclo de vida em `proxima_acao='com_closer'` — sem coluna nova, sem quebrar a UI.
-import { engineConfig } from '../config'
+import { getEngineConfig } from '../config'
 import { log } from '../logger'
 import type { EmailProvider } from '../email/provider'
 import type { Store } from '../store/store'
@@ -22,8 +22,8 @@ export async function direcionarCloser(
     return { ok: false }
   }
 
-  // Closer = responsável do lead; fallback para CLOSER_EMAIL.
-  let closerEmail = engineConfig.closerEmailFallback
+  // Closer = responsável do lead; fallback configurado (tela ou CLOSER_EMAIL).
+  let closerEmail = (await getEngineConfig()).closerEmailFallback
   let closerNome = 'Closer'
   if (lead.responsavel_id) {
     const u = await store.buscarUsuario(lead.responsavel_id)

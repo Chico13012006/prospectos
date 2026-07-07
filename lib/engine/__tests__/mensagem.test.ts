@@ -75,9 +75,22 @@ describe('montarEmail — follow-ups e threading', () => {
     expect(fup2.corpo).toContain('vou ser direto')
   })
 
-  it('nº de follow-up acima do máximo usa o último template (cap em 3)', async () => {
+  it('follow-up 3 oferece um exemplo e pede só "sim"', async () => {
+    const lead = makeLead({ segmento: '', empresa: 'Piloto SA' })
+    const fup3 = await montarEmail(store, lead, { tipo: 'follow_up', numero: 3 })
+    expect(fup3.corpo).toContain('um exemplo rápido')
+    expect(fup3.corpo).toContain('responder "sim"')
+  })
+
+  it('follow-up 4 é o encerramento (última tentativa)', async () => {
+    const lead = makeLead({ segmento: '', empresa: 'Piloto SA' })
+    const fup4 = await montarEmail(store, lead, { tipo: 'follow_up', numero: 4 })
+    expect(fup4.corpo).toContain('última mensagem')
+  })
+
+  it('nº de follow-up acima do máximo usa o último template (cap em 4)', async () => {
     const lead = makeLead({ segmento: '', empresa: 'Piloto SA' })
     const fup = await montarEmail(store, lead, { tipo: 'follow_up', numero: 9 })
-    expect(fup.corpo).toContain('última mensagem') // follow_up_3
+    expect(fup.corpo).toContain('última mensagem') // follow_up_4
   })
 })

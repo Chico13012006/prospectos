@@ -3,7 +3,7 @@
 // `usuarios`. A trava owner='engine' é aplicada em TODA leitura de lote.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
-import { engineConfig, OWNER_ENGINE } from '../config'
+import { getEngineConfig, OWNER_ENGINE } from '../config'
 import { ESTAGIOS_EM_CADENCIA, dominioDoLead } from '../templates'
 import type { Lead, NovaInteracao, TipoInteracaoEngine, UsuarioBasico } from '../types'
 import type { Store, TemplateEmail } from './store'
@@ -100,8 +100,9 @@ export class SupabaseStore implements Store {
   }
 
   async leadsParaFollowup(): Promise<Lead[]> {
+    const cfg = await getEngineConfig()
     const agora = Date.now()
-    const intervaloMs = engineConfig.horasEntreFollowups * 3600_000
+    const intervaloMs = cfg.horasEntreFollowups * 3600_000
     const { data, error } = await this.db
       .from('leads')
       .select('*')
@@ -115,7 +116,7 @@ export class SupabaseStore implements Store {
     for (const lead of candidatos) {
       // Trava de máximo de follow-ups.
       const enviados = await this.contarInteracoes(lead.id, 'follow_up')
-      if (enviados >= engineConfig.maxFollowups) continue
+      if (enviados >= cfg.maxFollowups) continue
       // Gate de tempo: proxima_acao_data se houver, senão ultimo_contato+intervalo.
       if (lead.proxima_acao_data) {
         if (new Date(lead.proxima_acao_data).getTime() > agora) continue
@@ -128,8 +129,9 @@ export class SupabaseStore implements Store {
   }
 
   async leadsEsgotadosSemResposta(): Promise<Lead[]> {
+    const cfg = await getEngineConfig()
     const agora = Date.now()
-    const intervaloMs = engineConfig.horasEntreFollowups * 3600_000
+    const intervaloMs = cfg.horasEntreFollowups * 3600_000
     const { data, error } = await this.db
       .from('leads')
       .select('*')
@@ -143,7 +145,7 @@ export class SupabaseStore implements Store {
     for (const lead of candidatos) {
       // Só os que ESGOTARAM os follow-ups.
       const enviados = await this.contarInteracoes(lead.id, 'follow_up')
-      if (enviados < engineConfig.maxFollowups) continue
+      if (enviados < cfg.maxFollowups) continue
       // E cujo tempo de espera do último follow-up já passou.
       let venceu = false
       if (lead.proxima_acao_data) venceu = new Date(lead.proxima_acao_data).getTime() <= agora

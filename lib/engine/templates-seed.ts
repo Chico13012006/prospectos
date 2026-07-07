@@ -142,7 +142,16 @@ Atenciosamente, {responsavel_comercial}`,
   },
   {
     canal: 'email', nicho: null, tipo: 'follow_up_3',
-    nome: 'E-mail · Follow-up 3 (última tentativa)',
+    nome: 'E-mail · Follow-up 3',
+    assunto: 'Re: [assunto do 1º contato]',
+    corpo: `Olá {nome}, tudo bem?
+Não quero ser insistente, então vou facilitar: se eu te mandar um exemplo rápido de como uma empresa parecida com a {empresa} reduziu perdas e tempo de inventário com RFID, isso ajuda a decidir se vale uma conversa?
+É só responder "sim" que eu te envio.
+Atenciosamente, {responsavel_comercial}`,
+  },
+  {
+    canal: 'email', nicho: null, tipo: 'follow_up_4',
+    nome: 'E-mail · Follow-up 4 (última tentativa)',
     assunto: 'Re: [assunto do 1º contato]',
     corpo: `Olá {nome}, tudo bem?
 Essa será minha última mensagem sobre esse tema por enquanto.

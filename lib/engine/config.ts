@@ -1,5 +1,15 @@
-// Configuração do motor de automação, lida do ambiente (server-side).
+// Configuração do motor de automação (server-side).
+// Duas camadas:
+//   1) engineConfig — getters síncronos lendo process.env. Continua sendo a
+//      fonte de MODO_ENSAIO e INTERNAL_SECRET (segurança, nunca vão pra tabela)
+//      e o FALLBACK dos parâmetros de cadência. Scripts locais podem seguir
+//      usando estes getters direto.
+//   2) getEngineConfig() — parâmetros de cadência dinâmicos, lidos da tabela
+//      `configuracoes_motor` (editável pela tela Configurações > Parâmetros),
+//      com cache de ~30s e fallback pro .env se o banco falhar.
 // Tem valores padrão SEGUROS: em modo de ensaio nada é enviado de verdade.
+import { createSupabaseAdminClient } from '@/lib/supabase-admin'
+import { log } from './logger'
 
 function num(v: string | undefined, padrao: number): number {
   const n = Number(v)
@@ -49,6 +59,87 @@ export const engineConfig = {
   get internalSecret(): string {
     return process.env.INTERNAL_SECRET ?? ''
   },
+}
+
+// ---------------------------------------------------------------------------
+// Config dinâmica de cadência (tabela `configuracoes_motor`, migration 0005).
+// ---------------------------------------------------------------------------
+
+export interface ConfigMotor {
+  maxEnviosDia: number
+  horasEntreFollowups: number
+  maxFollowups: number
+  intervaloEntreEnviosMin: number
+  diasSemanaAtivos: number[] // convenção JS Date.getDay(): 0=domingo..6=sábado
+  closerEmailFallback: string
+}
+
+// Dias ativos quando não há linha no banco: seg-sex (comportamento histórico).
+const DIAS_SEMANA_PADRAO = [1, 2, 3, 4, 5]
+
+const CACHE_TTL_MS = 30_000
+let cache: { valor: ConfigMotor; expiraEm: number } | null = null
+
+function configDoEnv(): ConfigMotor {
+  return {
+    maxEnviosDia: engineConfig.maxEnviosDia,
+    horasEntreFollowups: engineConfig.horasEntreFollowups,
+    maxFollowups: engineConfig.maxFollowups,
+    intervaloEntreEnviosMin: engineConfig.intervaloEntreEnviosMin,
+    diasSemanaAtivos: DIAS_SEMANA_PADRAO,
+    closerEmailFallback: engineConfig.closerEmailFallback,
+  }
+}
+
+// '1,2,3' → [1,2,3]; descarta lixo e devolve null se nada sobrar (usa fallback).
+function parseDiasSemana(csv: unknown): number[] | null {
+  if (typeof csv !== 'string') return null
+  const dias = csv
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
+  return dias.length > 0 ? [...new Set(dias)].sort() : null
+}
+
+// Lê a config de cadência da tabela, com cache e fallback pro .env.
+// O motor NUNCA trava por causa da tela de config: qualquer erro aqui
+// (tabela vazia, Supabase fora, service key ausente) cai nos getters de env.
+export async function getEngineConfig(): Promise<ConfigMotor> {
+  if (cache && Date.now() < cache.expiraEm) return cache.valor
+
+  let valor = configDoEnv()
+  try {
+    const db = createSupabaseAdminClient()
+    const { data, error } = await db
+      .from('configuracoes_motor')
+      .select('*')
+      .eq('id', 1)
+      .maybeSingle()
+    if (error) throw error
+    if (data) {
+      valor = {
+        maxEnviosDia: Number.isFinite(data.max_envios_dia) ? data.max_envios_dia : valor.maxEnviosDia,
+        horasEntreFollowups: Number.isFinite(data.horas_entre_followups) ? data.horas_entre_followups : valor.horasEntreFollowups,
+        maxFollowups: Number.isFinite(data.max_followups) ? data.max_followups : valor.maxFollowups,
+        intervaloEntreEnviosMin: Number.isFinite(data.intervalo_entre_envios_min) ? data.intervalo_entre_envios_min : valor.intervaloEntreEnviosMin,
+        diasSemanaAtivos: parseDiasSemana(data.dias_semana_ativos) ?? valor.diasSemanaAtivos,
+        closerEmailFallback: data.closer_email_fallback || valor.closerEmailFallback,
+      }
+    }
+  } catch (e) {
+    log.aviso('Config dinâmica indisponível — usando valores do .env como fallback.', {
+      erro: e instanceof Error ? e.message : String(e),
+    })
+  }
+
+  cache = { valor, expiraEm: Date.now() + CACHE_TTL_MS }
+  return valor
+}
+
+// Chamado pela API depois de salvar, pra refletir a mudança na hora
+// (sem esperar o TTL do cache expirar sozinho).
+export function invalidarCacheConfig(): void {
+  cache = null
 }
 
 // A trava de migração: os fluxos só agem em leads com este owner.

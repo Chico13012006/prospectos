@@ -16,8 +16,8 @@ export interface Envio {
   numero?: number
 }
 
-// Maior nº de follow-up com template próprio (follow_up_1..3). Acima disso, cap.
-const MAX_TIPO_FOLLOWUP = 3
+// Maior nº de follow-up com template próprio (follow_up_1..4). Acima disso, cap.
+const MAX_TIPO_FOLLOWUP = 4
 
 // Sinônimos de segmento (free-text do lead) → chave canônica de nicho. A maioria
 // dos nichos já casa direto pelo nome (oticas, varejo, ...); aqui ficam só os

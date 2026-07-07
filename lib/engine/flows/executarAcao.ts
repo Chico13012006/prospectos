@@ -3,7 +3,7 @@
 // Busca o lead, decide o próximo estágio, monta o e-mail pelo template, envia,
 // registra a interação e avança o estágio. Respeita owner='engine', limite
 // diário e idempotência (nunca reenvia o mesmo estágio ao mesmo lead).
-import { OWNER_ENGINE, engineConfig } from '../config'
+import { OWNER_ENGINE, getEngineConfig } from '../config'
 import { log } from '../logger'
 import { proximoEstagio, tipoDoEnvio } from '../templates'
 import { montarEmail } from '../mensagem'
@@ -21,6 +21,7 @@ export async function executarAcao(
   email: EmailProvider,
   payload: { leadId: string },
 ): Promise<ResultadoAcao> {
+  const cfg = await getEngineConfig()
   const lead = await store.buscarLead(payload.leadId)
   if (!lead) {
     log.erro('Lead não encontrado', { leadId: payload.leadId })
@@ -56,7 +57,7 @@ export async function executarAcao(
   let followupsEnviados = lead.followups_enviados ?? 0
   if (tipo === 'follow_up') {
     const enviados = await store.contarInteracoes(lead.id, 'follow_up')
-    if (enviados >= engineConfig.maxFollowups) {
+    if (enviados >= cfg.maxFollowups) {
       log.aviso('Máximo de follow-ups atingido.', { leadId: lead.id, enviados })
       return { ok: false, motivo: 'max_followups' }
     }
@@ -64,10 +65,10 @@ export async function executarAcao(
   }
 
   // Limite diário (protege a reputação do domínio).
-  if ((await store.enviosHoje()) >= engineConfig.maxEnviosDia) {
+  if ((await store.enviosHoje()) >= cfg.maxEnviosDia) {
     log.aviso('Limite diário de envios atingido. Ação adiada.', {
       leadId: lead.id,
-      limite: engineConfig.maxEnviosDia,
+      limite: cfg.maxEnviosDia,
     })
     return { ok: false, motivo: 'limite_diario' }
   }
@@ -87,7 +88,7 @@ export async function executarAcao(
   })
 
   const agora = new Date()
-  const proxima = new Date(agora.getTime() + engineConfig.horasEntreFollowups * 3600_000)
+  const proxima = new Date(agora.getTime() + cfg.horasEntreFollowups * 3600_000)
   await store.atualizarLead(lead.id, {
     estagio: destino,
     ultimo_contato: agora.toISOString(),

@@ -1,6 +1,6 @@
 // Composição do motor: monta store + provedor de e-mail + fila (com handlers)
 // e orquestra a cadência diária. Os endpoints em app/api/engine/* usam isto.
-import { engineConfig } from './config'
+import { engineConfig, getEngineConfig } from './config'
 import { log } from './logger'
 import { Queue } from './queue'
 import { SupabaseStore } from './store/supabaseStore'
@@ -45,16 +45,17 @@ export function criarMotor(overrides?: Partial<Motor>): Motor {
   return motor
 }
 
-// Dias úteis: segunda(1) a sexta(5).
-export function ehDiaUtil(d: Date = new Date()): boolean {
-  const dia = d.getDay()
-  return dia >= 1 && dia <= 5
+// Dia ativo? Convenção JS Date.getDay(): 0=domingo..6=sábado. A lista vem da
+// config dinâmica (tela de Parâmetros); default seg-sex.
+export function ehDiaUtil(diasAtivos: number[], d: Date = new Date()): boolean {
+  return diasAtivos.includes(d.getDay())
 }
 
 // Cadência diária: detectar respostas → processar fila (closer) → follow-ups.
 export async function cadenciaDiaria(motor: Motor, opts?: { forcar?: boolean }) {
-  if (!opts?.forcar && !ehDiaUtil()) {
-    log.info('Hoje não é dia útil — cadência diária pulada.')
+  const cfg = await getEngineConfig()
+  if (!opts?.forcar && !ehDiaUtil(cfg.diasSemanaAtivos)) {
+    log.info('Hoje não é dia ativo da cadência — pulada.', { diasAtivos: cfg.diasSemanaAtivos })
     return { pulado: true as const }
   }
   log.info('=== Cadência diária iniciada ===', { modoEnsaio: engineConfig.modoEnsaio })

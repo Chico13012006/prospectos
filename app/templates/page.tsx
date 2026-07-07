@@ -24,7 +24,7 @@ const labelNicho = (n?: string | null) => (n ? NICHO_LABEL[n] ?? n : 'Genérico'
 // Estágio = coluna `tipo`.
 const TIPO_LABEL: Record<string, string> = {
   primeiro_contato: '1º contato',
-  follow_up_1: 'Follow-up 1', follow_up_2: 'Follow-up 2', follow_up_3: 'Follow-up 3',
+  follow_up_1: 'Follow-up 1', follow_up_2: 'Follow-up 2', follow_up_3: 'Follow-up 3', follow_up_4: 'Follow-up 4',
   abertura_geral: 'Abertura geral', gancho_reuniao: 'Gancho p/ reunião',
   pedir_material: 'Pedir material', nao_e_a_pessoa: 'Não é a pessoa',
 };

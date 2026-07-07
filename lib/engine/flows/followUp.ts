@@ -5,7 +5,7 @@
 //
 // Quem já respondeu NUNCA entra aqui: a pausa do Fluxo 2 tira o lead da esteira
 // (estagio='interessado'), e leadsParaFollowup só devolve estágios em cadência.
-import { engineConfig } from '../config'
+import { getEngineConfig } from '../config'
 import { log } from '../logger'
 import { proximoEstagio } from '../templates'
 import { montarEmail } from '../mensagem'
@@ -24,6 +24,7 @@ export async function followUp(
   store: Store,
   email: EmailProvider,
 ): Promise<{ enviados: number; elegiveis: number; encerrados: number }> {
+  const cfg = await getEngineConfig()
   // Saída automática: quem esgotou os follow-ups (>= MAX) sem responder e já
   // passou do tempo de espera sai da esteira para 'sem_resposta' (terminal,
   // fora do board ativo). Reversível por ação manual. O motor PARA aqui — nunca
@@ -35,7 +36,7 @@ export async function followUp(
       lead_id: lead.id,
       tipo: 'nota',
       canal: 'sistema',
-      descricao: `Sem resposta após ${engineConfig.maxFollowups} follow-ups. Movido para 'sem_resposta'.`,
+      descricao: `Sem resposta após ${cfg.maxFollowups} follow-ups. Movido para 'sem_resposta'.`,
       origem_acao: 'ia',
       responsavel_id: lead.responsavel_id ?? null,
     })
@@ -52,14 +53,14 @@ export async function followUp(
   let enviados = 0
 
   for (const lead of elegiveis) {
-    if ((await store.enviosHoje()) >= engineConfig.maxEnviosDia) {
+    if ((await store.enviosHoje()) >= cfg.maxEnviosDia) {
       log.aviso('Limite diário atingido. Demais follow-ups ficam para o próximo dia útil.')
       break
     }
 
     // Idempotência reforçada (corrida): revalida a contagem antes de enviar.
     const jaEnviados = await store.contarInteracoes(lead.id, 'follow_up')
-    if (jaEnviados >= engineConfig.maxFollowups) continue
+    if (jaEnviados >= cfg.maxFollowups) continue
 
     const destino = proximoEstagio(lead.estagio)
     const msg = await montarEmail(store, lead, { tipo: 'follow_up', numero: jaEnviados + 1 })
@@ -74,7 +75,7 @@ export async function followUp(
     })
 
     const agora = new Date()
-    const proxima = new Date(agora.getTime() + engineConfig.horasEntreFollowups * 3600_000)
+    const proxima = new Date(agora.getTime() + cfg.horasEntreFollowups * 3600_000)
     await store.atualizarLead(lead.id, {
       estagio: destino,
       ultimo_contato: agora.toISOString(),
