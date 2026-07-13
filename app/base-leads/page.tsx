@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Loader2, ChevronLeft, ChevronRight, Database } from 'lucide-react';
-import { formatDate } from '@/lib/utils';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Database } from 'lucide-react';
+import { formatDate, dash } from '@/lib/utils';
 import { labelEstagio } from '@/lib/pipeline-stages';
 import { getTodosLeads, getPipelineFiltrosOpcoes, type BaseLeadsFiltros } from '@/lib/api';
 import type { Lead } from '@/lib/supabase';
 import LeadPanel from '@/components/leads/LeadPanel';
 import FiltrosBase, { FILTRO_VAZIO, type BaseFiltroForm } from '@/components/base/FiltrosBase';
+import { EstadoTabela, PaginacaoTabela } from '@/components/ui/tabela';
 
 const PAGE = 50;
 
@@ -16,8 +17,6 @@ function etapaFollowup(n?: number): string {
   if (!n) return '—';
   return n >= 4 ? '4º+' : `${n}º`;
 }
-
-const dash = (v?: string | null) => (v && String(v).trim() ? String(v) : '—');
 
 export default function BaseLeadsPage() {
   const [form, setForm] = useState<BaseFiltroForm>(FILTRO_VAZIO);
@@ -37,42 +36,50 @@ export default function BaseLeadsPage() {
       .catch(err => { console.error('Erro ao carregar Base de Leads:', err); setUseFallback(true); });
   }, []);
 
+  // Debounce só do FORM (campos digitados: busca, cidade, estado…); cliques de
+  // página e o reload pós-mutação disparam o fetch imediatamente.
+  const [formDebounced, setFormDebounced] = useState(form);
+  useEffect(() => {
+    const t = setTimeout(() => setFormDebounced(form), 250);
+    return () => clearTimeout(t);
+  }, [form]);
+
   // Form (strings) → filtros server-side da query.
   const filtros: BaseLeadsFiltros = useMemo(() => ({
-    busca: form.busca || undefined,
-    responsavel: form.responsavel || undefined,
-    segmento: form.segmento || undefined,
-    estagio: form.estagio || undefined,
-    followups: form.followup === '1' ? 1 : form.followup === '2' ? 2 : form.followup === '3' ? 3 : form.followup === '4+' ? { gte: 4 } : undefined,
-    cidade: form.cidade || undefined,
-    estado: form.estado || undefined,
-    cadastroDe: form.cadastroDe ? `${form.cadastroDe}T00:00:00` : null,
-    cadastroAte: form.cadastroAte ? `${form.cadastroAte}T23:59:59.999` : null,
-    interacaoDe: form.interacaoDe ? `${form.interacaoDe}T00:00:00` : null,
-    interacaoAte: form.interacaoAte ? `${form.interacaoAte}T23:59:59.999` : null,
-    atalho: form.atalho || undefined,
-  }), [form]);
+    busca: formDebounced.busca || undefined,
+    responsavel: formDebounced.responsavel || undefined,
+    segmento: formDebounced.segmento || undefined,
+    estagio: formDebounced.estagio || undefined,
+    followups: formDebounced.followup === '1' ? 1 : formDebounced.followup === '2' ? 2 : formDebounced.followup === '3' ? 3 : formDebounced.followup === '4+' ? { gte: 4 } : undefined,
+    cidade: formDebounced.cidade || undefined,
+    estado: formDebounced.estado || undefined,
+    cadastroDe: formDebounced.cadastroDe ? `${formDebounced.cadastroDe}T00:00:00` : null,
+    cadastroAte: formDebounced.cadastroAte ? `${formDebounced.cadastroAte}T23:59:59.999` : null,
+    interacaoDe: formDebounced.interacaoDe ? `${formDebounced.interacaoDe}T00:00:00` : null,
+    interacaoAte: formDebounced.interacaoAte ? `${formDebounced.interacaoAte}T23:59:59.999` : null,
+    atalho: formDebounced.atalho || undefined,
+  }), [formDebounced]);
 
   // Troca de filtro volta para a primeira página.
   useEffect(() => { setPage(0); }, [filtros]);
 
+  // Nº de sequência do fetch: resposta antiga em voo não sobrescreve a nova.
+  const seqRef = useRef(0);
+
   const carregar = useCallback(async () => {
+    const seq = ++seqRef.current;
     setLoading(true);
     const { data, total } = await getTodosLeads(filtros, { limit: PAGE, offset: page * PAGE });
+    if (seq !== seqRef.current) return;
     setData(data);
     setTotal(total);
     setLoading(false);
+    // Mutação pode encolher o total com a página além do fim: volta pra última válida.
+    const ultimaPagina = Math.max(0, Math.ceil(total / PAGE) - 1);
+    if (page > ultimaPagina) setPage(ultimaPagina);
   }, [filtros, page]);
 
-  // Debounce: muda filtro/página (ou após mutação no painel) → refaz o fetch.
-  useEffect(() => {
-    const t = setTimeout(carregar, 250);
-    return () => clearTimeout(t);
-  }, [carregar, reloadKey]);
-
-  const totalPaginas = Math.max(1, Math.ceil(total / PAGE));
-  const inicio = total === 0 ? 0 : page * PAGE + 1;
-  const fim = Math.min((page + 1) * PAGE, total);
+  useEffect(() => { carregar(); }, [carregar, reloadKey]);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -111,12 +118,8 @@ export default function BaseLeadsPage() {
               </tr>
             </thead>
             <tbody>
-              {loading && data.length === 0 ? (
-                <tr><td colSpan={8} className="py-16 text-center text-slate-500">
-                  <Loader2 size={18} className="animate-spin inline mr-2" /> Carregando...
-                </td></tr>
-              ) : data.length === 0 ? (
-                <tr><td colSpan={8} className="py-16 text-center text-slate-500 text-sm">Nenhum lead encontrado com esses filtros.</td></tr>
+              {data.length === 0 ? (
+                <EstadoTabela colSpan={8} loading={loading} />
               ) : (
                 data.map(lead => {
                   const responsavel = lead.usuarios?.nome ?? lead.responsavel_nome ?? null;
@@ -149,29 +152,14 @@ export default function BaseLeadsPage() {
         )}
       </div>
 
-      {/* Paginação */}
-      <div className="px-6 py-3 shrink-0 border-t border-[#2a3147] flex items-center justify-between bg-[#0f1117]">
-        <span className="text-xs text-slate-500">
-          {total > 0 ? `${inicio.toLocaleString('pt-BR')}–${fim.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')}` : '0 leads'}
-        </span>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">Página {page + 1} de {totalPaginas}</span>
-          <button
-            onClick={() => setPage(p => Math.max(0, p - 1))}
-            disabled={page === 0 || loading}
-            className="flex items-center gap-1 text-xs text-slate-300 border border-[#2a3147] px-2.5 py-1.5 rounded-lg hover:bg-[#1a1f2e] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft size={14} /> Anterior
-          </button>
-          <button
-            onClick={() => setPage(p => (p + 1 < totalPaginas ? p + 1 : p))}
-            disabled={page + 1 >= totalPaginas || loading}
-            className="flex items-center gap-1 text-xs text-slate-300 border border-[#2a3147] px-2.5 py-1.5 rounded-lg hover:bg-[#1a1f2e] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Próxima <ChevronRight size={14} />
-          </button>
-        </div>
-      </div>
+      <PaginacaoTabela
+        total={total}
+        page={page}
+        pageSize={PAGE}
+        loading={loading}
+        onPageChange={setPage}
+        className="px-6 py-3 shrink-0 border-t border-[#2a3147] bg-[#0f1117]"
+      />
 
       {/* Painel lateral completo (componente compartilhado em components/leads) */}
       <LeadPanel

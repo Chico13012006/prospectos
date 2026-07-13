@@ -1,15 +1,16 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Loader2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'
+import { ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'
 import { labelEstagio, labelProximaAcao, labelCanal, corEstagio, COLUNAS, type ColunaId } from '@/lib/pipeline-stages'
 import { getTodosLeads, type LeadOrdenavel } from '@/lib/api'
+import { dash } from '@/lib/utils'
 import type { Lead } from '@/lib/supabase'
 import { diasDesde, rotuloDias } from './prioridade'
 import type { GlobalFilterState } from './GlobalFilters'
+import { EstadoTabela, PaginacaoTabela } from '@/components/ui/tabela'
 
 const PAGE = 50
-const dash = (v?: string | null) => (v && String(v).trim() ? String(v) : '—')
 
 // Chips de status — usam os mesmos grupos/cores do Kanban (COLUNAS), sem
 // alterar as regras de negócio. "Todos" não filtra por estágio.
@@ -57,14 +58,22 @@ export default function LeadsTableView({
   const [data, setData] = useState<Lead[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  // Nº de sequência do fetch: o debounce cancela o timer, mas não a request em
-  // voo — sem isso, uma resposta antiga (lenta) sobrescreveria a mais nova.
+  // Nº de sequência do fetch: uma resposta antiga (lenta) em voo não pode
+  // sobrescrever a de um fetch mais novo.
   const seqRef = useRef(0)
 
   const estagios = useMemo(
     () => (chip === 'todos' ? undefined : COLUNAS.find(c => c.id === chip)?.estagios),
     [chip],
   )
+
+  // Só a BUSCA digitada precisa de debounce; cliques (página, chip, ordenação,
+  // selects dos filtros globais) disparam o fetch imediatamente.
+  const [buscaDebounced, setBuscaDebounced] = useState(filtros.search)
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDebounced(filtros.search), 250)
+    return () => clearTimeout(t)
+  }, [filtros.search])
 
   // Troca de filtro/chip/ordenação volta pra primeira página.
   useEffect(() => { setPage(0) }, [filtros, chip, sort])
@@ -74,7 +83,7 @@ export default function LeadsTableView({
     setLoading(true)
     const { data, total } = await getTodosLeads(
       {
-        busca: filtros.search || undefined,
+        busca: buscaDebounced || undefined,
         responsavel: filtros.responsavel || undefined,
         segmento: filtros.segmento || undefined,
         canal: filtros.canal || undefined,
@@ -92,21 +101,14 @@ export default function LeadsTableView({
     // última página válida, o que dispara novo fetch.
     const ultimaPagina = Math.max(0, Math.ceil(total / PAGE) - 1)
     if (page > ultimaPagina) setPage(ultimaPagina)
-  }, [filtros, estagios, sort, page])
+  }, [buscaDebounced, filtros.responsavel, filtros.segmento, filtros.canal, estagios, sort, page])
 
-  useEffect(() => {
-    const t = setTimeout(carregar, 250)
-    return () => clearTimeout(t)
-  }, [carregar, reloadKey])
+  useEffect(() => { carregar() }, [carregar, reloadKey])
 
   const toggleSort = (campo?: LeadOrdenavel) => {
     if (!campo) return
     setSort(prev => (prev.campo === campo ? { campo, asc: !prev.asc } : { campo, asc: true }))
   }
-
-  const totalPaginas = Math.max(1, Math.ceil(total / PAGE))
-  const inicio = total === 0 ? 0 : page * PAGE + 1
-  const fim = Math.min((page + 1) * PAGE, total)
 
   return (
     <div className="h-full flex flex-col min-h-0 px-6 pb-4">
@@ -158,14 +160,8 @@ export default function LeadsTableView({
             </tr>
           </thead>
           <tbody>
-            {loading && data.length === 0 ? (
-              <tr><td colSpan={COLUNAS_TABELA.length} className="py-16 text-center text-slate-500">
-                <Loader2 size={18} className="animate-spin inline mr-2" /> Carregando...
-              </td></tr>
-            ) : data.length === 0 ? (
-              <tr><td colSpan={COLUNAS_TABELA.length} className="py-16 text-center text-slate-500 text-sm">
-                Nenhum lead encontrado com esses filtros.
-              </td></tr>
+            {data.length === 0 ? (
+              <EstadoTabela colSpan={COLUNAS_TABELA.length} loading={loading} />
             ) : (
               data.map(lead => {
                 const responsavel = lead.usuarios?.nome ?? lead.responsavel_nome ?? null
@@ -203,29 +199,14 @@ export default function LeadsTableView({
         </table>
       </div>
 
-      {/* Paginação */}
-      <div className="pt-3 shrink-0 flex items-center justify-between">
-        <span className="text-xs text-slate-500">
-          {total > 0 ? `${inicio.toLocaleString('pt-BR')}–${fim.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')}` : '0 leads'}
-        </span>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">Página {page + 1} de {totalPaginas}</span>
-          <button
-            onClick={() => setPage(p => Math.max(0, p - 1))}
-            disabled={page === 0 || loading}
-            className="flex items-center gap-1 text-xs text-slate-300 border border-[#2a3147] px-2.5 py-1.5 rounded-lg hover:bg-[#1a1f2e] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft size={14} /> Anterior
-          </button>
-          <button
-            onClick={() => setPage(p => (p + 1 < totalPaginas ? p + 1 : p))}
-            disabled={page + 1 >= totalPaginas || loading}
-            className="flex items-center gap-1 text-xs text-slate-300 border border-[#2a3147] px-2.5 py-1.5 rounded-lg hover:bg-[#1a1f2e] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Próxima <ChevronRight size={14} />
-          </button>
-        </div>
-      </div>
+      <PaginacaoTabela
+        total={total}
+        page={page}
+        pageSize={PAGE}
+        loading={loading}
+        onPageChange={setPage}
+        className="pt-3 shrink-0"
+      />
     </div>
   )
 }

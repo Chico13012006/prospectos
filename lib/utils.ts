@@ -145,6 +145,9 @@ export function getTipoAcaoLabel(tipo: string): string {
   return labels[tipo] || tipo;
 }
 
+// Valor de célula de tabela: texto não-vazio ou travessão.
+export const dash = (v?: string | null): string => (v && String(v).trim() ? String(v) : '—');
+
 export function clsx(...classes: (string | undefined | false | null)[]): string {
   return classes.filter(Boolean).join(' ');
 }
