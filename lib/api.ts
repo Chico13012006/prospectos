@@ -365,7 +365,7 @@ export async function getLeadsStats() {
 export async function getLeadsRecentes(limit = 10) {
   const { data, error } = await supabase
     .from('leads')
-    .select('*')
+    .select('*, usuarios:responsavel_id (id, nome)')
     .order('created_at', { ascending: false })
     .limit(limit)
   if (error || !data) return []

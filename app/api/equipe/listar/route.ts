@@ -21,29 +21,50 @@ export async function GET() {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
-    // Os leads são atribuídos a um responsável da tabela `usuarios` via
-    // `responsavel_id` (UUID). Já os membros da equipe são usuários de auth.
-    // A ligação entre os dois é feita pelo e-mail.
+    // Os leads são atribuídos a um responsável da tabela `usuarios`. Já os
+    // membros da equipe são usuários de auth; a ligação entre os dois é feita
+    // pelo e-mail. `responsavel_id` NÃO é fonte de verdade hoje (100% null):
+    // os leads do import HubSpot só têm `responsavel_nome`, com nome COMPLETO
+    // ("Francisco Rufino") enquanto `usuarios.nome` é o curto ("Francisco").
+    // Mesmo padrão de resolução de lib/api.ts (filtroResponsavelOr /
+    // getLeadsPorResponsavel): casa por id OU prefixo case-insensitive do nome.
     const { data: usuarios } = await supabasePublic
-      .from('usuarios').select('id, email');
+      .from('usuarios').select('id, nome, email');
     const { data: leads } = await supabasePublic
-      .from('leads').select('responsavel_id');
+      .from('leads').select('responsavel_id, responsavel_nome');
 
-    // responsavel_id (usuarios.id) -> email
-    const emailPorResponsavel = new Map(
-      (usuarios ?? []).map(usr => [usr.id, usr.email?.toLowerCase() ?? null])
-    );
-    // e-mail -> total de leads atribuídos
-    const leadsPorEmail = new Map<string, number>();
+    const resolverUsuario = (l: { responsavel_id: string | null; responsavel_nome: string | null }) =>
+      (usuarios ?? []).find(u =>
+        u.id === l.responsavel_id ||
+        (!!l.responsavel_nome && !!u.nome &&
+          l.responsavel_nome.toLowerCase().startsWith(u.nome.toLowerCase()))
+      );
+
+    // usuarios.id -> total de leads atribuídos
+    const leadsPorUsuario = new Map<string, number>();
     for (const l of leads ?? []) {
-      const email = emailPorResponsavel.get(l.responsavel_id);
-      if (!email) continue;
-      leadsPorEmail.set(email, (leadsPorEmail.get(email) ?? 0) + 1);
+      const usr = resolverUsuario(l);
+      if (!usr) continue;
+      leadsPorUsuario.set(usr.id, (leadsPorUsuario.get(usr.id) ?? 0) + 1);
     }
 
     const membros = authData.users.map(u => {
       const perfil = perfis?.find(p => p.id === u.id);
-      const totalLeads = u.email ? (leadsPorEmail.get(u.email.toLowerCase()) ?? 0) : 0;
+      // Membro auth -> SDR de `usuarios`: por e-mail igual quando bate, senão
+      // pelo mesmo padrão de prefixo (usuarios.nome curto como prefixo do
+      // perfis.nome completo — os convites de auth usam e-mails pessoais que
+      // não existem em `usuarios`, ex.: franrufs13@gmail.com). Trade-off: duas
+      // contas do mesmo humano (ex.: "Francisco Rufs" admin e "Francisco
+      // Rufino") mostram a MESMA contagem do SDR Francisco — preferível a
+      // zerar a conta que a pessoa realmente usa.
+      const emailMembro = u.email?.toLowerCase();
+      const sdr =
+        (usuarios ?? []).find(usr => usr.email?.toLowerCase() === emailMembro) ??
+        (usuarios ?? []).find(usr =>
+          !!perfil?.nome && !!usr.nome &&
+          perfil.nome.toLowerCase().startsWith(usr.nome.toLowerCase())
+        );
+      const totalLeads = sdr ? (leadsPorUsuario.get(sdr.id) ?? 0) : 0;
       return {
         id: u.id,
         email: u.email,

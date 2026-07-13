@@ -237,7 +237,9 @@ export default function DashboardPage() {
         id: l.id,
         nome: l.empresa,
         segmento: l.segmento,
-        responsavel: l.responsavel_id ?? '',
+        // Nome do responsável, nunca o UUID: usuario via FK quando existir,
+        // senão o nome legado do CSV (responsavel_id é null em 100% dos leads).
+        responsavel: l.usuarios?.nome ?? l.responsavel_nome ?? '',
         estagio: l.estagio,
         badge: l.estagio === 'reuniao_agendada' ? 'Encaminhado' : l.estagio === 'novos_leads' ? 'Novo' : 'Pendente',
       }))
