@@ -23,6 +23,15 @@ export const COLUNAS: ColunaDef[] = [
 export const ESTAGIOS_RESERVATORIO = COLUNAS.find(c => c.id === 'novos')!.estagios
 export const ESTAGIOS_TEMPO_REAL = COLUNAS.filter(c => c.tipo === 'tempo_real').flatMap(c => c.estagios)
 
+// Kanban da vista "Pipeline de Contato": com leads em alto volume, o board não
+// é mais a visão principal (isso é a Tabela) — fica restrito às colunas de
+// quem já respondeu, demonstrou interesse ou virou oportunidade. NÃO reusa
+// `COLUNAS` inteiro (Novos Leads / Em Prospecção somem do Kanban, mas
+// continuam existindo normalmente na Tabela e no motor).
+export const COLUNAS_KANBAN: ColunaDef[] = COLUNAS.filter(c =>
+  c.id === 'respondeu' || c.id === 'reuniao' || c.id === 'ganho'
+)
+
 // --- VISÃO "CADÊNCIA DE FOLLOW-UP" ---------------------------------------
 // Mesmos leads do board, AGRUPADOS por número de follow-up enviado. NÃO altera
 // estágios do motor: as 4 primeiras colunas filtram os estágios em cadência +
@@ -77,6 +86,42 @@ export const ESTAGIO_LABELS: Record<string, string> = {
 export function labelEstagio(estagio?: string | null): string {
   if (!estagio) return '—'
   return ESTAGIO_LABELS[estagio] ?? estagio
+}
+
+// Cor do estágio (mesma paleta das colunas do Kanban) — usada no pill de
+// Status da Tabela para dar contexto visual sem precisar abrir o card.
+export function corEstagio(estagio?: string | null): string {
+  if (!estagio) return '#64748b'
+  if (estagio === 'perdido' || estagio === 'descartado') return '#ef4444'
+  if (estagio === 'sem_resposta') return '#94a3b8'
+  const coluna = COLUNAS.find(c => c.estagios.includes(estagio))
+  return coluna?.color ?? '#64748b'
+}
+
+// Rótulo amigável para `proxima_acao` (campo semi-livre: o motor grava sinais
+// conhecidos — aguardando_closer, com_closer, follow_up — mas o closer também
+// pode digitar texto livre no painel do lead). Usado na coluna "Próxima ação"
+// da Tabela.
+const PROXIMA_ACAO_LABELS: Record<string, string> = {
+  aguardando_closer: 'Resposta a tratar',
+  com_closer: 'Com o closer',
+  follow_up: 'Follow-up agendado',
+}
+export function labelProximaAcao(valor?: string | null): string {
+  if (!valor) return '—'
+  return PROXIMA_ACAO_LABELS[valor] ?? valor
+}
+
+// Rótulo amigável do canal preferencial de contato.
+const CANAL_LABELS: Record<string, string> = {
+  email: 'E-mail',
+  whatsapp: 'WhatsApp',
+  linkedin: 'LinkedIn',
+  telefone: 'Telefone',
+}
+export function labelCanal(canal?: string | null): string {
+  if (!canal) return '—'
+  return CANAL_LABELS[canal] ?? canal
 }
 
 // Opções do filtro "Status comercial" na Base de Leads (valor cru → rótulo).

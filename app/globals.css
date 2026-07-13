@@ -83,6 +83,15 @@ body {
   box-shadow: 0 4px 14px rgba(99, 102, 241, 0.18);
 }
 
+/* Shimmer dos blocos de loading (KPIs, gráficos, tabelas) */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.skeleton-pulse {
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-in,
   .bar-grow {
@@ -95,6 +104,10 @@ body {
   .card-hover:hover,
   .hover-pop:hover {
     transform: none;
+  }
+  .skeleton-pulse {
+    animation: none;
+    opacity: 0.75;
   }
 }
 

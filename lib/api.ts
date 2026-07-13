@@ -22,6 +22,33 @@ export async function getLeads() {
   return data || []
 }
 
+// Filtro "Responsável": o dropdown lista `usuarios.nome` (ex.: "Francisco"),
+// mas os leads guardam a atribuição de DUAS formas: `responsavel_id` (FK para
+// usuarios — fluxo normal da plataforma) e `responsavel_nome` (texto legado do
+// import HubSpot via scripts/popular-responsavel.cjs, com o nome COMPLETO do
+// CSV, ex.: "Francisco Rufino"). Por isso o filtro casa por id OU por PREFIXO
+// do nome — `eq` nunca acharia "Francisco Rufino" a partir de "Francisco".
+// O id é resolvido com uma query leve em `usuarios`, cacheada no módulo
+// (tabela pequena e estável), para não custar uma query extra por coluna do
+// Kanban. Trade-off documentado: o prefixo pode sobrepor nomes ("Ana" casaria
+// "Ana Paula"), aceitável com a equipe atual e preferível a esconder leads.
+const responsavelIdCache = new Map<string, string | null>()
+async function resolverResponsavelId(nome: string): Promise<string | null> {
+  const cached = responsavelIdCache.get(nome)
+  if (cached !== undefined) return cached
+  const { data, error } = await supabase.from('usuarios').select('id').eq('nome', nome).limit(1)
+  const id = !error && data && data.length > 0 ? (data[0].id as string) : null
+  responsavelIdCache.set(nome, id)
+  return id
+}
+
+async function filtroResponsavelOr(nome: string): Promise<string> {
+  const limpo = nome.replace(/[%,()"]/g, ' ').trim()
+  const porNome = `responsavel_nome.ilike.${limpo}%`
+  const id = await resolverResponsavelId(nome)
+  return id ? `responsavel_id.eq.${id},${porNome}` : porNome
+}
+
 export interface PipelineColFiltros {
   responsavel?: string
   segmento?: string
@@ -51,7 +78,7 @@ export async function getLeadsPorEstagioPaginado(
   if (typeof followups === 'number') q = q.eq('followups_enviados', followups)
   else if (followups) q = q.gte('followups_enviados', followups.gte)
   if (desde) q = q.gte('created_at', desde)
-  if (responsavel) q = q.eq('responsavel_nome', responsavel)
+  if (responsavel) q = q.or(await filtroResponsavelOr(responsavel))
   if (segmento) q = q.eq('segmento', segmento)
   if (canal) q = q.eq('canal_preferencial', canal)
   if (busca && busca.trim()) {
@@ -63,6 +90,9 @@ export async function getLeadsPorEstagioPaginado(
   } else {
     q = q.order('ultimo_contato', { ascending: false, nullsFirst: false })
   }
+  // Desempate por id: sem ele, linhas empatadas (mesma data / null) podem mudar
+  // de ordem entre queries e o scroll infinito duplica/pula leads entre páginas.
+  q = q.order('id', { ascending: true })
   const { data, error, count } = await q.range(offset, offset + limit - 1)
   if (error) {
     console.error('getLeadsPorEstagioPaginado:', error)
@@ -112,11 +142,19 @@ export async function getPipelineFiltrosOpcoes(): Promise<{
 
 // BASE DE LEADS: banco geral de TODOS os leads (qualquer estado). Paginado no
 // servidor (range), COUNT exato, busca e filtros server-side. NUNCA busca tudo.
+// Campos aceitos para ordenação da Tabela operacional (evita passar coluna
+// arbitrária direto pro Supabase a partir do clique do usuário).
+export type LeadOrdenavel =
+  | 'empresa' | 'segmento' | 'canal_preferencial' | 'estagio'
+  | 'ultimo_contato' | 'created_at' | 'responsavel_nome' | 'contato_cargo'
+
 export interface BaseLeadsFiltros {
   busca?: string
   responsavel?: string
   segmento?: string
-  estagio?: string          // status comercial exato
+  canal?: string             // canal_preferencial exato
+  estagio?: string           // status comercial exato
+  estagios?: string[]        // grupo de estágios (chips rápidos — ex.: colunas do Kanban)
   followups?: number | { gte: number }
   cidade?: string
   estado?: string
@@ -125,6 +163,7 @@ export interface BaseLeadsFiltros {
   interacaoDe?: string | null  // ultimo_contato >=
   interacaoAte?: string | null // ultimo_contato <=
   atalho?: 'responderam' | 'sem_resposta' | 'arquivados' | 'reativacao'
+  ordenarPor?: { campo: LeadOrdenavel; asc: boolean }
 }
 
 export async function getTodosLeads(
@@ -139,9 +178,11 @@ export async function getTodosLeads(
     const t = f.busca.trim().replace(/[%,()]/g, ' ')
     q = q.or(`empresa.ilike.%${t}%,contato_nome.ilike.%${t}%,contato_email.ilike.%${t}%`)
   }
-  if (f.responsavel) q = q.eq('responsavel_nome', f.responsavel)
+  if (f.responsavel) q = q.or(await filtroResponsavelOr(f.responsavel))
   if (f.segmento) q = q.eq('segmento', f.segmento)
+  if (f.canal) q = q.eq('canal_preferencial', f.canal)
   if (f.estagio) q = q.eq('estagio', f.estagio)
+  else if (f.estagios && f.estagios.length) q = q.in('estagio', f.estagios)
   if (typeof f.followups === 'number') q = q.eq('followups_enviados', f.followups)
   else if (f.followups) q = q.gte('followups_enviados', f.followups.gte)
   if (f.cidade && f.cidade.trim()) q = q.ilike('cidade', `%${f.cidade.trim()}%`)
@@ -156,9 +197,14 @@ export async function getTodosLeads(
   else if (f.atalho === 'sem_resposta' || f.atalho === 'reativacao') q = q.eq('estagio', 'sem_resposta')
   else if (f.atalho === 'arquivados') q = q.or('perdido.eq.true,estagio.eq.perdido,estagio.eq.descartado')
 
-  const { data, error, count } = await q
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1)
+  const ordenarPor = f.ordenarPor ?? { campo: 'created_at' as const, asc: false }
+  q = q.order(ordenarPor.campo, { ascending: ordenarPor.asc, nullsFirst: false })
+  // Desempate por id: colunas de baixa cardinalidade (segmento, canal, estágio)
+  // empatam milhares de linhas — sem ordem total, a página 2 pode repetir ou
+  // pular leads da página 1.
+  q = q.order('id', { ascending: true })
+
+  const { data, error, count } = await q.range(offset, offset + limit - 1)
   if (error) {
     console.error('getTodosLeads:', error)
     return { data: [], total: 0 }

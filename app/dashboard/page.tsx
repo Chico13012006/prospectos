@@ -3,7 +3,7 @@
 import { useApp } from '@/contexts/AppContext';
 import Link from 'next/link';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, Sector, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import {
@@ -14,6 +14,9 @@ import { getStatusBadgeClasses } from '@/lib/utils';
 import { SdrPill } from '@/components/ui/SdrAvatar';
 import { useState, useEffect } from 'react';
 import { getLeadsStats, getLeadsRecentes, getLeadsPorResponsavel } from '@/lib/api';
+import AnimatedKpiCard from '@/components/charts/AnimatedKpiCard';
+import ChartContainer from '@/components/charts/ChartContainer';
+import ChartTooltip from '@/components/charts/ChartTooltip';
 
 // Data real de hoje (YYYY-MM-DD) — sem datas fixas no app.
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -73,50 +76,53 @@ const evolucaoDados = [
   { dia: '15/06', enviadas: 24, respostas: 4 },
 ];
 
-function DonutChart({ data }: { data: { label: string; value: number; color: string }[] }) {
-  const total = data.reduce((sum, d) => sum + d.value, 0) || 1;
-  const radius = 60;
-  const cx = 80;
-  const cy = 80;
-  const strokeWidth = 20;
+// Sector expandido no hover (destaque visual do setor analisado no donut).
+function renderActiveDonutShape(props: any) {
+  const { outerRadius, ...rest } = props;
+  return <Sector {...rest} outerRadius={(outerRadius ?? 64) + 6} />;
+}
 
-  let cumulative = 0;
-  const segments = data.map((d) => {
-    const pct = d.value / total;
-    const start = cumulative;
-    cumulative += pct;
-    return { ...d, start, pct };
-  });
-
-  function polarToCartesian(pct: number) {
-    const angle = pct * 2 * Math.PI - Math.PI / 2;
-    return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
-  }
-
-  function describeArc(start: number, end: number) {
-    const s = polarToCartesian(start);
-    const e = polarToCartesian(end);
-    const large = end - start > 0.5 ? 1 : 0;
-    return `M ${s.x} ${s.y} A ${radius} ${radius} 0 ${large} 1 ${e.x} ${e.y}`;
-  }
+function NichoDonut({ data }: { data: { label: string; value: number; color: string }[] }) {
+  const total = data.reduce((sum, d) => sum + d.value, 0);
 
   return (
     <div className="flex items-center gap-6">
-      <svg width="160" height="160" viewBox="0 0 160 160">
-        <circle cx={cx} cy={cy} r={radius} fill="none" stroke="#1e2435" strokeWidth={strokeWidth} />
-        {segments.map((seg, i) => (
-          <path
-            key={i}
-            d={describeArc(seg.start, seg.start + seg.pct)}
-            fill="none"
-            stroke={seg.color}
-            strokeWidth={strokeWidth}
-            strokeLinecap="butt"
-          />
-        ))}
-        <text x={cx} y={cy - 4} textAnchor="middle" fontSize="18" fontWeight="700" fill="#f1f5f9">{total}</text>
-        <text x={cx} y={cy + 14} textAnchor="middle" fontSize="11" fill="#64748b">leads</text>
-      </svg>
+      <div className="w-40 h-40 relative shrink-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="label"
+              cx="50%"
+              cy="50%"
+              innerRadius={48}
+              outerRadius={64}
+              paddingAngle={2}
+              stroke="none"
+              isAnimationActive
+              animationDuration={700}
+              animationEasing="ease-out"
+              activeShape={renderActiveDonutShape}
+            >
+              {data.map((d, i) => (
+                <Cell key={i} fill={d.color} />
+              ))}
+            </Pie>
+            <Tooltip
+              content={
+                <ChartTooltip
+                  formatter={(item) => `${item.value} lead${Number(item.value) === 1 ? '' : 's'}`}
+                />
+              }
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span className="text-lg font-bold text-slate-100">{total}</span>
+          <span className="text-[11px] text-slate-500">leads</span>
+        </div>
+      </div>
 
       <div className="flex flex-col gap-2 flex-1">
         {data.map((d, i) => (
@@ -125,7 +131,7 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
             <span className="text-sm text-slate-300">{d.label}</span>
             <span className="text-sm font-medium text-slate-100 ml-auto pl-4">{d.value}</span>
             <span className="text-xs text-slate-500 w-10 text-right">
-              {Math.round((d.value / total) * 100)}%
+              {total ? Math.round((d.value / total) * 100) : 0}%
             </span>
           </div>
         ))}
@@ -147,6 +153,7 @@ export default function DashboardPage() {
   const [leadsData, setLeadsData] = useState<any[]>([])
   const [leadsRecentes, setLeadsRecentes] = useState<any[]>([])
   const [sdrDataSupabase, setSdrDataSupabase] = useState<any[]>([])
+  const [loadingDash, setLoadingDash] = useState(true)
 
   useEffect(() => {
     async function carregarDash() {
@@ -161,6 +168,8 @@ export default function DashboardPage() {
         if (sdrs.length > 0) setSdrDataSupabase(sdrs)
       } catch (err) {
         console.error('Erro ao carregar dashboard:', err)
+      } finally {
+        setLoadingDash(false)
       }
     }
     carregarDash()
@@ -283,7 +292,7 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* 5 KPI Cards com sparkline */}
+      {/* 5 KPI Cards com sparkline animada (contagem + entrada) */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
         {[
           { label: 'Leads Encontrados', value: leadsEncontrados, pct: '+12%', icon: Users, color: '#6366f1', iconColor: 'text-indigo-400', iconBg: 'bg-indigo-500/20' },
@@ -291,56 +300,33 @@ export default function DashboardPage() {
           { label: 'Mensagens Enviadas', value: mensagensEnviadas, pct: '+23%', icon: MessageCircle, color: '#06b6d4', iconColor: 'text-cyan-400', iconBg: 'bg-cyan-500/20' },
           { label: 'Respostas Recebidas', value: respostasRecebidas, pct: '+5%', icon: TrendingUp, color: '#10b981', iconColor: 'text-emerald-400', iconBg: 'bg-emerald-500/20' },
           { label: 'Leads Encaminhados', value: leadsEncaminhados, pct: '+40%', icon: Calendar, color: '#f59e0b', iconColor: 'text-amber-400', iconBg: 'bg-amber-500/20' },
-        ].map((kpi, idx) => {
-          const gid = `spark-${idx}`;
-          return (
-            <div key={kpi.label} className={`card card-hover p-5 flex flex-col gap-3 animate-in stagger-${idx + 3}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`w-8 h-8 rounded-lg ${kpi.iconBg} flex items-center justify-center`}>
-                    <kpi.icon size={16} className={kpi.iconColor} />
-                  </div>
-                  <span className="text-sm text-slate-400">{kpi.label}</span>
-                </div>
-                <span className="text-xs font-medium text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
-                  {kpi.pct}
-                </span>
-              </div>
-              <div className="text-3xl font-bold text-slate-100">{kpi.value}</div>
-              <svg viewBox="0 0 100 24" preserveAspectRatio="none" className="w-full h-6">
-                <defs>
-                  <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={kpi.color} stopOpacity="0.3" />
-                    <stop offset="100%" stopColor={kpi.color} stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <polyline
-                  points="0,20 16,16 33,18 50,10 66,14 83,6 100,8 100,24 0,24"
-                  fill={`url(#${gid})`}
-                  stroke="none"
-                />
-                <polyline
-                  points="0,20 16,16 33,18 50,10 66,14 83,6 100,8"
-                  fill="none"
-                  stroke={kpi.color}
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-          );
-        })}
+        ].map((kpi) => (
+          <AnimatedKpiCard
+            key={kpi.label}
+            label={kpi.label}
+            value={kpi.value}
+            delta={kpi.pct}
+            icon={kpi.icon}
+            color={kpi.color}
+            iconColor={kpi.iconColor}
+            iconBg={kpi.iconBg}
+            loading={loadingDash}
+          />
+        ))}
       </div>
 
       {/* Funil + Eficiência Follow-up */}
       <div className="grid grid-cols-5 gap-5">
         {/* Funil da IA */}
-        <div className="col-span-3 bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-5">
-          <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
-            <Zap size={16} className="text-indigo-500" />
-            Funil da IA
-          </h2>
+        <ChartContainer
+          title="Funil da IA"
+          icon={Zap}
+          iconColor="text-indigo-500"
+          loading={loadingDash}
+          skeletonVariant="table"
+          skeletonRows={6}
+          className="col-span-3"
+        >
           <div className="flex items-center gap-3 pb-1 mb-1">
             <span className="flex-1 text-xs text-slate-500 font-medium uppercase tracking-wide">Etapa</span>
             <span className="w-16 text-right text-xs text-slate-500 font-medium uppercase tracking-wide">Qtd</span>
@@ -363,14 +349,18 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-        </div>
+        </ChartContainer>
 
         {/* Eficiência de Follow-up */}
-        <div className="col-span-2 bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-6">
-          <h2 className="font-semibold text-slate-200 mb-3 flex items-center gap-2">
-            <Calendar size={16} className="text-green-500" />
-            Eficiência de Follow-up
-          </h2>
+        <ChartContainer
+          title="Eficiência de Follow-up"
+          icon={Calendar}
+          iconColor="text-green-500"
+          loading={loadingDash}
+          skeletonVariant="bars"
+          skeletonRows={4}
+          className="col-span-2"
+        >
           <div className="grid grid-cols-2 gap-2 mb-4">
             {[
               { label: 'Taxa resp. 1º contato', value: '8,4%', delta: '↑ 1,3 p.p.' },
@@ -390,22 +380,36 @@ export default function DashboardPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#2a3147" />
               <XAxis dataKey="etapa" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #2a3147', backgroundColor: '#1a1f2e', color: '#f1f5f9', fontSize: 11 }} />
-              <Bar dataKey="respostas" fill="#22c55e" name="Respostas" radius={[3, 3, 0, 0]} />
+              <Tooltip
+                cursor={{ fill: 'rgba(99, 102, 241, 0.08)' }}
+                content={<ChartTooltip formatter={(item) => `${item.value} resposta${Number(item.value) === 1 ? '' : 's'}`} />}
+              />
+              <Bar
+                dataKey="respostas"
+                fill="#22c55e"
+                name="Respostas"
+                radius={[3, 3, 0, 0]}
+                isAnimationActive
+                animationDuration={800}
+                animationEasing="ease-out"
+                activeBar={{ fillOpacity: 0.85, stroke: '#0f1117', strokeWidth: 1 }}
+              />
             </BarChart>
           </ResponsiveContainer>
-        </div>
+        </ChartContainer>
       </div>
 
       {/* Nicho + Leads interesse + Alertas */}
       <div className="grid grid-cols-3 gap-5">
         {/* Distribuição por nicho */}
-        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-7">
-          <h2 className="font-semibold text-slate-200 mb-3 flex items-center gap-2">
-            <Target size={16} className="text-indigo-500" />
-            Distribuição por nicho
-          </h2>
-          <DonutChart
+        <ChartContainer
+          title="Distribuição por nicho"
+          icon={Target}
+          iconColor="text-indigo-500"
+          loading={loadingDash}
+          skeletonVariant="donut"
+        >
+          <NichoDonut
             data={nichoData.map(n => ({
               label: n.nicho,
               value: n.positivos,
@@ -415,14 +419,20 @@ export default function DashboardPage() {
           <Link href="/pipeline" className="mt-4 text-xs text-indigo-400 hover:underline flex items-center gap-1">
             Ver todos os nichos <ArrowRight size={11} />
           </Link>
-        </div>
+        </ChartContainer>
 
         {/* Fila de leads com interesse */}
-        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-8">
-          <h2 className="font-semibold text-slate-200 mb-3 flex items-center gap-2">
-            <Users size={16} className="text-green-500" />
-            Fila de leads com interesse
-          </h2>
+        <ChartContainer
+          title="Fila de leads com interesse"
+          icon={Users}
+          iconColor="text-green-500"
+          loading={loadingDash}
+          empty={activeFila.length === 0}
+          emptyTitle="Nenhum lead com interesse no momento"
+          emptyDescription="Assim que alguém responder ou pedir mais informações, aparece aqui."
+          skeletonVariant="table"
+          skeletonRows={5}
+        >
           <div className="space-y-2">
             {activeFila.map(item => (
               <Link key={item.id} href={`/leads/${item.id}`}>
@@ -448,7 +458,7 @@ export default function DashboardPage() {
           <Link href="/pipeline" className="mt-3 text-xs text-indigo-400 hover:underline flex items-center gap-1">
             Ver todos os leads <ArrowRight size={11} />
           </Link>
-        </div>
+        </ChartContainer>
 
         {/* Alertas da automação */}
         <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-9">
@@ -481,11 +491,13 @@ export default function DashboardPage() {
       </div>
 
       {/* Evolução de prospecções */}
-      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-10">
-        <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
-          <TrendingUp size={16} className="text-indigo-500" />
-          Evolução de prospecções — últimos 30 dias
-        </h2>
+      <ChartContainer
+        title="Evolução de prospecções — últimos 30 dias"
+        icon={TrendingUp}
+        iconColor="text-indigo-500"
+        loading={loadingDash}
+        skeletonHeight={200}
+      >
         <ResponsiveContainer width="100%" height={200}>
           <AreaChart data={evolucaoDados} margin={{ left: -10 }}>
             <defs>
@@ -501,23 +513,39 @@ export default function DashboardPage() {
             <CartesianGrid strokeDasharray="3 3" stroke="#2a3147" />
             <XAxis dataKey="dia" tick={{ fontSize: 10 }} interval={4} />
             <YAxis tick={{ fontSize: 10 }} />
-            <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #2a3147', backgroundColor: '#1a1f2e', color: '#f1f5f9', fontSize: 12 }} />
+            <Tooltip
+              cursor={{ stroke: '#6366f1', strokeWidth: 1, strokeOpacity: 0.35 }}
+              content={<ChartTooltip formatter={(item) => `${item.value} ${item.name === 'Respostas recebidas' ? 'resposta(s)' : 'mensagem(ns)'}`} />}
+            />
             <Legend iconType="circle" iconSize={8}
               formatter={v => <span style={{ fontSize: 11, color: '#64748b' }}>{v}</span>} />
-            <Area type="monotone" dataKey="enviadas" stroke="#6366f1" strokeWidth={2}
-              fill="url(#gradEnviadas)" name="Mensagens enviadas" dot={false} />
-            <Area type="monotone" dataKey="respostas" stroke="#22c55e" strokeWidth={2}
-              fill="url(#gradRespostas)" name="Respostas recebidas" dot={false} />
+            <Area
+              type="monotone" dataKey="enviadas" stroke="#6366f1" strokeWidth={2}
+              fill="url(#gradEnviadas)" name="Mensagens enviadas" dot={false}
+              isAnimationActive animationDuration={900} animationEasing="ease-out"
+              activeDot={{ r: 5, strokeWidth: 2, stroke: '#0f1117' }}
+            />
+            <Area
+              type="monotone" dataKey="respostas" stroke="#22c55e" strokeWidth={2}
+              fill="url(#gradRespostas)" name="Respostas recebidas" dot={false}
+              isAnimationActive animationDuration={900} animationEasing="ease-out"
+              activeDot={{ r: 5, strokeWidth: 2, stroke: '#0f1117' }}
+            />
           </AreaChart>
         </ResponsiveContainer>
-      </div>
+      </ChartContainer>
 
       {/* Desempenho por SDR */}
-      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-10">
-        <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
-          <Users size={16} className="text-indigo-500" />
-          Desempenho por SDR
-        </h2>
+      <ChartContainer
+        title="Desempenho por SDR"
+        icon={Users}
+        iconColor="text-indigo-500"
+        loading={loadingDash}
+        empty={activeSdrData.length === 0}
+        emptyTitle="Nenhum SDR ativo"
+        skeletonVariant="table"
+        skeletonRows={3}
+      >
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[#2a3147]">
@@ -530,7 +558,7 @@ export default function DashboardPage() {
           </thead>
           <tbody>
             {activeSdrData.map(sdr => (
-              <tr key={sdr.sdr} className="border-b border-[#2a3147] hover:bg-[#0f1117]">
+              <tr key={sdr.sdr} className="border-b border-[#2a3147] hover:bg-[#0f1117] transition-colors">
                 <td className="py-3 px-3">
                   <SdrPill name={sdr.sdr} />
                 </td>
@@ -542,7 +570,7 @@ export default function DashboardPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </ChartContainer>
 
       {/* Meta do mês */}
       <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-10">

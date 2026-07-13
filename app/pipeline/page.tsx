@@ -4,14 +4,17 @@ import { useState, useEffect, useCallback } from 'react';
 import { Settings, Plus, Loader2 } from 'lucide-react';
 import { getPipelineFiltrosOpcoes } from '@/lib/api';
 import PipelineColumn from '@/components/pipeline/PipelineColumn';
+import LeadsTableView from '@/components/pipeline/LeadsTableView';
 import GlobalFilters, { type GlobalFilterState } from '@/components/pipeline/GlobalFilters';
 import LeadPanel from '@/components/leads/LeadPanel';
-import { COLUNAS, COLUNAS_CADENCIA } from '@/lib/pipeline-stages';
+import { COLUNAS_KANBAN, COLUNAS_CADENCIA } from '@/lib/pipeline-stages';
 
 export default function PipelinePage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<GlobalFilterState>({ search: '', responsavel: '', segmento: '', canal: '' });
-  const [vista, setVista] = useState<'comercial' | 'cadencia'>('comercial'); // aba do board
+  // Tabela é a visão PADRÃO (alto volume de leads); Kanban fica restrito a
+  // quem já respondeu/tem interesse/virou oportunidade (COLUNAS_KANBAN).
+  const [vista, setVista] = useState<'tabela' | 'comercial' | 'cadencia'>('tabela'); // aba do board
   const [filtroOpcoes, setFiltroOpcoes] = useState<{ responsaveis: string[]; segmentos: string[]; canais: string[] }>({ responsaveis: [], segmentos: [], canais: [] });
   const [reloadKey, setReloadKey] = useState(0); // bump -> colunas refazem o fetch (após mutação)
   const [loading, setLoading] = useState(true);
@@ -37,7 +40,7 @@ export default function PipelinePage() {
       <div className="px-6 pt-6 pb-3 flex items-start justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Pipeline de Contato</h1>
-          <p className="text-sm text-slate-400 mt-0.5">CRM de prospecção — Kanban por etapa</p>
+          <p className="text-sm text-slate-400 mt-0.5">CRM de prospecção — tabela operacional, Kanban para quem já engajou</p>
         </div>
         <div className="flex gap-3">
           <button className="flex items-center gap-2 text-sm text-slate-300 border border-[#2a3147] px-3 py-2 rounded-lg hover:bg-[#0f1117]">
@@ -54,10 +57,13 @@ export default function PipelinePage() {
 
       {/* Filtros globais + abas (Comercial x Cadência) */}
       <div className="px-6 pb-3 flex items-center gap-2 flex-wrap shrink-0">
-        {/* Aba: forma de AGRUPAR os mesmos leads (não muda os estágios do motor) */}
+        {/* Aba: forma de VISUALIZAR os mesmos leads (não muda os estágios do motor).
+            Tabela é a padrão — Kanban só mostra quem já respondeu/tem interesse/
+            virou oportunidade (ver COLUNAS_KANBAN). */}
         <div className="flex items-center rounded-lg border border-[#2a3147] bg-[#1a1f2e] p-0.5">
           {([
-            { id: 'comercial', label: 'Comercial' },
+            { id: 'tabela', label: 'Tabela' },
+            { id: 'comercial', label: 'Kanban' },
             { id: 'cadencia', label: 'Cadência' },
           ] as const).map(v => (
             <button
@@ -92,6 +98,15 @@ export default function PipelinePage() {
             <span className="text-sm font-medium text-slate-400">Sem conexão com os dados.</span>
             <span className="text-xs">Verifique a conexão com o Supabase.</span>
           </div>
+        ) : vista === 'tabela' ? (
+          /* Visão TABELA (padrão): todos os leads, alto volume — busca, filtros
+             rápidos, ordenação e paginação server-side. */
+          <LeadsTableView
+            filtros={filtros}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            reloadKey={reloadKey}
+          />
         ) : vista === 'cadencia' ? (
           /* Visão CADÊNCIA: mesmos leads, agrupados por nº de follow-up */
           <div className="h-full flex gap-4 overflow-x-auto px-6 pb-4">
@@ -108,8 +123,11 @@ export default function PipelinePage() {
             ))}
           </div>
         ) : (
+          /* Visão KANBAN: só quem já respondeu, tem interesse ou virou
+             oportunidade (COLUNAS_KANBAN) — Novos Leads/Em Prospecção ficam
+             só na Tabela, que aguenta o volume. */
           <div className="h-full flex gap-4 overflow-x-auto px-6 pb-4">
-            {COLUNAS.map(col => (
+            {COLUNAS_KANBAN.map(col => (
               <PipelineColumn
                 key={col.id}
                 stage={col}
