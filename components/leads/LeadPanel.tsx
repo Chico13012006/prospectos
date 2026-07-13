@@ -10,7 +10,7 @@ import {
 import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatDate, formatDateTime } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
 import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
-import { getLeadById, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao } from '@/lib/api';
+import { getLeadById, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao, updateLead } from '@/lib/api';
 import type { Lead, Interacao } from '@/lib/supabase';
 import { ESTAGIOS_MANUAIS } from '@/lib/pipeline-stages';
 
@@ -193,6 +193,8 @@ export default function LeadPanel({
   const [confirmandoPerdido, setConfirmandoPerdido] = useState(false);
   const [executando, setExecutando] = useState(false);
   const [feedbackAcao, setFeedbackAcao] = useState<string | null>(null);
+  const [confirmandoLiberar, setConfirmandoLiberar] = useState(false);
+  const [liberando, setLiberando] = useState(false);
 
   // Carrega (ou recarrega) as interações reais do lead selecionado
   const carregarInteracoes = useCallback(async () => {
@@ -220,6 +222,7 @@ export default function LeadPanel({
     setCentralTab('timeline');
     setShowRegistrar(false);
     setConfirmandoPerdido(false);
+    setConfirmandoLiberar(false);
     setFeedbackAcao(null);
     setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' });
     if (selectedId) {
@@ -293,6 +296,36 @@ export default function LeadPanel({
     }
   }
 
+  // Libera o lead para o motor (owner n8n → engine). Passo humano DELIBERADO e
+  // separado do "Executar ação": com MODO_ENSAIO=false, depois da liberação o
+  // motor real pode enviar e-mails automaticamente para este lead. Confirmação
+  // em dois cliques (mesmo padrão do "Marcar como perdido"). NÃO dispara a
+  // ação em seguida — liberar ≠ mandar agora (ver lib/engine/README.md).
+  async function handleLiberarMotor() {
+    if (!selectedId) return;
+    if (!confirmandoLiberar) {
+      setConfirmandoLiberar(true);
+      return;
+    }
+    setLiberando(true);
+    setFeedbackAcao(null);
+    try {
+      await updateLead(selectedId, { owner: 'engine' });
+      await registrarNota(selectedId, `Lead liberado para o motor (owner: ${selectedLead?.owner ?? 'n8n'} → engine) manualmente.`);
+      const atualizado = await getLeadById(selectedId).catch(() => null);
+      setSelectedLead(atualizado);
+      setFeedbackAcao('✓ Lead liberado para o motor. "Executar ação" já dispara a próxima etapa.');
+      onChanged?.();
+      await carregarInteracoes();
+    } catch (err) {
+      console.error('Erro ao liberar lead para o motor:', err);
+      setFeedbackAcao('✗ Não foi possível liberar o lead para o motor. Tente novamente.');
+    } finally {
+      setConfirmandoLiberar(false);
+      setLiberando(false);
+    }
+  }
+
   // Dispara o motor (lib/engine) para executar a próxima etapa da cadência do lead
   async function handleExecutarAcao() {
     if (!selectedId) return;
@@ -336,6 +369,10 @@ export default function LeadPanel({
   const isActionDelayed = !!selectedEmpresa && panelTimeSince > 5 &&
     (selectedEmpresa.estagio_pipeline === 'aguardando_resposta' ||
      selectedEmpresa.estagio_pipeline === 'follow_up');
+
+  // Lead ainda não liberado para o motor (trava owner != engine): em vez do
+  // erro mudo do executarAcao, oferece a liberação como ação explícita.
+  const precisaLiberar = usingSupabase && !!selectedLead && selectedLead.owner !== 'engine';
 
   if (!selectedEmpresa) return null;
 
@@ -480,9 +517,9 @@ export default function LeadPanel({
             </div>
             <button
               type="button"
-              onClick={handleExecutarAcao}
-              disabled={executando}
-              title="Executar próxima etapa da cadência"
+              onClick={precisaLiberar ? handleLiberarMotor : handleExecutarAcao}
+              disabled={executando || liberando}
+              title={precisaLiberar ? 'Liberar este lead para o motor de cadência' : 'Executar próxima etapa da cadência'}
               className={`w-full text-left rounded-xl px-3 py-2 mb-2 transition-colors disabled:opacity-60 ${isActionDelayed ? 'bg-red-500/10 hover:bg-red-500/20' : 'bg-indigo-500/10 hover:bg-indigo-500/20'}`}
             >
               <p className={`text-sm font-semibold leading-snug ${isActionDelayed ? 'text-red-900' : 'text-indigo-900'}`}>
@@ -493,18 +530,42 @@ export default function LeadPanel({
               Registrar ação
             </button>
             <div className="flex gap-2">
-              <button
-                onClick={handleExecutarAcao}
-                disabled={executando}
-                className="flex-1 text-xs font-semibold text-white py-1.5 rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50"
-                style={{ backgroundColor: '#6366f1' }}
-              >
-                {executando ? 'Executando...' : 'Executar ação'}
-              </button>
+              {precisaLiberar ? (
+                /* Trava n8n→motor: liberar é um passo humano separado do
+                   "Executar ação" — depois disso o motor REAL pode enviar
+                   e-mails automaticamente (MODO_ENSAIO=false). */
+                <button
+                  onClick={handleLiberarMotor}
+                  disabled={liberando}
+                  className={`flex-1 text-xs font-semibold py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
+                    confirmandoLiberar
+                      ? 'text-black bg-amber-400 hover:bg-amber-300'
+                      : 'text-amber-300 bg-amber-500/15 border border-amber-500/40 hover:bg-amber-500/25'
+                  }`}
+                >
+                  {liberando ? 'Liberando...' : confirmandoLiberar ? 'Confirmar liberação?' : 'Liberar para o motor'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleExecutarAcao}
+                  disabled={executando}
+                  className="flex-1 text-xs font-semibold text-white py-1.5 rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: '#6366f1' }}
+                >
+                  {executando ? 'Executando...' : 'Executar ação'}
+                </button>
+              )}
               <button className="flex-1 text-xs font-medium text-slate-300 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors">
                 Gerar mensagem
               </button>
             </div>
+            {confirmandoLiberar && !liberando && (
+              <p className="text-[11px] text-amber-400 mt-2 leading-snug">
+                Isso entrega o lead ao motor REAL: a partir da liberação, os e-mails da
+                cadência são enviados de verdade (automaticamente e via “Executar ação”).
+                Clique de novo para confirmar.
+              </p>
+            )}
             {feedbackAcao && (
               <p className={`text-xs mt-2 ${feedbackAcao.startsWith('✓') ? 'text-green-400' : 'text-red-500'}`}>
                 {feedbackAcao}

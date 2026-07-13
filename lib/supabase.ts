@@ -36,6 +36,9 @@ export type Lead = {
   followups_enviados?: number
   origem: string
   hubspot_id?: string
+  // Trava de migração n8n→motor (migration 0001): os fluxos do engine só agem
+  // em leads owner='engine'. Liberação é passo humano deliberado no LeadPanel.
+  owner?: 'n8n' | 'engine'
   perdido: boolean
   perdido_motivo?: string
   created_at: string
