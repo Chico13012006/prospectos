@@ -378,13 +378,28 @@ export async function getLeadsPorResponsavel() {
     .select('id, nome')
   const { data: leads, error: errL } = await supabase
     .from('leads')
-    .select('responsavel_id, estagio')
+    .select('responsavel_id, responsavel_nome, estagio')
   if (errU || errL || !usuarios || !leads) return []
 
-  return usuarios.map(u => ({
-    nome: u.nome,
-    total: leads.filter(l => l.responsavel_id === u.id).length,
-    reunioes: leads.filter(l => l.responsavel_id === u.id && l.estagio === 'reuniao_agendada').length,
-    interessados: leads.filter(l => l.responsavel_id === u.id && l.estagio === 'interessado').length,
-  }))
+  // Mesmo padrão do filtroResponsavelOr, aplicado em memória: casa por FK
+  // (responsavel_id) OU por prefixo do nome legado do CSV ("Francisco" →
+  // "Francisco Rufino"). `responsavel_id` NÃO é fonte de verdade hoje —
+  // nenhum fluxo do app grava essa coluna; todos os leads vieram do import
+  // HubSpot, que só preenche responsavel_nome.
+  const doResponsavel = (
+    l: { responsavel_id?: string | null; responsavel_nome?: string | null },
+    u: { id: string; nome: string },
+  ) =>
+    l.responsavel_id === u.id ||
+    (!!l.responsavel_nome && l.responsavel_nome.toLowerCase().startsWith(u.nome.toLowerCase()))
+
+  return usuarios.map(u => {
+    const meus = leads.filter(l => doResponsavel(l, u))
+    return {
+      nome: u.nome,
+      total: meus.length,
+      reunioes: meus.filter(l => l.estagio === 'reuniao_agendada').length,
+      interessados: meus.filter(l => l.estagio === 'interessado').length,
+    }
+  })
 }
