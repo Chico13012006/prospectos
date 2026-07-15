@@ -1,13 +1,12 @@
 'use client';
 
-import { useApp } from '@/contexts/AppContext';
 import Link from 'next/link';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, Sector, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import {
-  Users, MessageCircle, TrendingUp, ArrowRight, AlertTriangle,
+  Users, TrendingUp, ArrowRight,
   RefreshCw, Plus, Target, Calendar, Zap, Bot,
 } from 'lucide-react';
 import { getStatusBadgeClasses } from '@/lib/utils';
@@ -17,25 +16,6 @@ import { getLeadsStats, getLeadsRecentes, getLeadsPorResponsavel } from '@/lib/a
 import AnimatedKpiCard from '@/components/charts/AnimatedKpiCard';
 import ChartContainer from '@/components/charts/ChartContainer';
 import ChartTooltip from '@/components/charts/ChartTooltip';
-
-// Data real de hoje (YYYY-MM-DD) — sem datas fixas no app.
-const TODAY = new Date().toISOString().slice(0, 10);
-
-function daysBetween(a: string, b: string) {
-  return Math.floor(
-    (new Date(b.substring(0, 10)).getTime() - new Date(a.substring(0, 10)).getTime()) /
-    (1000 * 60 * 60 * 24)
-  );
-}
-
-const funnelSteps = [
-  { label: 'Encontrados', value: 1248, pct: '100%', color: '#4f46e5', w: 100 },
-  { label: 'Qualificados', value: 684, pct: '54,8%', color: '#7c3aed', w: 88 },
-  { label: 'Enviados', value: 522, pct: '41,8%', color: '#0891b2', w: 74 },
-  { label: 'Responderam', value: 74, pct: '14,2%', color: '#059669', w: 56 },
-  { label: 'Interesse identificado', value: 21, pct: '4,0%', color: '#d97706', w: 38 },
-  { label: 'Encaminhados', value: 18, pct: '3,2%', color: '#16a34a', w: 26 },
-];
 
 const followUpBars = [
   { etapa: '1º contato', respostas: 28 },
@@ -148,8 +128,6 @@ const NICHO_DONUT_CORES: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const { empresas, abordagens, respostas, followUps } = useApp();
-
   const [leadsData, setLeadsData] = useState<any[]>([])
   const [leadsRecentes, setLeadsRecentes] = useState<any[]>([])
   const [sdrDataSupabase, setSdrDataSupabase] = useState<any[]>([])
@@ -175,15 +153,9 @@ export default function DashboardPage() {
     carregarDash()
   }, [])
 
-  const leadsEncontrados = leadsData.length > 0 ? leadsData.length : empresas.length;
-  const leadsQualificados = leadsData.length > 0
-    ? leadsData.filter((l: any) => l.estagio !== 'novos_leads').length
-    : empresas.filter(e => e.status !== 'novo' && !e.blacklist && e.status !== 'descartado').length;
-  const mensagensEnviadas = abordagens.length;
-  const respostasRecebidas = respostas.length;
-  const leadsEncaminhados = leadsData.length > 0
-    ? leadsData.filter((l: any) => l.estagio === 'reuniao_agendada').length
-    : empresas.filter(e => e.estagio_pipeline === 'reuniao_agendada' || e.status === 'respondeu_positivo').length;
+  const leadsEncontrados = leadsData.length;
+  const leadsQualificados = leadsData.filter((l: any) => l.estagio !== 'novos_leads').length;
+  const leadsEncaminhados = leadsData.filter((l: any) => l.estagio === 'reuniao_agendada').length;
 
   const nichoData = [
     { nicho: 'Logística', positivos: 2, responsavel: 'Francisco' },
@@ -191,27 +163,6 @@ export default function DashboardPage() {
     { nicho: 'Agro', positivos: 2, responsavel: 'Francisco' },
     { nicho: 'Indústria', positivos: 1, responsavel: 'Silmara' },
   ];
-
-  const leadsInteresseMock = empresas.filter(
-    e => e.status === 'respondeu_positivo' || e.status === 'pediu_mais_info'
-  ).slice(0, 5);
-
-  const sdrDataMock = ['Francisco', 'Silmara'].map(sdr => {
-    const leads = empresas.filter(e => e.responsavel === sdr);
-    const msgs = abordagens.filter(a => {
-      const emp = empresas.find(e => e.id === a.empresa_id);
-      return emp?.responsavel === sdr;
-    }).length;
-    const resps = respostas.filter(r => {
-      const emp = empresas.find(e => e.id === r.empresa_id);
-      return emp?.responsavel === sdr;
-    }).length;
-    const reunioes = leads.filter(e => e.estagio_pipeline === 'reuniao_agendada').length;
-    const taxa = msgs > 0 ? Math.round((resps / msgs) * 100) : 0;
-    return { sdr, leads: leads.length, msgs, resps, taxa, reunioes };
-  });
-
-  const atrasados = followUps.filter(f => f.status === 'atrasado').length;
 
   function calcularFunil(data: any[]) {
     const total = data.length || 1
@@ -230,31 +181,20 @@ export default function DashboardPage() {
     ]
   }
 
-  const activeFunnelSteps = leadsData.length > 0 ? calcularFunil(leadsData) : funnelSteps
+  const activeFunnelSteps = calcularFunil(leadsData)
 
-  const activeFila = leadsRecentes.length > 0
-    ? leadsRecentes.slice(0, 5).map((l: any) => ({
-        id: l.id,
-        nome: l.empresa,
-        segmento: l.segmento,
-        // Nome do responsável, nunca o UUID: usuario via FK quando existir,
-        // senão o nome legado do CSV (responsavel_id é null em 100% dos leads).
-        responsavel: l.usuarios?.nome ?? l.responsavel_nome ?? '',
-        estagio: l.estagio,
-        badge: l.estagio === 'reuniao_agendada' ? 'Encaminhado' : l.estagio === 'novos_leads' ? 'Novo' : 'Pendente',
-      }))
-    : leadsInteresseMock.map(e => ({
-        id: e.id,
-        nome: e.nome,
-        segmento: e.segmento,
-        responsavel: e.responsavel,
-        estagio: e.estagio_pipeline,
-        badge: e.estagio_pipeline === 'reuniao_agendada' ? 'Encaminhado' : e.status === 'pediu_mais_info' ? 'Novo' : 'Pendente',
-      }))
+  const activeFila = leadsRecentes.slice(0, 5).map((l: any) => ({
+    id: l.id,
+    nome: l.empresa,
+    segmento: l.segmento,
+    // Nome do responsável, nunca o UUID: usuario via FK quando existir,
+    // senão o nome legado do CSV (responsavel_id é null em 100% dos leads).
+    responsavel: l.usuarios?.nome ?? l.responsavel_nome ?? '',
+    estagio: l.estagio,
+    badge: l.estagio === 'reuniao_agendada' ? 'Encaminhado' : l.estagio === 'novos_leads' ? 'Novo' : 'Pendente',
+  }))
 
-  const activeSdrData = sdrDataSupabase.length > 0
-    ? sdrDataSupabase.map((s: any) => ({ sdr: s.nome, leads: s.total, msgs: 0, resps: 0, taxa: 0, reunioes: s.reunioes }))
-    : sdrDataMock
+  const activeSdrData = sdrDataSupabase.map((s: any) => ({ sdr: s.nome, leads: s.total, msgs: 0, resps: 0, taxa: 0, reunioes: s.reunioes }))
 
   return (
     <div className="p-6 space-y-5">
@@ -294,13 +234,11 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* 5 KPI Cards com sparkline animada (contagem + entrada) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
+      {/* 3 KPI Cards com sparkline animada (contagem + entrada) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
         {[
           { label: 'Leads Encontrados', value: leadsEncontrados, pct: '+12%', icon: Users, color: '#6366f1', iconColor: 'text-indigo-400', iconBg: 'bg-indigo-500/20' },
           { label: 'Leads Qualificados', value: leadsQualificados, pct: '+8%', icon: Target, color: '#7c3aed', iconColor: 'text-violet-400', iconBg: 'bg-violet-500/20' },
-          { label: 'Mensagens Enviadas', value: mensagensEnviadas, pct: '+23%', icon: MessageCircle, color: '#06b6d4', iconColor: 'text-cyan-400', iconBg: 'bg-cyan-500/20' },
-          { label: 'Respostas Recebidas', value: respostasRecebidas, pct: '+5%', icon: TrendingUp, color: '#10b981', iconColor: 'text-emerald-400', iconBg: 'bg-emerald-500/20' },
           { label: 'Leads Encaminhados', value: leadsEncaminhados, pct: '+40%', icon: Calendar, color: '#f59e0b', iconColor: 'text-amber-400', iconBg: 'bg-amber-500/20' },
         ].map((kpi) => (
           <AnimatedKpiCard
@@ -401,8 +339,8 @@ export default function DashboardPage() {
         </ChartContainer>
       </div>
 
-      {/* Nicho + Leads interesse + Alertas */}
-      <div className="grid grid-cols-3 gap-5">
+      {/* Nicho + Leads interesse */}
+      <div className="grid grid-cols-2 gap-5">
         {/* Distribuição por nicho */}
         <ChartContainer
           title="Distribuição por nicho"
@@ -462,34 +400,6 @@ export default function DashboardPage() {
           </Link>
         </ChartContainer>
 
-        {/* Alertas da automação */}
-        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover animate-in stagger-9">
-          <h2 className="font-semibold text-slate-200 mb-3 flex items-center gap-2">
-            <AlertTriangle size={16} className="text-amber-500" />
-            Alertas da automação
-          </h2>
-          <div className="space-y-2.5">
-            <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 hover-pop">
-              <span className="shrink-0">⚠️</span>
-              <p className="text-sm text-red-400">
-                {atrasados} automações com baixa taxa de resposta
-              </p>
-            </div>
-            <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 hover-pop">
-              <span className="shrink-0">🟡</span>
-              <p className="text-sm text-amber-400">
-                12 leads com interesse identificado aguardando ação
-              </p>
-            </div>
-            <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 hover-pop">
-              <span className="shrink-0">🔵</span>
-              <p className="text-sm text-blue-400">1 nicho sem responsável definido</p>
-            </div>
-          </div>
-          <Link href="/configuracoes" className="mt-3 text-xs text-indigo-400 hover:underline flex items-center gap-1">
-            Ver todos os alertas <ArrowRight size={11} />
-          </Link>
-        </div>
       </div>
 
       {/* Evolução de prospecções */}

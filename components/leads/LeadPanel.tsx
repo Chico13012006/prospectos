@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useApp } from '@/contexts/AppContext';
 import {
   X, Star, ExternalLink, Mail, Phone,
   MessageSquare, Bot, User, ArrowRight, CheckCircle,
-  Zap, FileText, Bell, Loader2, Clock, Plus,
+  FileText, Bell, Loader2, Clock, Plus,
 } from 'lucide-react';
 import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatDate, formatDateTime } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
@@ -25,32 +24,6 @@ const STAGES = [
   { id: 'interessado', label: 'Interessado', color: '#8b5cf6' },
   { id: 'reuniao_agendada', label: 'Reunião Agendada', color: '#22c55e' },
 ] as const;
-
-const AI_ACTIONS: Record<string, { action: string; reason: string }> = {
-  'emp-001': { action: 'Executar Follow-up 3 via E-mail', reason: 'Leads similares tiveram 22% mais respostas com envio de case técnico após D7.' },
-  'emp-002': { action: 'Executar Follow-up 4 via Telefone', reason: 'Petróleo/Mineração responde melhor a contato humano nesta etapa. Taxa 3,4x maior.' },
-  'emp-003': { action: 'Confirmar reunião e enviar proposta', reason: 'Lead com interesse confirmado. Proposta deve ser enviada em até 48h.' },
-  'emp-004': { action: 'Iniciar cadência Agro via WhatsApp', reason: 'Leads do segmento Agro respondem 31% mais ao WhatsApp como primeiro contato.' },
-  'emp-005': { action: 'Executar Follow-up 2 via LinkedIn', reason: 'Indústria responde bem ao segundo toque após 3 dias. Taxa de 12% no D3.' },
-  'emp-006': { action: 'Aguardar Q4 — sem orçamento', reason: 'Lead informou que orçamento está congelado. Reativar em outubro.' },
-  'emp-007': { action: 'Enviar case de operação médio porte', reason: 'Lead pediu cases de 50-200 colaboradores. Envio rápido aumenta 47% a chance de reunião.' },
-  'emp-008': { action: 'Enviar case de rastreamento bovino', reason: 'Lead pediu material específico. Alta probabilidade de avanço após recebimento.' },
-  'emp-009': { action: 'Aguardar até meados de julho', reason: 'Lead pediu recontato após parada programada. Ação prematura pode gerar opt-out.' },
-  'emp-010': { action: 'Reativar em agosto 2026', reason: 'Cadência finalizada sem resposta. Programada para reativação em 90 dias.' },
-};
-
-const AI_SUMMARIES: Record<string, string> = {
-  'emp-001': 'Empresa do setor logístico com operação de cross-docking em São Paulo. Decisor é Carlos Mendes, Diretor de Operações. Potencial para rastreamento de ativos em docas de distribuição com RFID.',
-  'emp-002': 'Planta em Macaé com 200+ colaboradores no setor de Petróleo. Roberto Alves é o ponto de contato. Alto potencial para rastreamento de EPIs e equipamentos de campo.',
-  'emp-003': 'Operação de mineração com nova planta em Itabira. Adriana Santos demonstrou interesse positivo e pediu proposta para projeto piloto de rastreamento de EPIs e ferramentas.',
-  'emp-004': 'Lead gerado via automação. Paulo Ferreira, CEO, prefere WhatsApp. Empresa em fase de avaliação de soluções para rastreamento no campo agro.',
-  'emp-005': 'Empresa metalúrgica em Santo André. Marcos Oliveira, Gerente Industrial, é o contato principal. Potencial para rastreamento de ferramentas e controle de estoque.',
-  'emp-006': 'Gerente de TI informou que orçamento para TI está congelado até Q4. Candidata a reativação em outubro com nova proposta de valor.',
-  'emp-007': 'Contato feito em evento do setor. Antônio Costa, Gerente de Manutenção, pediu cases de operações de 50-200 colaboradores. Alta probabilidade de avanço com material certo.',
-  'emp-008': 'Granja com 12.000 cabeças bovinas em Uberlândia. Luciana Pereira pediu case de rastreamento de rebanho. Oportunidade no agronegócio de precisão.',
-  'emp-009': 'Grande operação de minério de ferro no Pará. Daniel Almeida pediu recontato para julho após parada programada de manutenção.',
-  'emp-010': 'Transportadora em Campinas sem resposta após cadência completa. Programada para reativação em agosto 2026.',
-};
 
 // Adapta um Lead do Supabase para o shape Empresa usado pelo layout
 function leadToEmpresa(lead: Lead): Empresa {
@@ -179,7 +152,6 @@ export default function LeadPanel({
   usingSupabase?: boolean;
   contexto?: 'pipeline' | 'base';
 }) {
-  const { getTimelineForEmpresa } = useApp();
   const selectedId = leadId;
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
@@ -354,12 +326,8 @@ export default function LeadPanel({
     }
   }
 
-  // Timeline mock — usada quando o Supabase não é a fonte ativa ou como fallback de erro
-  const fullMockTimeline = selectedId
-    ? [...getTimelineForEmpresa(selectedId)].reverse()
-    : [];
-  const mockTimeline = fullMockTimeline.slice(0, 6);
-  const showMockTimeline = !usingSupabase || interacoesError;
+  // Sem fonte de dados ou erro no fetch: mostra erro honesto (nunca timeline inventada).
+  const historicoIndisponivel = !usingSupabase || interacoesError;
 
   const panelTimeSince = selectedEmpresa
     ? (selectedEmpresa.ultimo_contato
@@ -523,7 +491,7 @@ export default function LeadPanel({
               className={`w-full text-left rounded-xl px-3 py-2 mb-2 transition-colors disabled:opacity-60 ${isActionDelayed ? 'bg-red-500/10 hover:bg-red-500/20' : 'bg-indigo-500/10 hover:bg-indigo-500/20'}`}
             >
               <p className={`text-sm font-semibold leading-snug ${isActionDelayed ? 'text-red-900' : 'text-indigo-900'}`}>
-                {selectedEmpresa.observacoes ?? AI_ACTIONS[selectedEmpresa.id]?.action ?? 'Executar próxima etapa da cadência'}
+                {selectedEmpresa.observacoes ?? 'Executar próxima etapa da cadência'}
               </p>
             </button>
             <button className="w-full text-xs font-medium text-slate-300 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors mb-2">
@@ -580,7 +548,7 @@ export default function LeadPanel({
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Resumo · IA</span>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed line-clamp-3">
-              {AI_SUMMARIES[selectedEmpresa.id] ?? (selectedEmpresa.observacoes ?? 'Sem resumo disponível.')}
+              {selectedEmpresa.observacoes ?? 'Sem resumo disponível.'}
             </p>
           </div>
 
@@ -611,43 +579,8 @@ export default function LeadPanel({
                 Ver tudo <ArrowRight size={10} />
               </button>
             </div>
-            {showMockTimeline ? (
-              mockTimeline.length === 0 ? (
-                <p className="text-xs text-slate-500">Nenhuma interação registrada.</p>
-              ) : (
-                <div className="space-y-2.5">
-                  {mockTimeline.map((entry, i) => (
-                    <div key={i} className="flex items-start gap-2.5">
-                      <div className="w-5 h-5 rounded-full bg-[#252b3b] flex items-center justify-center shrink-0 mt-0.5">
-                        {entry.kind === 'abordagem' && (
-                          entry.item.origem_acao === 'automatico'
-                            ? <Bot size={10} className="text-blue-500" />
-                            : <User size={10} className="text-green-500" />
-                        )}
-                        {entry.kind === 'resposta' && <MessageSquare size={10} className="text-green-400" />}
-                        {entry.kind === 'followup' && <CheckCircle size={10} className="text-green-400" />}
-                        {entry.kind === 'webhook' && <Zap size={10} className="text-purple-500" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs text-slate-300">
-                          {entry.kind === 'abordagem' && `Abordagem via ${entry.item.canal}`}
-                          {entry.kind === 'resposta' && 'Resposta recebida'}
-                          {entry.kind === 'followup' && 'Follow-up registrado'}
-                          {entry.kind === 'webhook' && entry.item.evento.replace(/\s*--\s*etapa\s*\d+/gi, '')}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {new Date(entry.date).toLocaleDateString('pt-BR')}
-                          {entry.kind === 'abordagem' && (
-                            <span className="ml-1.5">
-                              {entry.item.origem_acao === 'automatico' ? '· IA' : '· Manual'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
+            {historicoIndisponivel ? (
+              <p className="text-xs text-red-400">Não foi possível carregar o histórico. Tente novamente.</p>
             ) : loadingInteracoes ? (
               <div className="flex items-center gap-2 text-slate-500 py-2">
                 <Loader2 size={13} className="animate-spin" />

@@ -48,3 +48,4 @@ backups/
 
 # Cache local da prospeccao free-tier (candidatos da RF + status por CNPJ)
 data/prospeccao/
+lote-*.log
