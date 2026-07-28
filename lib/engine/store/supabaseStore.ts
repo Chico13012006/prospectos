@@ -1,6 +1,12 @@
 // Implementação real do Store sobre o Supabase, usando o client de service role
 // (lib/supabase-admin.ts). Mapeia para as tabelas reais `leads`, `interacoes`,
-// `usuarios`. A trava owner='engine' é aplicada em TODA leitura de lote.
+// `usuarios`, `templates`. A trava owner='engine' é aplicada em TODA leitura de
+// lote.
+//
+// MULTI-TENANT (migration 0006): este Store é PRESO a uma organização, passada
+// no construtor. TODA leitura filtra e TODA escrita grava `organizacao_id`.
+// Como o client é service_role (bypassa RLS), esse filtro explícito é o que
+// garante o isolamento neste caminho — não é redundância, é obrigatório.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { getEngineConfig, OWNER_ENGINE } from '../config'
@@ -9,14 +15,21 @@ import type { Lead, NovaInteracao, TipoInteracaoEngine, UsuarioBasico } from '..
 import type { Store, TemplateEmail } from './store'
 
 export class SupabaseStore implements Store {
+  readonly organizacaoId: string
   private db: SupabaseClient
 
-  constructor(client?: SupabaseClient) {
+  constructor(organizacaoId: string, client?: SupabaseClient) {
+    this.organizacaoId = organizacaoId
     this.db = client ?? createSupabaseAdminClient()
   }
 
   async buscarLead(id: string): Promise<Lead | null> {
-    const { data, error } = await this.db.from('leads').select('*').eq('id', id).maybeSingle()
+    const { data, error } = await this.db
+      .from('leads')
+      .select('*')
+      .eq('id', id)
+      .eq('organizacao_id', this.organizacaoId)
+      .maybeSingle()
     if (error) throw error
     return (data as Lead) ?? null
   }
@@ -25,6 +38,7 @@ export class SupabaseStore implements Store {
     const { data, error } = await this.db
       .from('leads')
       .select('*')
+      .eq('organizacao_id', this.organizacaoId)
       .eq('owner', OWNER_ENGINE)
       .ilike('contato_email', email.trim())
       .limit(1)
@@ -39,6 +53,7 @@ export class SupabaseStore implements Store {
     const porColuna = await this.db
       .from('leads')
       .select('*')
+      .eq('organizacao_id', this.organizacaoId)
       .eq('owner', OWNER_ENGINE)
       .ilike('dominio', d)
       .limit(1)
@@ -48,6 +63,7 @@ export class SupabaseStore implements Store {
     const porEmail = await this.db
       .from('leads')
       .select('*')
+      .eq('organizacao_id', this.organizacaoId)
       .eq('owner', OWNER_ENGINE)
       .ilike('contato_email', `%@${d}`)
       .limit(1)
@@ -59,7 +75,11 @@ export class SupabaseStore implements Store {
   }
 
   async atualizarLead(id: string, patch: Partial<Lead>): Promise<void> {
-    const { error } = await this.db.from('leads').update(patch).eq('id', id)
+    const { error } = await this.db
+      .from('leads')
+      .update(patch)
+      .eq('id', id)
+      .eq('organizacao_id', this.organizacaoId)
     if (error) throw error
   }
 
@@ -71,6 +91,7 @@ export class SupabaseStore implements Store {
       descricao: i.descricao,
       origem_acao: i.origem_acao,
       responsavel_id: i.responsavel_id ?? null,
+      organizacao_id: this.organizacaoId,
     })
     if (error) throw error
   }
@@ -79,6 +100,7 @@ export class SupabaseStore implements Store {
     const { count, error } = await this.db
       .from('interacoes')
       .select('id', { count: 'exact', head: true })
+      .eq('organizacao_id', this.organizacaoId)
       .eq('lead_id', leadId)
       .eq('tipo', tipo)
       .eq('origem_acao', 'ia')
@@ -92,6 +114,7 @@ export class SupabaseStore implements Store {
     const { count, error } = await this.db
       .from('interacoes')
       .select('id', { count: 'exact', head: true })
+      .eq('organizacao_id', this.organizacaoId)
       .in('tipo', ['abordagem', 'follow_up'])
       .eq('origem_acao', 'ia')
       .gte('created_at', inicioDia.toISOString())
@@ -100,12 +123,13 @@ export class SupabaseStore implements Store {
   }
 
   async leadsParaFollowup(): Promise<Lead[]> {
-    const cfg = await getEngineConfig()
+    const cfg = await getEngineConfig(this.organizacaoId)
     const agora = Date.now()
     const intervaloMs = cfg.horasEntreFollowups * 3600_000
     const { data, error } = await this.db
       .from('leads')
       .select('*')
+      .eq('organizacao_id', this.organizacaoId)
       .eq('owner', OWNER_ENGINE)
       .eq('perdido', false)
       .in('estagio', ESTAGIOS_EM_CADENCIA)
@@ -129,12 +153,13 @@ export class SupabaseStore implements Store {
   }
 
   async leadsEsgotadosSemResposta(): Promise<Lead[]> {
-    const cfg = await getEngineConfig()
+    const cfg = await getEngineConfig(this.organizacaoId)
     const agora = Date.now()
     const intervaloMs = cfg.horasEntreFollowups * 3600_000
     const { data, error } = await this.db
       .from('leads')
       .select('*')
+      .eq('organizacao_id', this.organizacaoId)
       .eq('owner', OWNER_ENGINE)
       .eq('perdido', false)
       .in('estagio', ESTAGIOS_EM_CADENCIA)
@@ -161,6 +186,7 @@ export class SupabaseStore implements Store {
       .from('usuarios')
       .select('id, nome, email')
       .eq('id', id)
+      .eq('organizacao_id', this.organizacaoId)
       .maybeSingle()
     if (error) throw error
     return (data as UsuarioBasico) ?? null
@@ -170,6 +196,7 @@ export class SupabaseStore implements Store {
     let q = this.db
       .from('templates')
       .select('assunto, corpo')
+      .eq('organizacao_id', this.organizacaoId)
       .eq('canal', 'email')
       .eq('tipo', tipo)
       .eq('ativo', true)

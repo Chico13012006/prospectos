@@ -3,7 +3,7 @@
 // owner='engine' garante que este endpoint só age em leads do motor.
 import { NextResponse } from 'next/server'
 import { autorizar } from '@/lib/engine/http'
-import { criarMotor, executarAcao } from '@/lib/engine'
+import { criarMotor, executarAcao, resolverOrgDoLead } from '@/lib/engine'
 
 export const runtime = 'nodejs'
 
@@ -22,7 +22,12 @@ export async function POST(req: Request) {
   }
 
   try {
-    const motor = criarMotor()
+    // Multi-tenant: descobre a org do lead e escopa o motor nela.
+    const org = await resolverOrgDoLead(body.lead_id)
+    if (!org) {
+      return NextResponse.json({ erro: 'Lead não encontrado' }, { status: 404 })
+    }
+    const motor = criarMotor(org)
     const r = await executarAcao(motor.store, motor.email, { leadId: body.lead_id })
     return NextResponse.json(r, { status: r.ok ? 200 : 409 })
   } catch (err) {

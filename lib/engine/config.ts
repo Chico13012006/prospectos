@@ -78,7 +78,9 @@ export interface ConfigMotor {
 const DIAS_SEMANA_PADRAO = [1, 2, 3, 4, 5]
 
 const CACHE_TTL_MS = 30_000
-let cache: { valor: ConfigMotor; expiraEm: number } | null = null
+// Cache por organização: a config de cadência agora é 1 linha por org
+// (migration 0006 — configuracoes_motor deixou de ser singleton id=1).
+const cachePorOrg = new Map<string, { valor: ConfigMotor; expiraEm: number }>()
 
 function configDoEnv(): ConfigMotor {
   return {
@@ -101,46 +103,62 @@ function parseDiasSemana(csv: unknown): number[] | null {
   return dias.length > 0 ? [...new Set(dias)].sort() : null
 }
 
-// Lê a config de cadência da tabela, com cache e fallback pro .env.
-// O motor NUNCA trava por causa da tela de config: qualquer erro aqui
-// (tabela vazia, Supabase fora, service key ausente) cai nos getters de env.
-export async function getEngineConfig(): Promise<ConfigMotor> {
+// Lê a config de cadência da tabela (por organização), com cache e fallback
+// pro .env. O motor NUNCA trava por causa da tela de config: qualquer erro aqui
+// (linha ausente, Supabase fora, service key ausente) cai nos getters de env.
+//
+// `organizacaoId` omitido = contexto sem org (scripts/testes com MemoryStore):
+// devolve só a config do .env, sem tocar no banco — mesmo comportamento seguro
+// de antes. Com org, lê a linha `configuracoes_motor` daquela organização.
+// USA service_role (bypassa RLS), por isso o filtro por organizacao_id abaixo
+// é obrigatório — é ele que garante o isolamento neste caminho.
+export async function getEngineConfig(organizacaoId?: string): Promise<ConfigMotor> {
+  const chave = organizacaoId ?? '__env__'
+  const cache = cachePorOrg.get(chave)
   if (cache && Date.now() < cache.expiraEm) return cache.valor
 
   let valor = configDoEnv()
-  try {
-    const db = createSupabaseAdminClient()
-    const { data, error } = await db
-      .from('configuracoes_motor')
-      .select('*')
-      .eq('id', 1)
-      .maybeSingle()
-    if (error) throw error
-    if (data) {
-      valor = {
-        maxEnviosDia: Number.isFinite(data.max_envios_dia) ? data.max_envios_dia : valor.maxEnviosDia,
-        horasEntreFollowups: Number.isFinite(data.horas_entre_followups) ? data.horas_entre_followups : valor.horasEntreFollowups,
-        maxFollowups: Number.isFinite(data.max_followups) ? data.max_followups : valor.maxFollowups,
-        intervaloEntreEnviosMin: Number.isFinite(data.intervalo_entre_envios_min) ? data.intervalo_entre_envios_min : valor.intervaloEntreEnviosMin,
-        diasSemanaAtivos: parseDiasSemana(data.dias_semana_ativos) ?? valor.diasSemanaAtivos,
-        closerEmailFallback: data.closer_email_fallback || valor.closerEmailFallback,
+  if (organizacaoId) {
+    try {
+      const db = createSupabaseAdminClient()
+      const { data, error } = await db
+        .from('configuracoes_motor')
+        .select('*')
+        .eq('organizacao_id', organizacaoId)
+        .maybeSingle()
+      if (error) throw error
+      if (data) {
+        valor = {
+          maxEnviosDia: Number.isFinite(data.max_envios_dia) ? data.max_envios_dia : valor.maxEnviosDia,
+          horasEntreFollowups: Number.isFinite(data.horas_entre_followups) ? data.horas_entre_followups : valor.horasEntreFollowups,
+          maxFollowups: Number.isFinite(data.max_followups) ? data.max_followups : valor.maxFollowups,
+          intervaloEntreEnviosMin: Number.isFinite(data.intervalo_entre_envios_min) ? data.intervalo_entre_envios_min : valor.intervaloEntreEnviosMin,
+          diasSemanaAtivos: parseDiasSemana(data.dias_semana_ativos) ?? valor.diasSemanaAtivos,
+          closerEmailFallback: data.closer_email_fallback || valor.closerEmailFallback,
+        }
       }
+    } catch (e) {
+      log.aviso('Config dinâmica indisponível — usando valores do .env como fallback.', {
+        erro: e instanceof Error ? e.message : String(e),
+      })
     }
-  } catch (e) {
-    log.aviso('Config dinâmica indisponível — usando valores do .env como fallback.', {
-      erro: e instanceof Error ? e.message : String(e),
-    })
   }
 
-  cache = { valor, expiraEm: Date.now() + CACHE_TTL_MS }
+  cachePorOrg.set(chave, { valor, expiraEm: Date.now() + CACHE_TTL_MS })
   return valor
 }
 
-// Chamado pela API depois de salvar, pra refletir a mudança na hora
-// (sem esperar o TTL do cache expirar sozinho).
-export function invalidarCacheConfig(): void {
-  cache = null
+// Chamado pela API depois de salvar, pra refletir a mudança na hora (sem
+// esperar o TTL). Sem argumento, limpa o cache de todas as organizações.
+export function invalidarCacheConfig(organizacaoId?: string): void {
+  if (organizacaoId) cachePorOrg.delete(organizacaoId)
+  else cachePorOrg.clear()
 }
 
 // A trava de migração: os fluxos só agem em leads com este owner.
 export const OWNER_ENGINE = 'engine' as const
+
+// Organização padrão (backfill da migration 0006). UUID FIXO — precisa bater
+// com o INSERT em db/migrations/0006_organizacoes_rls.sql. É a org da instância
+// single-tenant atual; scripts e o runner de cron usam como ponto de partida.
+export const ORG_PADRAO_ID = '00000000-0000-0000-0000-000000000001' as const

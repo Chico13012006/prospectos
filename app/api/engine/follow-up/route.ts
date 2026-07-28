@@ -4,7 +4,7 @@
 // o Fluxo 4, e ?forcar=1 para ignorar a checagem de dia útil.
 import { NextResponse } from 'next/server'
 import { autorizar } from '@/lib/engine/http'
-import { criarMotor, cadenciaDiaria, followUp } from '@/lib/engine'
+import { criarMotor, cadenciaTodasOrgs, followUp, listarOrganizacoesAtivas } from '@/lib/engine'
 
 export const runtime = 'nodejs'
 
@@ -15,12 +15,18 @@ async function executar(req: Request) {
   const forcar = url.searchParams.get('forcar') === '1'
   const soFollowup = url.searchParams.get('modo') === 'followup'
   try {
-    const motor = criarMotor()
+    // Multi-tenant: o cron varre TODAS as organizações ativas (não tem
+    // auth.uid()); cada org roda com seu motor escopado.
     if (soFollowup) {
-      const r = await followUp(motor.store, motor.email)
-      return NextResponse.json(r)
+      const orgs = await listarOrganizacoesAtivas()
+      const porOrg: Record<string, unknown> = {}
+      for (const org of orgs) {
+        const motor = criarMotor(org)
+        porOrg[org] = await followUp(motor.store, motor.email)
+      }
+      return NextResponse.json({ organizacoes: orgs.length, porOrg })
     }
-    const r = await cadenciaDiaria(motor, { forcar })
+    const r = await cadenciaTodasOrgs({ forcar })
     return NextResponse.json(r)
   } catch (err) {
     console.error('[engine/follow-up] erro:', err)

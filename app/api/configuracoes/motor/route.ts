@@ -2,9 +2,22 @@
 // Autenticação por sessão de usuário logado (mesmo padrão de /api/perfil) —
 // é uma tela do app, NÃO um endpoint interno do motor (nada de x-internal-secret).
 import { NextRequest, NextResponse } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
 import { invalidarCacheConfig } from '@/lib/engine/config';
+
+// Organização do usuário logado (fonte de verdade: perfis.organizacao_id).
+// service_role bypassa RLS, então o filtro por org no resto da rota é o que
+// mantém o isolamento — cada usuário só lê/grava a config da PRÓPRIA org.
+async function organizacaoDoUsuario(admin: SupabaseClient, userId: string): Promise<string | null> {
+  const { data } = await admin
+    .from('perfis')
+    .select('organizacao_id')
+    .eq('id', userId)
+    .maybeSingle();
+  return (data?.organizacao_id as string) ?? null;
+}
 
 const DEFAULTS = {
   maxEnviosDia: 40,
@@ -32,10 +45,13 @@ export async function GET() {
     if (!user) return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 });
 
     const admin = createSupabaseAdminClient();
+    const org = await organizacaoDoUsuario(admin, user.id);
+    if (!org) return NextResponse.json({ erro: 'Usuário sem organização' }, { status: 400 });
+
     const { data, error } = await admin
       .from('configuracoes_motor')
       .select('*')
-      .eq('id', 1)
+      .eq('organizacao_id', org)
       .maybeSingle();
     if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
 
@@ -55,7 +71,7 @@ export async function GET() {
   }
 }
 
-// POST — grava a config (upsert do singleton id=1) e invalida o cache do motor.
+// POST — grava a config (upsert por organizacao_id) e invalida o cache do motor.
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createSupabaseServerClient();
@@ -92,8 +108,11 @@ export async function POST(req: NextRequest) {
     const atualizadoPor = user.email ?? user.id;
 
     const admin = createSupabaseAdminClient();
+    const org = await organizacaoDoUsuario(admin, user.id);
+    if (!org) return NextResponse.json({ erro: 'Usuário sem organização' }, { status: 400 });
+
     const { error } = await admin.from('configuracoes_motor').upsert({
-      id: 1,
+      organizacao_id: org,
       max_envios_dia: maxEnviosDia,
       horas_entre_followups: horasEntreFollowups,
       max_followups: maxFollowups,
@@ -102,11 +121,11 @@ export async function POST(req: NextRequest) {
       closer_email_fallback: closerEmailFallback ? String(closerEmailFallback).trim() : null,
       atualizado_em: atualizadoEm,
       atualizado_por: atualizadoPor,
-    });
+    }, { onConflict: 'organizacao_id' });
     if (error) return NextResponse.json({ erro: error.message }, { status: 400 });
 
-    // Reflete a mudança no motor na hora, sem esperar o TTL do cache.
-    invalidarCacheConfig();
+    // Reflete a mudança no motor na hora (só a org afetada), sem esperar o TTL.
+    invalidarCacheConfig(org);
 
     return NextResponse.json({ ok: true, atualizadoEm, atualizadoPor });
   } catch {

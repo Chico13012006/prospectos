@@ -15,7 +15,7 @@ async function main() {
   const { SupabaseStore } = await import('../lib/engine/store/supabaseStore')
   const { GmailProvider, lerCredenciaisGmail } = await import('../lib/engine/email/gmailProvider')
   const { criarMotor, cadenciaDiaria } = await import('../lib/engine')
-  const { engineConfig } = await import('../lib/engine/config')
+  const { engineConfig, ORG_PADRAO_ID } = await import('../lib/engine/config')
   type Store = import('../lib/engine/store/store').Store
   type EmailProvider = import('../lib/engine/email/provider').EmailProvider
 
@@ -33,11 +33,12 @@ async function main() {
   const sk = process.env.SUPABASE_SERVICE_ROLE_KEY
   const key = sk && !sk.includes('sua_') ? sk : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
-  const real: Store = new SupabaseStore(client)
+  const real: Store = new SupabaseStore(ORG_PADRAO_ID, client)
 
   // Wrapper DRY-RUN: leituras passam adiante; escritas só logam.
   const escritas: string[] = []
   const dryStore: Store = {
+    organizacaoId: real.organizacaoId,
     buscarLead: (id) => real.buscarLead(id),
     buscarLeadPorEmail: (e) => real.buscarLeadPorEmail(e),
     buscarLeadPorDominio: (d) => real.buscarLeadPorDominio(d),
@@ -76,7 +77,7 @@ async function main() {
   console.log(`${C.dim}Gmail: ${cred.user} | MODO_ENSAIO=${engineConfig.modoEnsaio} | maxFollowups=${engineConfig.maxFollowups} | maxEnviosDia=${engineConfig.maxEnviosDia}${C.r}`)
   console.log(C.dim + '─'.repeat(70) + C.r)
 
-  const motor = criarMotor({ store: dryStore, email })
+  const motor = criarMotor(ORG_PADRAO_ID, { store: dryStore, email })
   const r = await cadenciaDiaria(motor, { forcar: true })
 
   console.log(C.dim + '─'.repeat(70) + C.r)

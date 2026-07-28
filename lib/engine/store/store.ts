@@ -10,6 +10,11 @@ export interface TemplateEmail {
 }
 
 export interface Store {
+  // Organização à qual este Store está preso (multi-tenant, migration 0006).
+  // O SupabaseStore filtra/grava sempre esta org; o MemoryStore (testes) não
+  // usa org e deixa undefined. Os fluxos leem daqui p/ pedir a config da org
+  // certa (getEngineConfig(store.organizacaoId)).
+  readonly organizacaoId?: string
   buscarLead(id: string): Promise<Lead | null>
   // Casa pelo e-mail EXATO do contato (case-insensitive).
   buscarLeadPorEmail(email: string): Promise<Lead | null>

@@ -109,10 +109,10 @@ function listarLote(leads: LeadDoLote[]) {
 async function main() {
   const { criarMotorReal } = await import('../lib/engine/scheduler')
   const { executarAcao } = await import('../lib/engine/flows/executarAcao')
-  const { engineConfig, getEngineConfig } = await import('../lib/engine/config')
+  const { engineConfig, getEngineConfig, ORG_PADRAO_ID } = await import('../lib/engine/config')
 
   const ensaio = engineConfig.modoEnsaio
-  const cfg = await getEngineConfig()
+  const cfg = await getEngineConfig(ORG_PADRAO_ID)
   const intervaloMin = cfg.intervaloEntreEnviosMin
   const intervaloMs = intervaloMin * 60_000
 

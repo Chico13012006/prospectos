@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { createClient } from '@supabase/supabase-js';
 
 export async function GET() {
   try {
@@ -11,16 +10,22 @@ export async function GET() {
 
     const supabaseAdmin = createSupabaseAdminClient();
 
+    // Multi-tenant: só lista a equipe da PRÓPRIA organização de quem chama.
+    // service_role bypassa RLS, então filtramos organizacao_id no código.
+    const { data: convidante } = await supabaseAdmin
+      .from('perfis').select('organizacao_id').eq('id', user.id).maybeSingle();
+    const org = convidante?.organizacao_id as string | undefined;
+    if (!org) return NextResponse.json({ erro: 'Usuário sem organização' }, { status: 400 });
+
     const { data: authData, error } = await supabaseAdmin.auth.admin.listUsers();
     if (error) return NextResponse.json({ erro: error.message }, { status: 400 });
 
     const { data: perfis } = await supabaseAdmin
-      .from('perfis').select('id, nome, role, nicho, avatar_url');
+      .from('perfis').select('id, nome, role, nicho, avatar_url').eq('organizacao_id', org);
 
-    const supabasePublic = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    // Só os usuários de auth que têm perfil NESTA organização entram na lista.
+    const idsDaOrg = new Set((perfis ?? []).map((p) => p.id));
+
     // Os leads são atribuídos a um responsável da tabela `usuarios`. Já os
     // membros da equipe são usuários de auth; a ligação entre os dois é feita
     // pelo e-mail. `responsavel_id` NÃO é fonte de verdade hoje (100% null):
@@ -28,10 +33,10 @@ export async function GET() {
     // ("Francisco Rufino") enquanto `usuarios.nome` é o curto ("Francisco").
     // Mesmo padrão de resolução de lib/api.ts (filtroResponsavelOr /
     // getLeadsPorResponsavel): casa por id OU prefixo case-insensitive do nome.
-    const { data: usuarios } = await supabasePublic
-      .from('usuarios').select('id, nome, email');
-    const { data: leads } = await supabasePublic
-      .from('leads').select('responsavel_id, responsavel_nome');
+    const { data: usuarios } = await supabaseAdmin
+      .from('usuarios').select('id, nome, email').eq('organizacao_id', org);
+    const { data: leads } = await supabaseAdmin
+      .from('leads').select('responsavel_id, responsavel_nome').eq('organizacao_id', org);
 
     const resolverUsuario = (l: { responsavel_id: string | null; responsavel_nome: string | null }) =>
       (usuarios ?? []).find(u =>
@@ -48,7 +53,7 @@ export async function GET() {
       leadsPorUsuario.set(usr.id, (leadsPorUsuario.get(usr.id) ?? 0) + 1);
     }
 
-    const membros = authData.users.map(u => {
+    const membros = authData.users.filter(u => idsDaOrg.has(u.id)).map(u => {
       const perfil = perfis?.find(p => p.id === u.id);
       // Membro auth -> SDR de `usuarios`: por e-mail igual quando bate, senão
       // pelo mesmo padrão de prefixo (usuarios.nome curto como prefixo do

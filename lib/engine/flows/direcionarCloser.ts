@@ -23,7 +23,7 @@ export async function direcionarCloser(
   }
 
   // Closer = responsável do lead; fallback configurado (tela ou CLOSER_EMAIL).
-  let closerEmail = (await getEngineConfig()).closerEmailFallback
+  let closerEmail = (await getEngineConfig(store.organizacaoId)).closerEmailFallback
   let closerNome = 'Closer'
   if (lead.responsavel_id) {
     const u = await store.buscarUsuario(lead.responsavel_id)

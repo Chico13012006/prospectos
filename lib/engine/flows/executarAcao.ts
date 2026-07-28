@@ -21,7 +21,7 @@ export async function executarAcao(
   email: EmailProvider,
   payload: { leadId: string },
 ): Promise<ResultadoAcao> {
-  const cfg = await getEngineConfig()
+  const cfg = await getEngineConfig(store.organizacaoId)
   const lead = await store.buscarLead(payload.leadId)
   if (!lead) {
     log.erro('Lead não encontrado', { leadId: payload.leadId })

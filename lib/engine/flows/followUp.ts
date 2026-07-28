@@ -24,7 +24,7 @@ export async function followUp(
   store: Store,
   email: EmailProvider,
 ): Promise<{ enviados: number; elegiveis: number; encerrados: number }> {
-  const cfg = await getEngineConfig()
+  const cfg = await getEngineConfig(store.organizacaoId)
   // Saída automática: quem esgotou os follow-ups (>= MAX) sem responder e já
   // passou do tempo de espera sai da esteira para 'sem_resposta' (terminal,
   // fora do board ativo). Reversível por ação manual. O motor PARA aqui — nunca

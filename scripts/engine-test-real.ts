@@ -46,7 +46,7 @@ async function main() {
   const { executarAcao } = await import('../lib/engine/flows/executarAcao')
   const { proximoEstagio, tipoDoEnvio } = await import('../lib/engine/templates')
   const { montarEmail } = await import('../lib/engine/mensagem')
-  const { engineConfig } = await import('../lib/engine/config')
+  const { engineConfig, ORG_PADRAO_ID } = await import('../lib/engine/config')
   type Store = import('../lib/engine/store/store').Store
   type EmailProvider = import('../lib/engine/email/provider').EmailProvider
   type Lead = import('../lib/engine/types').Lead
@@ -61,11 +61,12 @@ async function main() {
   const key = usandoService ? sk! : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
 
-  const real: Store = new SupabaseStore(client)
+  const real: Store = new SupabaseStore(ORG_PADRAO_ID, client)
 
   // 4) Wrapper DRY-RUN: leituras passam adiante (Supabase real); escritas só logam.
   const escritas: string[] = []
   const dryStore: Store = {
+    organizacaoId: real.organizacaoId,
     buscarLead: (id) => real.buscarLead(id),
     buscarLeadPorEmail: (e) => real.buscarLeadPorEmail(e),
     buscarLeadPorDominio: (d) => real.buscarLeadPorDominio(d),

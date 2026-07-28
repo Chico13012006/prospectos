@@ -1,5 +1,17 @@
-import { supabase, Lead, Interacao, Usuario, Template } from './supabase'
+import type { Lead, Interacao, Usuario, Template } from './supabase'
+import { createSupabaseBrowserClient } from './supabase-browser'
 import { ESTAGIOS_RESERVATORIO } from './pipeline-stages'
+
+// Camada de dados do browser. ANTES: usava o client anon "cru" de lib/supabase.ts
+// (createClient com anonKey, sessão em localStorage), que NÃO compartilhava o
+// cookie de sessão do login (feito via @supabase/ssr em lib/supabase-browser.ts)
+// — na prática, requisições anônimas. Isso é pré-requisito da RLS multi-tenant:
+// as policies dependem de auth.uid(), que só resolve se o client carregar a
+// sessão do usuário logado. Trocamos para o client baseado em cookie (SSR), que
+// é o MESMO usado no login, então auth.uid() passa a existir nas queries daqui.
+// Todos os consumidores de lib/api.ts são 'use client', então o client de
+// browser é seguro (as queries rodam no browser, em handlers/useEffect).
+const supabase = createSupabaseBrowserClient()
 
 // --- LEADS ---
 

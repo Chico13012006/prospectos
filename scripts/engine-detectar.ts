@@ -40,7 +40,7 @@ async function main() {
   const { detectarResposta } = await import('../lib/engine/flows/detectarResposta')
   const { direcionarCloser } = await import('../lib/engine/flows/direcionarCloser')
   const { Queue } = await import('../lib/engine/queue')
-  const { engineConfig } = await import('../lib/engine/config')
+  const { engineConfig, ORG_PADRAO_ID } = await import('../lib/engine/config')
   type Store = import('../lib/engine/store/store').Store
   type EmailProvider = import('../lib/engine/email/provider').EmailProvider
   type MensagemRecebida = import('../lib/engine/types').MensagemRecebida
@@ -61,11 +61,12 @@ async function main() {
   const usandoService = !!(sk && !sk.includes('sua_'))
   const key = usandoService ? sk! : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
-  const real: Store = new SupabaseStore(client)
+  const real: Store = new SupabaseStore(ORG_PADRAO_ID, client)
 
   // Em ensaio, intercepta escritas (não toca no banco).
   const escritas: string[] = []
   const dryStore: Store = {
+    organizacaoId: real.organizacaoId,
     buscarLead: (id) => real.buscarLead(id),
     buscarLeadPorEmail: (e) => real.buscarLeadPorEmail(e),
     buscarLeadPorDominio: (d) => real.buscarLeadPorDominio(d),

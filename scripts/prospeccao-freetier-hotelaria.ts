@@ -425,8 +425,9 @@ async function main() {
 
   // Imports tardios (depois do bootstrapEnv), como nos demais scripts do motor.
   const { SupabaseStore } = await import('../lib/engine/store/supabaseStore')
+  const { ORG_PADRAO_ID } = await import('../lib/engine/config')
   const { createSupabaseAdminClient } = await import('../lib/supabase-admin')
-  const store = new SupabaseStore()
+  const store = new SupabaseStore(ORG_PADRAO_ID)
   const db = createSupabaseAdminClient()
 
   const cache = await carregarOuGerarCandidatos()

@@ -15,19 +15,22 @@
 import { schedule, validate } from 'node-cron'
 import { criarMotor, cadenciaDiaria, type Motor } from './index'
 import { GmailProvider, lerCredenciaisGmail } from './email/gmailProvider'
-import { engineConfig } from './config'
+import { engineConfig, ORG_PADRAO_ID } from './config'
 import { log } from './logger'
 
 // Monta o motor "real": usa o GmailProvider quando há credenciais, para que o
 // detectarResposta leia a CAIXA REAL mesmo em ensaio (a fábrica padrão cairia no
 // provedor simulado, de caixa vazia). O envio continua gated por MODO_ENSAIO.
-export function criarMotorReal(): Motor {
+//
+// Escopado à organização padrão (single-tenant): a caixa do Gmail é única e
+// pertence à empresa dona da instância. Multi-inbox por org é tarefa separada.
+export function criarMotorReal(organizacaoId: string = ORG_PADRAO_ID): Motor {
   const cred = lerCredenciaisGmail()
   if (!cred) {
     log.aviso('Sem GMAIL_USER/GMAIL_APP_PASSWORD — usando provedor padrão (caixa simulada).')
-    return criarMotor()
+    return criarMotor(organizacaoId)
   }
-  return criarMotor({ email: new GmailProvider(cred) })
+  return criarMotor(organizacaoId, { email: new GmailProvider(cred) })
 }
 
 // Executa a cadência diária uma vez. forcar=true ignora a checagem de dia útil.
