@@ -11,6 +11,7 @@ import {
   Calendar,
   Users,
   FileText,
+  Workflow,
   Settings,
   Zap,
   Bot,
@@ -27,6 +28,7 @@ const mainNav = [
   { href: '/inteligencia-comercial', icon: BrainCircuit, label: 'Inteligência Comercial' },
   { href: '/equipe', icon: Users, label: 'Equipe' },
   { href: '/templates', icon: FileText, label: 'Templates' },
+  { href: '/workflows', icon: Workflow, label: 'Workflows' },
 ];
 
 interface PerfilSidebar {
