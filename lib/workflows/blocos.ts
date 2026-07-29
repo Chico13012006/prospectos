@@ -86,23 +86,46 @@ export const acaoCriarTarefa: Acao = {
   },
 }
 
-// --- AÇÃO: ramificar — SALTO CONDICIONAL no pipeline (Fase 4.5, entrega 2) ----
-// config: { condicao: BlocoConfig, destino: number }. Avalia a condição via o
-// registro; se PASSA, salta o pipeline para o passo `destino`; senão continua
-// para o próximo passo. É a ramificação DE VERDADE: o braço destino são passos
-// de topo, então esperas dentro dele SUSPENDEM normalmente — diferente da versão
-// síncrona antiga (rodava sub-ações inline e IGNORAVA esperas), que não cobria
-// o caso "aguardar → ramificar pelo resultado → aguardar de novo".
+// --- AÇÃO: ramificar (SÍNCRONO, legado) — A ou B por uma condição ------------
+// config: { condicao: BlocoConfig, entao: BlocoConfig[], senao: BlocoConfig[] }.
+// Avalia a condição e roda as ações do ramo escolhido, em sequência. As esperas
+// dentro de um ramo NÃO suspendem (só logam e são ignoradas). PRESERVADO INTACTO
+// por imutabilidade de versão: versões publicadas na Fase 3 podem ter congelado
+// este tipo com ESTE formato de config. Para o caso "aguardar → ramificar →
+// aguardar", use `saltar_se` (salto no pipeline), abaixo.
 export const acaoRamificar: Acao = {
   tipo: 'ramificar',
   async executar(ctx): Promise<ResultadoAcao> {
     const cond = ctx.config.condicao as BlocoConfig | undefined
     if (!cond?.tipo) throw new Error("ação 'ramificar' exige config.condicao")
+    const passou = await ctx.registro.obterCondicao(cond.tipo).avaliar(comConfig(ctx, cond.config ?? {}))
+    const ramo = (passou ? ctx.config.entao : ctx.config.senao) as BlocoConfig[] | undefined
+    await ctx.log('ramo_escolhido', { condicao: cond.tipo, passou, ramo: passou ? 'entao' : 'senao' })
+    for (const bloco of ramo ?? []) {
+      const res = await ctx.registro.obterAcao(bloco.tipo).executar(comConfig(ctx, bloco.config ?? {}))
+      if (res.tipo === 'esperar') await ctx.log('espera_em_ramo_ignorada', { bloco: bloco.tipo })
+    }
+    return { tipo: 'continuar' }
+  },
+}
+
+// --- AÇÃO: saltar_se — SALTO CONDICIONAL no pipeline (Fase 4.5, entrega 2) ----
+// config: { condicao: BlocoConfig, destino: number }. Avalia a condição via o
+// registro; se PASSA, salta o pipeline para o passo `destino`; senão continua
+// para o próximo passo. É a ramificação DE VERDADE: o braço destino são passos
+// de TOPO, então esperas dentro dele SUSPENDEM normalmente. Tipo NOVO (não
+// reaproveita 'ramificar', cujo formato de config é outro) — protege a
+// imutabilidade das versões já publicadas.
+export const acaoSaltarSe: Acao = {
+  tipo: 'saltar_se',
+  async executar(ctx): Promise<ResultadoAcao> {
+    const cond = ctx.config.condicao as BlocoConfig | undefined
+    if (!cond?.tipo) throw new Error("ação 'saltar_se' exige config.condicao")
     const destino = Number(ctx.config.destino)
     if (!Number.isInteger(destino) || destino < 0)
-      throw new Error("ação 'ramificar' exige config.destino (índice de passo inteiro >= 0)")
+      throw new Error("ação 'saltar_se' exige config.destino (índice de passo inteiro >= 0)")
     const passou = await ctx.registro.obterCondicao(cond.tipo).avaliar(comConfig(ctx, cond.config ?? {}))
-    await ctx.log('ramificacao_avaliada', { condicao: cond.tipo, passou, destino })
+    await ctx.log('salto_avaliado', { condicao: cond.tipo, passou, destino })
     return passou ? { tipo: 'saltar', para: destino } : { tipo: 'continuar' }
   },
 }
@@ -127,5 +150,6 @@ export function registrarBlocosPadrao(registro = new RegistroWorkflows()): Regis
     .registrarAcao(acaoEnviarEmail)
     .registrarAcao(acaoCriarTarefa)
     .registrarAcao(acaoRamificar)
+    .registrarAcao(acaoSaltarSe)
     .registrarAcao(acaoEncerrar)
 }

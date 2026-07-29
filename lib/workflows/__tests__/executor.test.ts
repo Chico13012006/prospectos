@@ -113,6 +113,34 @@ describe('executor de workflows', () => {
     expect(amb.emails).toEqual([{ leadId: 'lead-1', template: 'follow_up_1' }])
   })
 
+  it('ramificar (síncrono, legado): roda o ramo entao/senao inline conforme a condição', async () => {
+    const def: DefinicaoWorkflow = {
+      gatilho,
+      condicoes: [],
+      acoes: [{
+        tipo: 'ramificar',
+        config: {
+          condicao: { tipo: 'lead_respondeu', config: { respondeu: true } },
+          entao: [{ tipo: 'criar_tarefa', config: { titulo: 'Ligar (respondeu)' } }],
+          senao: [{ tipo: 'enviar_email', config: { template: 'follow_up_1' } }],
+        },
+      }],
+    }
+    const sA = new MemoryWorkflowStore(); const aA = new AmbienteFake()
+    aA.alvos = ['lead-1']; aA.respondeu.add('lead-1')
+    await publicarWorkflow(sA, def)
+    await processarTudo(sA, registro, aA)
+    expect(aA.tarefas).toHaveLength(1)
+    expect(aA.emails).toHaveLength(0)
+
+    const sB = new MemoryWorkflowStore(); const aB = new AmbienteFake()
+    aB.alvos = ['lead-2']
+    await publicarWorkflow(sB, def)
+    await processarTudo(sB, registro, aB)
+    expect(aB.emails).toHaveLength(1)
+    expect(aB.tarefas).toHaveLength(0)
+  })
+
   // Fluxo de aceite da Fase 4.5 (control-flow por SALTO no pipeline; as ações
   // finais 'atualizar status'/'notificar' chegam na entrega 3 — aqui uso as
   // ações disponíveis como stand-in, o que prova é o desvio de passo_atual):
@@ -125,10 +153,10 @@ describe('executor de workflows', () => {
     acoes: [
       { tipo: 'enviar_email', config: { template: 'primeiro_contato' } },
       { tipo: 'esperar', config: { dias: 3 } },
-      { tipo: 'ramificar', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: 8 } },
+      { tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: 8 } },
       { tipo: 'enviar_email', config: { template: 'follow_up_1' } },
       { tipo: 'esperar', config: { dias: 3 } },
-      { tipo: 'ramificar', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: 8 } },
+      { tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: 8 } },
       { tipo: 'criar_tarefa', config: { titulo: 'Ligar (sem resposta)' } },
       { tipo: 'encerrar', config: {} },
       { tipo: 'criar_tarefa', config: { titulo: 'Respondeu: atualizar status + notificar' } },
@@ -185,7 +213,7 @@ describe('executor de workflows', () => {
     const store = new MemoryWorkflowStore(); const amb = new AmbienteFake()
     amb.alvos = ['lead-1'] // não respondeu → condição {respondeu:false} passa → salta p/ si mesmo
     await publicarWorkflow(store, { gatilho, condicoes: [], acoes: [
-      { tipo: 'ramificar', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: false } }, destino: 0 } },
+      { tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: false } }, destino: 0 } },
     ] })
     await processarTudo(store, registro, amb)
     const ex = [...(store as unknown as { execucoes: Map<string, { status: string }> }).execucoes.values()][0]
