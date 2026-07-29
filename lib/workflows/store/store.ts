@@ -1,0 +1,60 @@
+// Interface de persistência do módulo de Workflows. O resto do módulo só conhece
+// esta interface — nunca o Supabase direto — para ser testável contra um
+// MemoryStore, no mesmo espírito do Store do motor de cadência (lib/engine).
+import type {
+  DefinicaoWorkflow,
+  Workflow,
+  WorkflowExecucao,
+  WorkflowExecucaoEvento,
+  WorkflowVersao,
+  StatusExecucao,
+} from '../types'
+
+// Campos do workflow que o versionamento pode alterar (o resto é imutável).
+export type PatchWorkflow = Partial<
+  Pick<Workflow, 'nome' | 'status' | 'versao_atual_id' | 'rascunho_definicao' | 'atualizado_em'>
+>
+
+export type PatchExecucao = Partial<
+  Pick<WorkflowExecucao, 'passo_atual' | 'status' | 'proxima_verificacao_em' | 'atualizado_em'>
+>
+
+export interface WorkflowStore {
+  // Organização à qual este Store está preso. O SupabaseStore filtra/grava
+  // sempre esta org (service_role bypassa RLS — o filtro no código é o que
+  // isola). O MemoryStore (testes) deixa undefined.
+  readonly organizacaoId?: string
+
+  // --- workflows ---
+  criarWorkflow(input: { nome: string; rascunho_definicao?: DefinicaoWorkflow | null }): Promise<Workflow>
+  buscarWorkflow(id: string): Promise<Workflow | null>
+  listarWorkflows(): Promise<Workflow[]>
+  atualizarWorkflow(id: string, patch: PatchWorkflow): Promise<void>
+
+  // --- versões (imutáveis) ---
+  // Próximo `numero` de versão para o workflow (max + 1; 1 se não houver).
+  proximoNumeroVersao(workflowId: string): Promise<number>
+  criarVersao(input: {
+    workflow_id: string
+    numero: number
+    definicao: DefinicaoWorkflow
+    publicado_por?: string | null
+  }): Promise<WorkflowVersao>
+  buscarVersao(id: string): Promise<WorkflowVersao | null>
+  listarVersoes(workflowId: string): Promise<WorkflowVersao[]>
+
+  // --- execuções ---
+  criarExecucao(input: {
+    workflow_id: string
+    versao_id: string
+    lead_id?: string | null
+    status?: StatusExecucao
+    proxima_verificacao_em?: string | null
+  }): Promise<WorkflowExecucao>
+  buscarExecucao(id: string): Promise<WorkflowExecucao | null>
+  atualizarExecucao(id: string, patch: PatchExecucao): Promise<void>
+
+  // --- eventos (log append-only) ---
+  registrarEvento(evento: WorkflowExecucaoEvento): Promise<void>
+  listarEventos(execucaoId: string): Promise<WorkflowExecucaoEvento[]>
+}
