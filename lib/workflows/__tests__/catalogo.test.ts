@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   ACOES,
+  CONDICOES,
   GATILHOS,
   acharBlocoDef,
   blocoPadrao,
@@ -14,8 +15,7 @@ describe('catálogo de blocos (UI)', () => {
   it('todo tipo do catálogo tem handler registrado no motor', () => {
     const reg = registrarBlocosPadrao()
     for (const g of GATILHOS) expect(() => reg.obterGatilho(g.tipo)).not.toThrow()
-    // condições/ações do catálogo também existem no registro
-    expect(() => reg.obterCondicao('lead_respondeu')).not.toThrow()
+    for (const c of CONDICOES) expect(() => reg.obterCondicao(c.tipo)).not.toThrow()
     for (const a of ACOES) expect(() => reg.obterAcao(a.tipo)).not.toThrow()
   })
 

@@ -5,6 +5,7 @@
 import type { Acao, Condicao, CtxExec, Gatilho, ResultadoAcao } from './registro'
 import { RegistroWorkflows } from './registro'
 import type { BlocoConfig } from './types'
+import { avaliarOperador, type Operador } from './operadores'
 
 // Helper: mesmo contexto, outro `config` (para blocos aninhados em 'ramificar').
 const comConfig = (ctx: CtxExec, config: Record<string, unknown>): CtxExec => ({ ...ctx, config })
@@ -31,6 +32,21 @@ export const condicaoLeadRespondeu: Condicao = {
     const esperado = ctx.config.respondeu !== false // default: espera que TENHA respondido
     const respondeu = await ctx.ambiente.leadRespondeu(ctx.leadId)
     return respondeu === esperado
+  },
+}
+
+// --- CONDIÇÃO genérica: um campo do lead comparado com um valor (Fase 4.5) ----
+// config: { campo, operador, valor }. É o "filtro de público genérico": lê o
+// campo (whitelist no ambiente) e delega a comparação para avaliarOperador.
+export const condicaoCampo: Condicao = {
+  tipo: 'campo',
+  async avaliar(ctx) {
+    if (!ctx.leadId) return false
+    const campo = String(ctx.config.campo ?? '')
+    if (!campo) return false
+    const operador = String(ctx.config.operador ?? 'igual') as Operador
+    const atual = await ctx.ambiente.lerCampoLead(ctx.leadId, campo)
+    return avaliarOperador(operador, atual, ctx.config.valor)
   },
 }
 
@@ -96,6 +112,7 @@ export function registrarBlocosPadrao(registro = new RegistroWorkflows()): Regis
   return registro
     .registrarGatilho(gatilhoCampoDataVence)
     .registrarCondicao(condicaoLeadRespondeu)
+    .registrarCondicao(condicaoCampo)
     .registrarAcao(acaoEsperar)
     .registrarAcao(acaoEnviarEmail)
     .registrarAcao(acaoCriarTarefa)

@@ -21,6 +21,9 @@ export interface AmbienteWorkflow {
   // Condição 'lead_respondeu': o lead já respondeu? (interação tipo='resposta',
   // gravada pelo detectarResposta do motor).
   leadRespondeu(leadId: string): Promise<boolean>
+  // Condição genérica 'campo' (Fase 4.5): lê UM campo do lead (whitelist de
+  // colunas reais da tabela `leads`). Devolve null se o lead/campo não existir.
+  lerCampoLead(leadId: string, campo: string): Promise<unknown>
   // Ação 'enviar_email': monta pelo template e envia (gated por MODO_ENSAIO /
   // simular). Devolve o assunto para o log da execução.
   enviarEmailTemplate(leadId: string, templateTipo: string): Promise<{ enviado: boolean; assunto: string }>
@@ -31,6 +34,16 @@ export interface AmbienteWorkflow {
 // Colunas de data que um gatilho pode observar. Whitelist: o `campo` vem da
 // definição do workflow (input do usuário) e NÃO pode virar nome de coluna livre.
 const CAMPOS_DATA_PERMITIDOS = new Set(['proxima_acao_data', 'ultimo_contato', 'created_at'])
+
+// Colunas REAIS de `leads` (lib/supabase.ts, tipo Lead) que a condição genérica
+// pode ler. Whitelist porque `campo` vem da definição do workflow (input do
+// usuário) e NÃO pode virar nome de coluna livre. Nota: são as colunas de
+// `leads`, não os campos do tipo `Empresa` (esse é o modelo de mock-data/UI).
+const CAMPOS_LEAD_PERMITIDOS = new Set([
+  'estagio', 'segmento', 'score', 'responsavel_nome', 'responsavel_id',
+  'cidade', 'estado', 'origem', 'faixa_funcionarios', 'canal_preferencial',
+  'followups_enviados', 'perdido', 'ultimo_contato', 'proxima_acao_data', 'created_at',
+])
 
 export class AmbienteSupabase implements AmbienteWorkflow {
   private motor: Motor
@@ -61,6 +74,21 @@ export class AmbienteSupabase implements AmbienteWorkflow {
 
   async leadRespondeu(leadId: string): Promise<boolean> {
     return (await this.motor.store.contarInteracoes(leadId, 'resposta')) > 0
+  }
+
+  async lerCampoLead(leadId: string, campo: string): Promise<unknown> {
+    if (!CAMPOS_LEAD_PERMITIDOS.has(campo))
+      throw new Error(`Campo de lead não permitido na condição: '${campo}'`)
+    // Lê só a coluna pedida, org-scoped (mesmo padrão de selecionarLeads...).
+    const { data, error } = await this.db
+      .from('leads')
+      .select(campo)
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('id', leadId)
+      .maybeSingle()
+    if (error) throw error
+    // `select(campo)` dinâmico não é estaticamente tipado — cast via unknown.
+    return data ? (data as unknown as Record<string, unknown>)[campo] ?? null : null
   }
 
   async enviarEmailTemplate(leadId: string, templateTipo: string): Promise<{ enviado: boolean; assunto: string }> {

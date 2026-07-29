@@ -17,8 +17,10 @@ class AmbienteFake implements AmbienteWorkflow {
   respondeu = new Set<string>()
   emails: { leadId: string; template: string }[] = []
   tarefas: { leadId: string; titulo: string }[] = []
+  campos: Record<string, Record<string, unknown>> = {} // leadId -> { campo: valor }
   async selecionarLeadsComCampoVencendo() { return this.alvos }
   async leadRespondeu(leadId: string) { return this.respondeu.has(leadId) }
+  async lerCampoLead(leadId: string, campo: string) { return this.campos[leadId]?.[campo] ?? null }
   async enviarEmailTemplate(leadId: string, template: string) { this.emails.push({ leadId, template }); return { enviado: true, assunto: 'assunto' } }
   async criarTarefa(leadId: string, titulo: string) { this.tarefas.push({ leadId, titulo }) }
 }
@@ -61,6 +63,26 @@ describe('executor de workflows', () => {
     expect(amb.emails).toHaveLength(0)
     const [ex] = await store.execucoesPendentes(new Date(Date.now() + 9e11).toISOString())
     expect(ex).toBeUndefined() // nada pendente: execução foi concluída
+  })
+
+  it('condição genérica de campo gateia pelo valor real do lead', async () => {
+    // segue só se estagio === 'follow_up_1'. lead-1 casa; lead-2 não.
+    const def: DefinicaoWorkflow = {
+      gatilho,
+      condicoes: [{ tipo: 'campo', config: { campo: 'estagio', operador: 'igual', valor: 'follow_up_1' } }],
+      acoes: [{ tipo: 'criar_tarefa', config: { titulo: 't' } }],
+    }
+    const sA = new MemoryWorkflowStore(); const aA = new AmbienteFake()
+    aA.alvos = ['lead-1']; aA.campos = { 'lead-1': { estagio: 'follow_up_1' } }
+    await publicarWorkflow(sA, def)
+    await processarTudo(sA, registro, aA)
+    expect(aA.tarefas).toHaveLength(1)
+
+    const sB = new MemoryWorkflowStore(); const aB = new AmbienteFake()
+    aB.alvos = ['lead-2']; aB.campos = { 'lead-2': { estagio: 'ganho' } }
+    await publicarWorkflow(sB, def)
+    await processarTudo(sB, registro, aB)
+    expect(aB.tarefas).toHaveLength(0)
   })
 
   it('espera PERSISTIDA suspende e retoma no mesmo passo após "reinício"', async () => {

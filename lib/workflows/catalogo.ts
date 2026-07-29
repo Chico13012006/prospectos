@@ -10,6 +10,7 @@
 // 'ramificar' (A/B) existe no motor mas ainda não tem editor visual — fica para
 // uma iteração seguinte; workflows com ramificação podem ser autorados por script.
 import type { BlocoConfig, DefinicaoWorkflow } from './types'
+import { OPERADORES } from './operadores'
 
 export type CampoTipo = 'texto' | 'numero' | 'select' | 'booleano'
 
@@ -57,7 +58,48 @@ export const GATILHOS: BlocoDef[] = [
   },
 ]
 
+// Campos de `leads` expostos ao filtro genérico (espelham a whitelist do
+// ambiente CAMPOS_LEAD_PERMITIDOS). Rótulos amigáveis; `valor` é a coluna real.
+const CAMPOS_LEAD_OPCOES = [
+  { valor: 'estagio', label: 'Estágio no pipeline' },
+  { valor: 'segmento', label: 'Segmento' },
+  { valor: 'score', label: 'Score de engajamento' },
+  { valor: 'responsavel_nome', label: 'Responsável (nome)' },
+  { valor: 'cidade', label: 'Cidade' },
+  { valor: 'estado', label: 'Estado' },
+  { valor: 'origem', label: 'Origem' },
+  { valor: 'faixa_funcionarios', label: 'Faixa de funcionários' },
+  { valor: 'canal_preferencial', label: 'Canal preferencial' },
+  { valor: 'followups_enviados', label: 'Follow-ups enviados' },
+  { valor: 'ultimo_contato', label: 'Último contato (data)' },
+  { valor: 'proxima_acao_data', label: 'Próxima ação (data)' },
+  { valor: 'created_at', label: 'Data de entrada' },
+  { valor: 'perdido', label: 'Perdido (true/false)' },
+]
+
 export const CONDICOES: BlocoDef[] = [
+  {
+    tipo: 'campo',
+    label: 'Campo do lead',
+    descricao: 'Filtro de público: compara um campo do lead com um valor.',
+    campos: [
+      { nome: 'campo', label: 'Campo', tipo: 'select', padrao: 'estagio', opcoes: CAMPOS_LEAD_OPCOES },
+      {
+        nome: 'operador',
+        label: 'Operador',
+        tipo: 'select',
+        padrao: 'igual',
+        opcoes: OPERADORES.map((o) => ({ valor: o.valor, label: o.label })),
+      },
+      {
+        nome: 'valor',
+        label: 'Valor',
+        tipo: 'texto',
+        padrao: '',
+        dica: 'Ignorado para "está vazio"/"não está vazio".',
+      },
+    ],
+  },
   {
     tipo: 'lead_respondeu',
     label: 'Lead respondeu?',
