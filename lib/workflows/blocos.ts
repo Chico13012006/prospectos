@@ -86,24 +86,34 @@ export const acaoCriarTarefa: Acao = {
   },
 }
 
-// --- AÇÃO: ramificar (A ou B por uma condição) ------------------------------
-// config: { condicao: BlocoConfig, entao: BlocoConfig[], senao: BlocoConfig[] }.
-// Avalia a condição e roda as ações do ramo escolhido, em sequência. Nesta v1 as
-// esperas dentro de um ramo NÃO suspendem (waits só no nível de topo do pipeline);
-// se um sub-bloco pedir espera, ela é ignorada e logada.
+// --- AÇÃO: ramificar — SALTO CONDICIONAL no pipeline (Fase 4.5, entrega 2) ----
+// config: { condicao: BlocoConfig, destino: number }. Avalia a condição via o
+// registro; se PASSA, salta o pipeline para o passo `destino`; senão continua
+// para o próximo passo. É a ramificação DE VERDADE: o braço destino são passos
+// de topo, então esperas dentro dele SUSPENDEM normalmente — diferente da versão
+// síncrona antiga (rodava sub-ações inline e IGNORAVA esperas), que não cobria
+// o caso "aguardar → ramificar pelo resultado → aguardar de novo".
 export const acaoRamificar: Acao = {
   tipo: 'ramificar',
   async executar(ctx): Promise<ResultadoAcao> {
     const cond = ctx.config.condicao as BlocoConfig | undefined
     if (!cond?.tipo) throw new Error("ação 'ramificar' exige config.condicao")
+    const destino = Number(ctx.config.destino)
+    if (!Number.isInteger(destino) || destino < 0)
+      throw new Error("ação 'ramificar' exige config.destino (índice de passo inteiro >= 0)")
     const passou = await ctx.registro.obterCondicao(cond.tipo).avaliar(comConfig(ctx, cond.config ?? {}))
-    const ramo = (passou ? ctx.config.entao : ctx.config.senao) as BlocoConfig[] | undefined
-    await ctx.log('ramo_escolhido', { condicao: cond.tipo, passou, ramo: passou ? 'entao' : 'senao' })
-    for (const bloco of ramo ?? []) {
-      const res = await ctx.registro.obterAcao(bloco.tipo).executar(comConfig(ctx, bloco.config ?? {}))
-      if (res.tipo === 'esperar') await ctx.log('espera_em_ramo_ignorada', { bloco: bloco.tipo })
-    }
-    return { tipo: 'continuar' }
+    await ctx.log('ramificacao_avaliada', { condicao: cond.tipo, passou, destino })
+    return passou ? { tipo: 'saltar', para: destino } : { tipo: 'continuar' }
+  },
+}
+
+// --- AÇÃO: encerrar — conclui a execução aqui (halt) -------------------------
+// Sela um braço numa lista plana: sem ele, o braço que saltou "por cima" cairia
+// nos passos do outro braço logo abaixo.
+export const acaoEncerrar: Acao = {
+  tipo: 'encerrar',
+  async executar(): Promise<ResultadoAcao> {
+    return { tipo: 'encerrar' }
   },
 }
 
@@ -117,4 +127,5 @@ export function registrarBlocosPadrao(registro = new RegistroWorkflows()): Regis
     .registrarAcao(acaoEnviarEmail)
     .registrarAcao(acaoCriarTarefa)
     .registrarAcao(acaoRamificar)
+    .registrarAcao(acaoEncerrar)
 }

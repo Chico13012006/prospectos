@@ -28,9 +28,19 @@ export interface CtxExec {
   log(tipo: string, detalhe?: Record<string, unknown>): Promise<void>
 }
 
-// Uma ação ou continua o pipeline, ou pede uma espera persistida (suspende a
-// execução até `ate`; o poll retoma no mesmo passo depois).
-export type ResultadoAcao = { tipo: 'continuar' } | { tipo: 'esperar'; ate: string }
+// Resultado de uma ação, do ponto de vista do CONTROLE DE FLUXO do pipeline:
+//  - continuar: segue para o próximo passo (passo_atual + 1);
+//  - esperar:   espera PERSISTIDA — suspende até `ate`, retoma no mesmo passo;
+//  - saltar:    desvia o pipeline para o passo de índice `para` (ramificação de
+//               verdade — o braço destino são passos de topo, então esperas
+//               dentro dele suspendem normalmente);
+//  - encerrar:  conclui a execução aqui (halt — impede "vazar" de um braço pro
+//               outro numa lista plana).
+export type ResultadoAcao =
+  | { tipo: 'continuar' }
+  | { tipo: 'esperar'; ate: string }
+  | { tipo: 'saltar'; para: number }
+  | { tipo: 'encerrar' }
 
 export interface Gatilho {
   tipo: string

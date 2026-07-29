@@ -76,17 +76,24 @@ export async function processarExecucao(
       }
     }
 
-    // Pipeline de ações.
+    // Pipeline de ações. `passo_atual` NÃO é só +1: uma ação pode saltar
+    // (ramificação) ou encerrar. Trava anti-laço: um salto para trás sem espera
+    // no meio geraria loop infinito dentro de um único tick — o contador corta.
+    const totalAcoes = def.acoes?.length ?? 0
+    const MAX_PASSOS = totalAcoes * 100 + 100
     let passo = ex.passo_atual
-    while (passo < (def.acoes?.length ?? 0)) {
+    let voltas = 0
+    while (passo < totalAcoes) {
+      if (voltas++ > MAX_PASSOS)
+        throw new Error(`limite de passos excedido (${MAX_PASSOS}) — possível laço de ramificação`)
+
       const bloco = def.acoes[passo]
       const res = await registro.obterAcao(bloco.tipo).executar(ctxDe(store, registro, ambiente, ex, bloco.config ?? {}))
       await log('acao_executada', { passo, acao: bloco.tipo })
-      passo += 1
 
       if (res.tipo === 'esperar') {
         await store.atualizarExecucao(ex.id, {
-          passo_atual: passo,
+          passo_atual: passo + 1, // retoma DEPOIS da espera
           status: 'aguardando',
           proxima_verificacao_em: res.ate,
           atualizado_em: agoraISO,
@@ -94,6 +101,17 @@ export async function processarExecucao(
         await log('aguardando', { ate: res.ate })
         return
       }
+
+      if (res.tipo === 'encerrar') {
+        await store.atualizarExecucao(ex.id, { status: 'concluido', atualizado_em: agoraISO })
+        await log('encerrado', { passo })
+        return
+      }
+
+      // saltar: desvia; continuar: próximo passo. Persiste passo_atual sempre,
+      // para o resume (at-least-once) retomar do lugar certo se cair aqui.
+      passo = res.tipo === 'saltar' ? res.para : passo + 1
+      if (res.tipo === 'saltar') await log('saltou', { para: passo })
       await store.atualizarExecucao(ex.id, { passo_atual: passo, status: 'em_andamento', atualizado_em: agoraISO })
     }
 
