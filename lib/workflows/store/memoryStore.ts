@@ -130,6 +130,30 @@ export class MemoryWorkflowStore implements WorkflowStore {
     this.execucoes.set(id, { ...ex, ...patch })
   }
 
+  async existeExecucaoParaLead(workflowId: string, leadId: string): Promise<boolean> {
+    for (const ex of this.execucoes.values())
+      if (ex.workflow_id === workflowId && ex.lead_id === leadId) return true
+    return false
+  }
+
+  async execucoesPendentes(agoraISO: string): Promise<WorkflowExecucao[]> {
+    const agora = new Date(agoraISO).getTime()
+    return [...this.execucoes.values()]
+      .filter(
+        (ex) =>
+          ex.status === 'em_andamento' ||
+          (ex.status === 'aguardando' &&
+            ex.proxima_verificacao_em != null &&
+            new Date(ex.proxima_verificacao_em).getTime() <= agora),
+      )
+      .sort((a, b) => a.iniciado_em.localeCompare(b.iniciado_em))
+      .map((ex) => ({ ...ex }))
+  }
+
+  async workflowsPublicados(): Promise<Workflow[]> {
+    return [...this.workflows.values()].filter((w) => w.status === 'publicado').map((w) => ({ ...w }))
+  }
+
   async registrarEvento(evento: WorkflowExecucaoEvento): Promise<void> {
     this.eventos.push({ ...evento, id: this.seqEvento++, criado_em: evento.criado_em ?? this.agora() })
   }

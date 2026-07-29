@@ -53,6 +53,14 @@ export interface WorkflowStore {
   }): Promise<WorkflowExecucao>
   buscarExecucao(id: string): Promise<WorkflowExecucao | null>
   atualizarExecucao(id: string, patch: PatchExecucao): Promise<void>
+  // Já existe alguma execução (qualquer status) deste workflow para o lead?
+  // Base da idempotência de enrollment (não inscrever o mesmo lead 2x).
+  existeExecucaoParaLead(workflowId: string, leadId: string): Promise<boolean>
+  // Execuções que o poll deve tocar AGORA: em_andamento, ou aguardando com
+  // proxima_verificacao_em <= agora (espera vencida). Ordenadas por antiguidade.
+  execucoesPendentes(agoraISO: string): Promise<WorkflowExecucao[]>
+  // Workflows publicados (status='publicado') — candidatos a enrollment.
+  workflowsPublicados(): Promise<Workflow[]>
 
   // --- eventos (log append-only) ---
   registrarEvento(evento: WorkflowExecucaoEvento): Promise<void>

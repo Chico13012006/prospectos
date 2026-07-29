@@ -171,6 +171,48 @@ export class SupabaseWorkflowStore implements WorkflowStore {
     if (error) throw error
   }
 
+  async existeExecucaoParaLead(workflowId: string, leadId: string): Promise<boolean> {
+    const { count, error } = await this.db
+      .from('workflow_execucoes')
+      .select('id', { count: 'exact', head: true })
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('workflow_id', workflowId)
+      .eq('lead_id', leadId)
+    if (error) throw error
+    return (count ?? 0) > 0
+  }
+
+  async execucoesPendentes(agoraISO: string): Promise<WorkflowExecucao[]> {
+    // Duas populações: em_andamento (seguir já) e aguardando vencidas. PostgREST
+    // não faz esse OR com um filtro de nulo limpo, então buscamos as duas e
+    // juntamos — volume por org/tick é baixo (poll diário).
+    const emAndamento = await this.db
+      .from('workflow_execucoes')
+      .select('*')
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('status', 'em_andamento')
+    if (emAndamento.error) throw emAndamento.error
+    const aguardando = await this.db
+      .from('workflow_execucoes')
+      .select('*')
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('status', 'aguardando')
+      .lte('proxima_verificacao_em', agoraISO)
+    if (aguardando.error) throw aguardando.error
+    return [...(emAndamento.data ?? []), ...(aguardando.data ?? [])]
+      .sort((a, b) => String(a.iniciado_em).localeCompare(String(b.iniciado_em))) as WorkflowExecucao[]
+  }
+
+  async workflowsPublicados(): Promise<Workflow[]> {
+    const { data, error } = await this.db
+      .from('workflows')
+      .select('*')
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('status', 'publicado')
+    if (error) throw error
+    return (data as Workflow[]) ?? []
+  }
+
   // --- eventos ---
   async registrarEvento(evento: WorkflowExecucaoEvento): Promise<void> {
     const { error } = await this.db.from('workflow_execucao_eventos').insert({

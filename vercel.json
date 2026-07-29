@@ -3,6 +3,10 @@
     {
       "path": "/api/engine/follow-up",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/workflows/processar",
+      "schedule": "30 12 * * *"
     }
   ]
 }
