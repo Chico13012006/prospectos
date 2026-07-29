@@ -86,6 +86,89 @@ export const acaoCriarTarefa: Acao = {
   },
 }
 
+// === AÇÕES EXPANDIDAS (Fase 4.5, entrega 3) — aditivas, mesmo padrão ==========
+
+// --- AÇÃO: enviar_whatsapp — STUB (sem integração real ainda) ----------------
+// Não envia: loga a INTENÇÃO e marca a execução como pendente de integração. O
+// provedor (tendência: Meta Cloud API) é decisão de negócio pendente — este stub
+// não bloqueia o resto. config: { texto } (mensagem/label livre).
+export const acaoEnviarWhatsapp: Acao = {
+  tipo: 'enviar_whatsapp',
+  async executar(ctx): Promise<ResultadoAcao> {
+    if (!ctx.leadId) throw new Error("ação 'enviar_whatsapp' exige um lead")
+    const texto = String(ctx.config.texto ?? '')
+    await ctx.log('whatsapp_pendente', { pendente_integracao: true, texto })
+    return { tipo: 'continuar' }
+  },
+}
+
+// --- AÇÃO: criar_tarefa_ligacao — tarefa de ligação --------------------------
+export const acaoCriarTarefaLigacao: Acao = {
+  tipo: 'criar_tarefa_ligacao',
+  async executar(ctx): Promise<ResultadoAcao> {
+    if (!ctx.leadId) throw new Error("ação 'criar_tarefa_ligacao' exige um lead")
+    const titulo = String(ctx.config.titulo ?? 'Ligar para o lead')
+    await ctx.ambiente.criarTarefa(ctx.leadId, `[Ligação] ${titulo}`)
+    await ctx.log('tarefa_ligacao_criada', { titulo })
+    return { tipo: 'continuar' }
+  },
+}
+
+// --- AÇÃO: atualizar_status — muda o estágio/status do lead ------------------
+// No schema real de `leads` o "status" é a coluna `estagio` (não há status
+// separado); mover_pipeline usa a MESMA coluna. Ambas existem por pedido do spec.
+export const acaoAtualizarStatus: Acao = {
+  tipo: 'atualizar_status',
+  async executar(ctx): Promise<ResultadoAcao> {
+    if (!ctx.leadId) throw new Error("ação 'atualizar_status' exige um lead")
+    const estagio = String(ctx.config.estagio ?? '')
+    if (!estagio) throw new Error("ação 'atualizar_status' exige config.estagio")
+    await ctx.ambiente.atualizarCampoLead(ctx.leadId, 'estagio', estagio)
+    await ctx.log('status_atualizado', { estagio })
+    return { tipo: 'continuar' }
+  },
+}
+
+// --- AÇÃO: mover_pipeline — move a etapa do pipeline (leads.estagio) ---------
+export const acaoMoverPipeline: Acao = {
+  tipo: 'mover_pipeline',
+  async executar(ctx): Promise<ResultadoAcao> {
+    if (!ctx.leadId) throw new Error("ação 'mover_pipeline' exige um lead")
+    const estagio = String(ctx.config.estagio ?? '')
+    if (!estagio) throw new Error("ação 'mover_pipeline' exige config.estagio")
+    await ctx.ambiente.atualizarCampoLead(ctx.leadId, 'estagio', estagio)
+    await ctx.log('pipeline_movido', { estagio })
+    return { tipo: 'continuar' }
+  },
+}
+
+// --- AÇÃO: atribuir_responsavel — define o responsável do lead ---------------
+export const acaoAtribuirResponsavel: Acao = {
+  tipo: 'atribuir_responsavel',
+  async executar(ctx): Promise<ResultadoAcao> {
+    if (!ctx.leadId) throw new Error("ação 'atribuir_responsavel' exige um lead")
+    const responsavelId = String(ctx.config.responsavel_id ?? '')
+    if (!responsavelId) throw new Error("ação 'atribuir_responsavel' exige config.responsavel_id")
+    await ctx.ambiente.atualizarCampoLead(ctx.leadId, 'responsavel_id', responsavelId)
+    await ctx.log('responsavel_atribuido', { responsavel_id: responsavelId })
+    return { tipo: 'continuar' }
+  },
+}
+
+// --- AÇÃO: notificar — avisa o responsável interno (e-mail e/ou WhatsApp) -----
+// Nesta v1 é uma NOTIFICAÇÃO logada (reaproveita o mesmo stub do WhatsApp): o
+// disparo real por canal fica para quando a integração existir. config:
+// { canais: 'email'|'whatsapp'|'ambos', mensagem }.
+export const acaoNotificar: Acao = {
+  tipo: 'notificar',
+  async executar(ctx): Promise<ResultadoAcao> {
+    const canais = String(ctx.config.canais ?? 'email')
+    const mensagem = String(ctx.config.mensagem ?? '')
+    await ctx.log('responsavel_notificado', { canais, mensagem, pendente_integracao: canais !== 'email' })
+    return { tipo: 'continuar' }
+  },
+}
+
 // --- AÇÃO: ramificar (SÍNCRONO, legado) — A ou B por uma condição ------------
 // config: { condicao: BlocoConfig, entao: BlocoConfig[], senao: BlocoConfig[] }.
 // Avalia a condição e roda as ações do ramo escolhido, em sequência. As esperas
@@ -149,6 +232,12 @@ export function registrarBlocosPadrao(registro = new RegistroWorkflows()): Regis
     .registrarAcao(acaoEsperar)
     .registrarAcao(acaoEnviarEmail)
     .registrarAcao(acaoCriarTarefa)
+    .registrarAcao(acaoEnviarWhatsapp)
+    .registrarAcao(acaoCriarTarefaLigacao)
+    .registrarAcao(acaoAtualizarStatus)
+    .registrarAcao(acaoMoverPipeline)
+    .registrarAcao(acaoAtribuirResponsavel)
+    .registrarAcao(acaoNotificar)
     .registrarAcao(acaoRamificar)
     .registrarAcao(acaoSaltarSe)
     .registrarAcao(acaoEncerrar)

@@ -18,11 +18,13 @@ class AmbienteFake implements AmbienteWorkflow {
   emails: { leadId: string; template: string }[] = []
   tarefas: { leadId: string; titulo: string }[] = []
   campos: Record<string, Record<string, unknown>> = {} // leadId -> { campo: valor }
+  escritas: { leadId: string; campo: string; valor: unknown }[] = []
   async selecionarLeadsComCampoVencendo() { return this.alvos }
   async leadRespondeu(leadId: string) { return this.respondeu.has(leadId) }
   async lerCampoLead(leadId: string, campo: string) { return this.campos[leadId]?.[campo] ?? null }
   async enviarEmailTemplate(leadId: string, template: string) { this.emails.push({ leadId, template }); return { enviado: true, assunto: 'assunto' } }
   async criarTarefa(leadId: string, titulo: string) { this.tarefas.push({ leadId, titulo }) }
+  async atualizarCampoLead(leadId: string, campo: string, valor: unknown) { this.escritas.push({ leadId, campo, valor }) }
 }
 
 const registro = registrarBlocosPadrao()
@@ -236,6 +238,35 @@ describe('executor de workflows', () => {
     const algumId = [...store2.execucoes.values()][0].id
     await processarExecucao(store, registro, amb, algumId)
     expect(amb.emails).toHaveLength(1)
+  })
+
+  it('ações expandidas (entrega 3): escrevem no lead e logam; whatsapp fica pendente', async () => {
+    const store = new MemoryWorkflowStore(); const amb = new AmbienteFake()
+    amb.alvos = ['lead-1']
+    await publicarWorkflow(store, { gatilho, condicoes: [], acoes: [
+      { tipo: 'atualizar_status', config: { estagio: 'respondeu' } },
+      { tipo: 'atribuir_responsavel', config: { responsavel_id: 'user-9' } },
+      { tipo: 'criar_tarefa_ligacao', config: { titulo: 'Retornar' } },
+      { tipo: 'enviar_whatsapp', config: { texto: 'oi' } },
+      { tipo: 'notificar', config: { canais: 'email', mensagem: 'lead quente' } },
+    ] })
+    await processarTudo(store, registro, amb)
+
+    // escritas no lead (status + responsável)
+    expect(amb.escritas).toEqual([
+      { leadId: 'lead-1', campo: 'estagio', valor: 'respondeu' },
+      { leadId: 'lead-1', campo: 'responsavel_id', valor: 'user-9' },
+    ])
+    expect(amb.tarefas).toEqual([{ leadId: 'lead-1', titulo: '[Ligação] Retornar' }])
+
+    // eventos: whatsapp pendente de integração; notificação registrada
+    const [ex] = [...(store as unknown as { execucoes: Map<string, { id: string }> }).execucoes.values()]
+    const eventos = await store.listarEventos(ex.id)
+    const tipos = eventos.map((e) => e.tipo)
+    expect(tipos).toContain('whatsapp_pendente')
+    expect(tipos).toContain('responsavel_notificado')
+    const wpp = eventos.find((e) => e.tipo === 'whatsapp_pendente')
+    expect(wpp?.detalhe?.pendente_integracao).toBe(true)
   })
 
   it('gatilho/condição/ação desconhecidos: erro claro do registro', () => {

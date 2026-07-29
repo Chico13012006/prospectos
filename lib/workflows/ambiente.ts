@@ -27,8 +27,12 @@ export interface AmbienteWorkflow {
   // Ação 'enviar_email': monta pelo template e envia (gated por MODO_ENSAIO /
   // simular). Devolve o assunto para o log da execução.
   enviarEmailTemplate(leadId: string, templateTipo: string): Promise<{ enviado: boolean; assunto: string }>
-  // Ação 'criar_tarefa': registra a tarefa como interação de sistema no lead.
+  // Ação 'criar_tarefa'/'criar_tarefa_ligacao': registra a tarefa como interação
+  // de sistema no lead.
   criarTarefa(leadId: string, titulo: string): Promise<void>
+  // Ações 'atualizar_status'/'mover_pipeline'/'atribuir_responsavel' (Fase 4.5):
+  // grava UM campo do lead (whitelist de ESCRITA). No-op em simulação.
+  atualizarCampoLead(leadId: string, campo: string, valor: unknown): Promise<void>
 }
 
 // Colunas de data que um gatilho pode observar. Whitelist: o `campo` vem da
@@ -43,6 +47,13 @@ const CAMPOS_LEAD_PERMITIDOS = new Set([
   'estagio', 'segmento', 'score', 'responsavel_nome', 'responsavel_id',
   'cidade', 'estado', 'origem', 'faixa_funcionarios', 'canal_preferencial',
   'followups_enviados', 'perdido', 'ultimo_contato', 'proxima_acao_data', 'created_at',
+])
+
+// Colunas de `leads` que as AÇÕES podem gravar. Subconjunto do que faz sentido
+// mutar por automação — nunca id/organizacao_id/timestamps de sistema.
+const CAMPOS_LEAD_ESCRITA_PERMITIDOS = new Set([
+  'estagio', 'perdido', 'perdido_motivo', 'responsavel_id', 'responsavel_nome',
+  'proxima_acao', 'proxima_acao_data',
 ])
 
 export class AmbienteSupabase implements AmbienteWorkflow {
@@ -127,5 +138,17 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       descricao: `Tarefa (workflow): ${titulo}`,
       origem_acao: 'ia',
     })
+  }
+
+  async atualizarCampoLead(leadId: string, campo: string, valor: unknown): Promise<void> {
+    if (!CAMPOS_LEAD_ESCRITA_PERMITIDOS.has(campo))
+      throw new Error(`Campo de lead não permitido para escrita: '${campo}'`)
+    if (this.simular) return // em simulação não muta o lead
+    const { error } = await this.db
+      .from('leads')
+      .update({ [campo]: valor })
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('id', leadId)
+    if (error) throw error
   }
 }

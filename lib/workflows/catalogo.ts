@@ -119,6 +119,19 @@ export const CONDICOES: BlocoDef[] = [
   },
 ]
 
+// Estágios do pipeline (leads.estagio) para atualizar_status / mover_pipeline.
+const ESTAGIO_OPCOES = [
+  { valor: 'novos_leads', label: 'Novos leads' },
+  { valor: 'primeiro_contato', label: '1º contato' },
+  { valor: 'aguardando_resposta', label: 'Aguardando resposta' },
+  { valor: 'follow_up', label: 'Follow-up' },
+  { valor: 'interessado', label: 'Interessado' },
+  { valor: 'respondeu', label: 'Respondeu' },
+  { valor: 'reuniao_agendada', label: 'Reunião agendada' },
+  { valor: 'ganho', label: 'Ganho' },
+  { valor: 'perdido', label: 'Perdido' },
+]
+
 export const ACOES: BlocoDef[] = [
   {
     tipo: 'esperar',
@@ -142,6 +155,57 @@ export const ACOES: BlocoDef[] = [
     label: 'Criar tarefa',
     descricao: 'Cria uma tarefa vinculada ao lead.',
     campos: [{ nome: 'titulo', label: 'Título', tipo: 'texto', padrao: 'Tarefa do workflow' }],
+  },
+  {
+    tipo: 'criar_tarefa_ligacao',
+    label: 'Criar tarefa de ligação',
+    descricao: 'Cria uma tarefa de ligação vinculada ao lead.',
+    campos: [{ nome: 'titulo', label: 'Título', tipo: 'texto', padrao: 'Ligar para o lead' }],
+  },
+  {
+    tipo: 'enviar_whatsapp',
+    label: 'Enviar WhatsApp (stub)',
+    descricao: 'Ainda sem integração: registra a intenção como pendente (não envia).',
+    campos: [{ nome: 'texto', label: 'Mensagem', tipo: 'texto', padrao: '' }],
+  },
+  {
+    tipo: 'atualizar_status',
+    label: 'Atualizar status do lead',
+    descricao: 'Muda o estágio/status do lead (leads.estagio).',
+    campos: [{ nome: 'estagio', label: 'Novo status', tipo: 'select', padrao: 'respondeu', opcoes: ESTAGIO_OPCOES }],
+  },
+  {
+    tipo: 'mover_pipeline',
+    label: 'Mover etapa do pipeline',
+    descricao: 'Move o lead para outra etapa do pipeline (leads.estagio).',
+    campos: [{ nome: 'estagio', label: 'Etapa', tipo: 'select', padrao: 'follow_up', opcoes: ESTAGIO_OPCOES }],
+  },
+  {
+    tipo: 'atribuir_responsavel',
+    label: 'Atribuir responsável',
+    descricao: 'Define o responsável do lead (perfis/usuário, por id).',
+    campos: [
+      { nome: 'responsavel_id', label: 'ID do responsável', tipo: 'texto', padrao: '', dica: 'UUID do usuário responsável.' },
+    ],
+  },
+  {
+    tipo: 'notificar',
+    label: 'Notificar responsável interno',
+    descricao: 'Avisa o responsável (e-mail e/ou WhatsApp — WhatsApp ainda em stub).',
+    campos: [
+      {
+        nome: 'canais',
+        label: 'Canais',
+        tipo: 'select',
+        padrao: 'email',
+        opcoes: [
+          { valor: 'email', label: 'E-mail' },
+          { valor: 'whatsapp', label: 'WhatsApp (stub)' },
+          { valor: 'ambos', label: 'E-mail + WhatsApp' },
+        ],
+      },
+      { nome: 'mensagem', label: 'Mensagem', tipo: 'texto', padrao: '' },
+    ],
   },
 ]
 
