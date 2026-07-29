@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const acao = body?.acao
 
     if (acao === 'publicar') {
-      const { workflow, versao } = await publicar(ctx.store, id, ctx.autor)
+      const { workflow, versao } = await publicar(ctx.store, id, ctx.autorId)
       return NextResponse.json({ workflow, versao })
     }
     if (acao === 'pausar') {

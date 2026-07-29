@@ -13,8 +13,9 @@ import { SupabaseWorkflowStore } from './store/supabaseStore'
 export interface ContextoWorkflows {
   store: SupabaseWorkflowStore
   organizacaoId: string
-  // Identidade legível para carimbar publicado_por.
-  autor: string
+  // UUID do usuário (perfis.id) para carimbar workflow_versoes.publicado_por,
+  // que é uuid FK — NÃO usar o e-mail aqui (falha no cast p/ uuid, 22P02).
+  autorId: string
 }
 
 // Resolve o contexto ou devolve uma NextResponse de erro pronta (401/400).
@@ -34,6 +35,6 @@ export async function resolverContexto(): Promise<ContextoWorkflows | NextRespon
   return {
     store: new SupabaseWorkflowStore(org, admin),
     organizacaoId: org,
-    autor: user.email ?? user.id,
+    autorId: user.id,
   }
 }
