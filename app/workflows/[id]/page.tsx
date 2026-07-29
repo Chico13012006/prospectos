@@ -12,6 +12,7 @@ import {
   ACOES, CONDICOES, GATILHOS, acharBlocoDef, blocoPadrao, configPadrao, definicaoVazia,
   type BlocoDef, type CampoDef,
 } from '@/lib/workflows/catalogo';
+import ResumoFluxo from '@/components/workflows/ResumoFluxo';
 
 const STATUS_INFO: Record<StatusWorkflow, { label: string; classes: string }> = {
   rascunho: { label: 'Rascunho', classes: 'bg-slate-500/20 text-slate-300' },
@@ -71,12 +72,15 @@ function CamposEditor({ def, config, onChange }: {
 }
 
 // --- Linha de bloco: seletor de tipo + campos + controles --------------------
-function LinhaBloco({ opcoes, bloco, onChange, onRemover, controles }: {
+function LinhaBloco({ opcoes, bloco, onChange, onRemover, controles, extra }: {
   opcoes: BlocoDef[];
   bloco: BlocoConfig;
   onChange: (novo: BlocoConfig) => void;
   onRemover?: () => void;
   controles?: React.ReactNode;
+  // Editor dedicado para blocos com config aninhado (ex.: saltar_se), renderizado
+  // no lugar do CamposEditor genérico.
+  extra?: React.ReactNode;
 }) {
   const def = acharBlocoDef(bloco.tipo) ?? opcoes[0];
   return (
@@ -100,11 +104,57 @@ function LinhaBloco({ opcoes, bloco, onChange, onRemover, controles }: {
           </button>
         )}
       </div>
+      {extra ?? (
+        <CamposEditor
+          def={def}
+          config={bloco.config}
+          onChange={(nome, valor) => onChange({ ...bloco, config: { ...bloco.config, [nome]: valor } })}
+        />
+      )}
+    </div>
+  );
+}
+
+// --- Editor dedicado do bloco 'saltar_se' (condição aninhada + destino) -------
+function SaltarSeEditor({ bloco, acoes, onChange }: {
+  bloco: BlocoConfig;
+  acoes: BlocoConfig[];
+  onChange: (novo: BlocoConfig) => void;
+}) {
+  const cond = (bloco.config.condicao as BlocoConfig | undefined) ?? blocoPadrao(CONDICOES[0]);
+  const condDef = acharBlocoDef(cond.tipo) ?? CONDICOES[0];
+  const destino = Number(bloco.config.destino ?? 0);
+  const setCond = (novo: BlocoConfig) => onChange({ ...bloco, config: { ...bloco.config, condicao: novo } });
+  return (
+    <div className="mt-2 space-y-2 border-l-2 border-sky-500/30 pl-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-slate-400">Se</span>
+        <select
+          value={cond.tipo}
+          onChange={e => { const d = acharBlocoDef(e.target.value)!; setCond({ tipo: d.tipo, config: configPadrao(d) }); }}
+          className="bg-[#0f1117] border border-[#2a3147] rounded-lg px-2.5 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500/50"
+        >
+          {CONDICOES.map(c => <option key={c.tipo} value={c.tipo}>{c.label}</option>)}
+        </select>
+      </div>
       <CamposEditor
-        def={def}
-        config={bloco.config}
-        onChange={(nome, valor) => onChange({ ...bloco, config: { ...bloco.config, [nome]: valor } })}
+        def={condDef}
+        config={cond.config}
+        onChange={(nome, valor) => setCond({ ...cond, config: { ...cond.config, [nome]: valor } })}
       />
+      <label className="text-xs text-slate-400 flex items-center gap-2 flex-wrap">
+        <span>então pular para</span>
+        <select
+          value={destino}
+          onChange={e => onChange({ ...bloco, config: { ...bloco.config, destino: Number(e.target.value) } })}
+          className="bg-[#0f1117] border border-[#2a3147] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500/50 min-w-[16rem]"
+        >
+          {acoes.map((a, idx) => (
+            <option key={idx} value={idx}>{idx + 1}. {acharBlocoDef(a.tipo)?.label ?? a.tipo}</option>
+          ))}
+        </select>
+        <span className="text-slate-600">(senão continua no próximo passo)</span>
+      </label>
     </div>
   );
 }
@@ -384,6 +434,13 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
                   bloco={a}
                   onChange={novo => setDef({ ...def, acoes: def.acoes.map((x, j) => (j === i ? novo : x)) })}
                   onRemover={() => setDef({ ...def, acoes: def.acoes.filter((_, j) => j !== i) })}
+                  extra={a.tipo === 'saltar_se' ? (
+                    <SaltarSeEditor
+                      bloco={a}
+                      acoes={def.acoes}
+                      onChange={novo => setDef({ ...def, acoes: def.acoes.map((x, j) => (j === i ? novo : x)) })}
+                    />
+                  ) : undefined}
                   controles={
                     <div className="flex flex-col shrink-0">
                       <button
@@ -412,6 +469,9 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
           <Plus size={13} /> Adicionar ação
         </button>
       </section>
+
+      {/* Resumo visual read-only do fluxo (gatilho → público → ações → ramificação → fim) */}
+      <ResumoFluxo def={def} />
     </div>
   );
 }

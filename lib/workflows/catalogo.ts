@@ -29,6 +29,11 @@ export interface BlocoDef {
   label: string
   descricao: string
   campos: CampoDef[]
+  // Config inicial CUSTOM (para blocos que não são só campos planos, como
+  // 'saltar_se', cujo config tem uma condição aninhada). Quando presente,
+  // configPadrao a usa em vez de montar a partir de `campos`. Editada por um
+  // editor dedicado na UI (o renderer genérico não cobre config aninhado).
+  configInicial?: Record<string, unknown>
 }
 
 // Estágios de template conhecidos (espelham TIPO_LABEL da tela de Templates).
@@ -172,13 +177,31 @@ export const ACOES: BlocoDef[] = [
     tipo: 'atualizar_status',
     label: 'Atualizar status do lead',
     descricao: 'Muda o estágio/status do lead (leads.estagio).',
-    campos: [{ nome: 'estagio', label: 'Novo status', tipo: 'select', padrao: 'respondeu', opcoes: ESTAGIO_OPCOES }],
+    campos: [
+      {
+        nome: 'estagio',
+        label: 'Novo status',
+        tipo: 'select',
+        padrao: 'respondeu',
+        opcoes: ESTAGIO_OPCOES,
+        dica: 'Hoje age no mesmo campo que "Mover etapa do pipeline" (leads.estagio).',
+      },
+    ],
   },
   {
     tipo: 'mover_pipeline',
     label: 'Mover etapa do pipeline',
     descricao: 'Move o lead para outra etapa do pipeline (leads.estagio).',
-    campos: [{ nome: 'estagio', label: 'Etapa', tipo: 'select', padrao: 'follow_up', opcoes: ESTAGIO_OPCOES }],
+    campos: [
+      {
+        nome: 'estagio',
+        label: 'Etapa',
+        tipo: 'select',
+        padrao: 'follow_up',
+        opcoes: ESTAGIO_OPCOES,
+        dica: 'Hoje age no mesmo campo que "Atualizar status do lead" (leads.estagio).',
+      },
+    ],
   },
   {
     tipo: 'atribuir_responsavel',
@@ -207,6 +230,19 @@ export const ACOES: BlocoDef[] = [
       { nome: 'mensagem', label: 'Mensagem', tipo: 'texto', padrao: '' },
     ],
   },
+  {
+    tipo: 'saltar_se',
+    label: 'Ramificar (saltar se…)',
+    descricao: 'Se a condição passar, salta para outro passo; senão continua.',
+    campos: [], // editor dedicado (condição aninhada + destino), ver ResumoFluxo/editor
+    configInicial: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: 0 },
+  },
+  {
+    tipo: 'encerrar',
+    label: 'Encerrar fluxo',
+    descricao: 'Conclui a execução aqui — sela um braço da ramificação.',
+    campos: [],
+  },
 ]
 
 const PORTIPO: Record<string, BlocoDef> = Object.fromEntries(
@@ -220,6 +256,7 @@ export function acharBlocoDef(tipo: string): BlocoDef | undefined {
 // Config padrão de um bloco (a partir dos `padrao` dos campos). Booleano vira
 // boolean real; número vira number — é o que o motor lê em blocos.ts.
 export function configPadrao(def: BlocoDef): Record<string, unknown> {
+  if (def.configInicial) return JSON.parse(JSON.stringify(def.configInicial))
   const config: Record<string, unknown> = {}
   for (const c of def.campos) config[c.nome] = c.padrao
   return config

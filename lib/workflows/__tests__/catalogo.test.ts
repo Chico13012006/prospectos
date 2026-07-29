@@ -27,6 +27,14 @@ describe('catálogo de blocos (UI)', () => {
     expect(typeof configPadrao(cond).respondeu).toBe('boolean')
   })
 
+  it('configPadrao usa configInicial (config aninhado) e devolve clone independente', () => {
+    const a = configPadrao(acharBlocoDef('saltar_se')!)
+    const b = configPadrao(acharBlocoDef('saltar_se')!)
+    expect(a).toEqual({ condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: 0 })
+    ;(a.condicao as { tipo: string }).tipo = 'campo'
+    expect((b.condicao as { tipo: string }).tipo).toBe('lead_respondeu') // não compartilha referência
+  })
+
   it('blocoPadrao instancia { tipo, config }', () => {
     const bloco = blocoPadrao(acharBlocoDef('enviar_email')!)
     expect(bloco).toEqual({ tipo: 'enviar_email', config: { template: 'follow_up_1' } })
