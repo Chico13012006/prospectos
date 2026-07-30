@@ -44,19 +44,21 @@ const RUN = Date.now().toString(36)
 let falhas = 0
 const checa = (c: boolean, d: string) => { c ? ok(d) : (no(d), falhas++) }
 
+// destino do saltar_se referencia o ID estável do passo final (não o índice).
+const ID_FINAL = 'passo-respondeu'
 const DEF = {
   gatilho: { tipo: 'campo_data_vence', config: { campo: 'proxima_acao_data', dias: 1 } },
   condicoes: [],
   acoes: [
-    { tipo: 'enviar_email', config: { template: 'primeiro_contato' } },                                         // 0
-    { tipo: 'esperar', config: { dias: 3 } },                                                                    // 1
-    { tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: 8 } }, // 2
-    { tipo: 'enviar_email', config: { template: 'follow_up_1' } },                                               // 3
-    { tipo: 'esperar', config: { dias: 3 } },                                                                    // 4
-    { tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: 8 } }, // 5
-    { tipo: 'criar_tarefa', config: { titulo: 'Ligar (sem resposta)' } },                                        // 6
-    { tipo: 'encerrar', config: {} },                                                                            // 7
-    { tipo: 'criar_tarefa', config: { titulo: 'Respondeu: atualizar status + notificar' } },                     // 8
+    { tipo: 'enviar_email', config: { template: 'primeiro_contato' } },                                                // 0
+    { tipo: 'esperar', config: { dias: 3 } },                                                                           // 1
+    { tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: ID_FINAL } }, // 2
+    { tipo: 'enviar_email', config: { template: 'follow_up_1' } },                                                      // 3
+    { tipo: 'esperar', config: { dias: 3 } },                                                                           // 4
+    { tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: ID_FINAL } }, // 5
+    { tipo: 'criar_tarefa', config: { titulo: 'Ligar (sem resposta)' } },                                               // 6
+    { tipo: 'encerrar', config: {} },                                                                                   // 7
+    { id: ID_FINAL, tipo: 'criar_tarefa', config: { titulo: 'Respondeu: atualizar status + notificar' } },              // 8
   ],
 }
 
@@ -155,7 +157,7 @@ async function main() {
     const A2 = await eventosDoLead(leadA)
     const B2 = await eventosDoLead(leadB)
     checa(A2.status === 'concluido', 'tick 2: lead A (respondeu) concluído.')
-    checa(A2.saltos.some((s) => s.detalhe?.passou === true && s.detalhe?.destino === 8), 'tick 2: lead A SALTOU no passo 2 (respondeu → destino 8).')
+    checa(A2.saltos.some((s) => s.detalhe?.passou === true && s.detalhe?.destinoId === ID_FINAL), 'tick 2: lead A SALTOU no passo 2 (respondeu → destino por id).')
     checa(A2.tarefas.includes('Respondeu: atualizar status + notificar') && !A2.emails.includes('follow_up_1'),
       'tick 2: lead A foi pro braço final (sem follow-up).')
     checa(B2.status === 'aguardando' && B2.emails.includes('follow_up_1'),

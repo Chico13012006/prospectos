@@ -235,7 +235,8 @@ export const ACOES: BlocoDef[] = [
     label: 'Ramificar (saltar se…)',
     descricao: 'Se a condição passar, salta para outro passo; senão continua.',
     campos: [], // editor dedicado (condição aninhada + destino), ver ResumoFluxo/editor
-    configInicial: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: 0 },
+    // destino = id do passo alvo (string). '' = ainda não escolhido (a UI valida).
+    configInicial: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: '' },
   },
   {
     tipo: 'encerrar',
@@ -262,9 +263,20 @@ export function configPadrao(def: BlocoDef): Record<string, unknown> {
   return config
 }
 
-// Instancia um BlocoConfig novo com os padrões do tipo.
+// ID estável de passo (Web Crypto — existe no browser e no Node 20+).
+function novoId(): string {
+  return globalThis.crypto.randomUUID()
+}
+
+// Instancia um BlocoConfig novo com os padrões do tipo, já com um id estável.
 export function blocoPadrao(def: BlocoDef): BlocoConfig {
-  return { tipo: def.tipo, config: configPadrao(def) }
+  return { id: novoId(), tipo: def.tipo, config: configPadrao(def) }
+}
+
+// Garante que TODA ação tem um id estável (backfill de defs antigas ao carregar
+// no editor). Alvos de saltar_se referenciam esses ids.
+export function garantirIdsAcoes(def: DefinicaoWorkflow): DefinicaoWorkflow {
+  return { ...def, acoes: (def.acoes ?? []).map((a) => (a.id ? a : { ...a, id: novoId() })) }
 }
 
 // Definição inicial de um workflow recém-criado: gatilho padrão, sem condições,

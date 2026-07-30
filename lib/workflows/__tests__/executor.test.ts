@@ -146,22 +146,23 @@ describe('executor de workflows', () => {
   // Fluxo de aceite da Fase 4.5 (control-flow por SALTO no pipeline; as ações
   // finais 'atualizar status'/'notificar' chegam na entrega 3 — aqui uso as
   // ações disponíveis como stand-in, o que prova é o desvio de passo_atual):
-  //  0 email(primeiro) · 1 esperar · 2 ramificar(respondeu→8) · 3 email(follow)
-  //  4 esperar · 5 ramificar(respondeu→8) · 6 tarefa(ligação) · 7 encerrar
-  //  8 tarefa(respondeu)
+  //  0 email(primeiro) · 1 esperar · 2 saltar_se(respondeu→final) · 3 email(follow)
+  //  4 esperar · 5 saltar_se(respondeu→final) · 6 tarefa(ligação) · 7 encerrar
+  //  8 tarefa(respondeu)  ← destino referenciado por ID estável, não índice
+  const ID_FINAL = 'passo-respondeu'
   const fluxoAceite: DefinicaoWorkflow = {
     gatilho,
     condicoes: [],
     acoes: [
       { tipo: 'enviar_email', config: { template: 'primeiro_contato' } },
       { tipo: 'esperar', config: { dias: 3 } },
-      { tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: 8 } },
+      { tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: ID_FINAL } },
       { tipo: 'enviar_email', config: { template: 'follow_up_1' } },
       { tipo: 'esperar', config: { dias: 3 } },
-      { tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: 8 } },
+      { tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: ID_FINAL } },
       { tipo: 'criar_tarefa', config: { titulo: 'Ligar (sem resposta)' } },
       { tipo: 'encerrar', config: {} },
-      { tipo: 'criar_tarefa', config: { titulo: 'Respondeu: atualizar status + notificar' } },
+      { id: ID_FINAL, tipo: 'criar_tarefa', config: { titulo: 'Respondeu: atualizar status + notificar' } },
     ],
   }
 
@@ -215,7 +216,40 @@ describe('executor de workflows', () => {
     const store = new MemoryWorkflowStore(); const amb = new AmbienteFake()
     amb.alvos = ['lead-1'] // não respondeu → condição {respondeu:false} passa → salta p/ si mesmo
     await publicarWorkflow(store, { gatilho, condicoes: [], acoes: [
-      { tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: false } }, destino: 0 } },
+      { id: 'loop', tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: false } }, destino: 'loop' } },
+    ] })
+    await processarTudo(store, registro, amb)
+    const ex = [...(store as unknown as { execucoes: Map<string, { status: string }> }).execucoes.values()][0]
+    expect(ex.status).toBe('erro')
+  })
+
+  it('saltar_se por ID: o alvo é resolvido por id, então REORDENAR passos não quebra o salto', async () => {
+    // Alvo tem id fixo; um passo é inserido ANTES dele (deslocaria o índice).
+    // Se o destino fosse índice, apontaria pro passo errado; por id, acerta.
+    const alvo = { id: 'alvo', tipo: 'criar_tarefa', config: { titulo: 'destino certo' } }
+    const def: DefinicaoWorkflow = {
+      gatilho, condicoes: [],
+      acoes: [
+        { tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: 'alvo' } },
+        { tipo: 'criar_tarefa', config: { titulo: 'inserido antes do alvo' } }, // desloca o índice do alvo p/ 2
+        { tipo: 'enviar_email', config: { template: 'follow_up_1' } },
+        { tipo: 'encerrar', config: {} },
+        alvo,
+      ],
+    }
+    const store = new MemoryWorkflowStore(); const amb = new AmbienteFake()
+    amb.alvos = ['lead-1']; amb.respondeu.add('lead-1') // respondeu → salta p/ 'alvo'
+    await publicarWorkflow(store, def)
+    await processarTudo(store, registro, amb)
+    expect(amb.tarefas).toEqual([{ leadId: 'lead-1', titulo: 'destino certo' }]) // acertou o alvo, não o passo 1
+    expect(amb.emails).toHaveLength(0)
+  })
+
+  it('saltar_se com destino inexistente vira erro claro', async () => {
+    const store = new MemoryWorkflowStore(); const amb = new AmbienteFake()
+    amb.alvos = ['lead-1']; amb.respondeu.add('lead-1')
+    await publicarWorkflow(store, { gatilho, condicoes: [], acoes: [
+      { tipo: 'saltar_se', config: { condicao: { tipo: 'lead_respondeu', config: { respondeu: true } }, destino: 'nao-existe' } },
     ] })
     await processarTudo(store, registro, amb)
     const ex = [...(store as unknown as { execucoes: Map<string, { status: string }> }).execucoes.values()][0]

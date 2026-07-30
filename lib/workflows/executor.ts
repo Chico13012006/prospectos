@@ -108,10 +108,17 @@ export async function processarExecucao(
         return
       }
 
-      // saltar: desvia; continuar: próximo passo. Persiste passo_atual sempre,
+      // saltar: resolve o id do passo alvo → índice ATUAL (referência estável a
+      // reordenar/remover). continuar: próximo passo. Persiste passo_atual sempre,
       // para o resume (at-least-once) retomar do lugar certo se cair aqui.
-      passo = res.tipo === 'saltar' ? res.para : passo + 1
-      if (res.tipo === 'saltar') await log('saltou', { para: passo })
+      if (res.tipo === 'saltar') {
+        const alvo = (def.acoes ?? []).findIndex((a) => a.id === res.destinoId)
+        if (alvo < 0) throw new Error(`saltar_se: passo destino '${res.destinoId}' não existe na definição`)
+        passo = alvo
+        await log('saltou', { destinoId: res.destinoId, para: alvo })
+      } else {
+        passo += 1
+      }
       await store.atualizarExecucao(ex.id, { passo_atual: passo, status: 'em_andamento', atualizado_em: agoraISO })
     }
 

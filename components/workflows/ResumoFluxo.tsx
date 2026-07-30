@@ -55,8 +55,9 @@ function FluxoPasso({ bloco, indice, acoes }: { bloco: BlocoConfig; indice: numb
   if (bloco.tipo === 'saltar_se') {
     const cfg = bloco.config ?? {};
     const cond = cfg.condicao as BlocoConfig | undefined;
-    const destino = Number(cfg.destino);
-    const destinoValido = Number.isInteger(destino) && destino >= 0 && destino < acoes.length;
+    const destinoId = String(cfg.destino ?? '');
+    const destino = acoes.findIndex((a) => a.id === destinoId); // id → índice atual
+    const destinoValido = destino >= 0;
     return (
       <li>
         <div className="flex items-center gap-2">
@@ -70,7 +71,7 @@ function FluxoPasso({ bloco, indice, acoes }: { bloco: BlocoConfig; indice: numb
           <div className="flex items-center gap-1.5 text-emerald-300">
             <CornerDownRight size={12} /> verdadeiro → vai para{' '}
             <span className={destinoValido ? 'font-medium' : 'text-red-400'}>
-              {destinoValido ? rotuloPasso(acoes, destino) : `passo ${destino + 1} (fora do fluxo)`}
+              {destinoValido ? rotuloPasso(acoes, destino) : destinoId ? 'passo removido' : 'destino não escolhido'}
             </span>
           </div>
           <div className="flex items-center gap-1.5 text-slate-400">

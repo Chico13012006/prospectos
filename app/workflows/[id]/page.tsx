@@ -10,7 +10,7 @@ import {
 import type { BlocoConfig, DefinicaoWorkflow, Workflow, WorkflowVersao, StatusWorkflow } from '@/lib/workflows/types';
 import {
   ACOES, CONDICOES, GATILHOS, acharBlocoDef, blocoPadrao, configPadrao, definicaoVazia,
-  type BlocoDef, type CampoDef,
+  garantirIdsAcoes, type BlocoDef, type CampoDef,
 } from '@/lib/workflows/catalogo';
 import ResumoFluxo from '@/components/workflows/ResumoFluxo';
 
@@ -90,7 +90,8 @@ function LinhaBloco({ opcoes, bloco, onChange, onRemover, controles, extra }: {
           value={bloco.tipo}
           onChange={e => {
             const novoDef = acharBlocoDef(e.target.value)!;
-            onChange({ tipo: novoDef.tipo, config: configPadrao(novoDef) });
+            // Preserva o id estável do passo ao trocar o tipo (saltar_se aponta p/ ele).
+            onChange({ id: bloco.id, tipo: novoDef.tipo, config: configPadrao(novoDef) });
           }}
           className="bg-[#1a1f2e] border border-[#2a3147] rounded-lg px-2.5 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500/50"
         >
@@ -123,7 +124,7 @@ function SaltarSeEditor({ bloco, acoes, onChange }: {
 }) {
   const cond = (bloco.config.condicao as BlocoConfig | undefined) ?? blocoPadrao(CONDICOES[0]);
   const condDef = acharBlocoDef(cond.tipo) ?? CONDICOES[0];
-  const destino = Number(bloco.config.destino ?? 0);
+  const destino = String(bloco.config.destino ?? '');
   const setCond = (novo: BlocoConfig) => onChange({ ...bloco, config: { ...bloco.config, condicao: novo } });
   return (
     <div className="mt-2 space-y-2 border-l-2 border-sky-500/30 pl-3">
@@ -146,11 +147,14 @@ function SaltarSeEditor({ bloco, acoes, onChange }: {
         <span>então pular para</span>
         <select
           value={destino}
-          onChange={e => onChange({ ...bloco, config: { ...bloco.config, destino: Number(e.target.value) } })}
+          onChange={e => onChange({ ...bloco, config: { ...bloco.config, destino: e.target.value } })}
           className="bg-[#0f1117] border border-[#2a3147] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500/50 min-w-[16rem]"
         >
+          <option value="">— escolha um passo —</option>
           {acoes.map((a, idx) => (
-            <option key={idx} value={idx}>{idx + 1}. {acharBlocoDef(a.tipo)?.label ?? a.tipo}</option>
+            a.id && a.id !== bloco.id
+              ? <option key={a.id} value={a.id}>{idx + 1}. {acharBlocoDef(a.tipo)?.label ?? a.tipo}</option>
+              : null
           ))}
         </select>
         <span className="text-slate-600">(senão continua no próximo passo)</span>
@@ -185,7 +189,8 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
       const vs = (data.versoes ?? []) as WorkflowVersao[];
       const versaoAtual = vs.find(v => v.id === wf.versao_atual_id);
       // Base de edição: rascunho pendente, senão a versão publicada, senão vazio.
-      const base = wf.rascunho_definicao ?? versaoAtual?.definicao ?? definicaoVazia();
+      // garantirIdsAcoes: backfill de ids em defs antigas (alvos de saltar_se).
+      const base = garantirIdsAcoes(wf.rascunho_definicao ?? versaoAtual?.definicao ?? definicaoVazia());
       setWorkflow(wf);
       setVersoes(vs);
       setStats(data.execucoesPorStatus ?? {});

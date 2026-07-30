@@ -7,6 +7,11 @@
 // de execução (Fase 3) via registro extensível — aqui só guardamos a config.
 
 export interface BlocoConfig {
+  // ID ESTÁVEL do passo (gerado em blocoPadrao). Alvos de ramificação
+  // (saltar_se.destino) referenciam este id — NÃO o índice — para sobreviver a
+  // reordenar/remover passos. Opcional só por retrocompat de defs antigas; a UI
+  // garante um id em toda ação carregada (garantirIdsAcoes).
+  id?: string
   // Identificador do gatilho/condição/ação. Ex.: 'campo_data_vence',
   // 'lead_respondeu', 'enviar_email'. O registro da Fase 3 resolve o handler.
   tipo: string

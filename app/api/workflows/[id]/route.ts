@@ -16,7 +16,10 @@ function coagirDefinicao(raw: unknown): DefinicaoWorkflow {
   const obj = (raw ?? {}) as Record<string, unknown>
   const bloco = (b: unknown): BlocoConfig => {
     const o = (b ?? {}) as Record<string, unknown>
-    return { tipo: String(o.tipo ?? ''), config: (o.config as Record<string, unknown>) ?? {} }
+    const base: BlocoConfig = { tipo: String(o.tipo ?? ''), config: (o.config as Record<string, unknown>) ?? {} }
+    // Preserva o id estável do passo (referenciado por saltar_se.destino).
+    if (typeof o.id === 'string' && o.id) base.id = o.id
+    return base
   }
   const g = (obj.gatilho ?? {}) as Record<string, unknown>
   return {

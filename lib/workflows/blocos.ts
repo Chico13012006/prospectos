@@ -204,12 +204,12 @@ export const acaoSaltarSe: Acao = {
   async executar(ctx): Promise<ResultadoAcao> {
     const cond = ctx.config.condicao as BlocoConfig | undefined
     if (!cond?.tipo) throw new Error("ação 'saltar_se' exige config.condicao")
-    const destino = Number(ctx.config.destino)
-    if (!Number.isInteger(destino) || destino < 0)
-      throw new Error("ação 'saltar_se' exige config.destino (índice de passo inteiro >= 0)")
+    const destinoId = String(ctx.config.destino ?? '')
+    if (!destinoId) throw new Error("ação 'saltar_se' exige config.destino (id do passo alvo)")
     const passou = await ctx.registro.obterCondicao(cond.tipo).avaliar(comConfig(ctx, cond.config ?? {}))
-    await ctx.log('salto_avaliado', { condicao: cond.tipo, passou, destino })
-    return passou ? { tipo: 'saltar', para: destino } : { tipo: 'continuar' }
+    await ctx.log('salto_avaliado', { condicao: cond.tipo, passou, destinoId })
+    // A resolução id→índice é do executor (ele conhece a lista de passos).
+    return passou ? { tipo: 'saltar', destinoId } : { tipo: 'continuar' }
   },
 }
 

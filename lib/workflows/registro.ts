@@ -31,15 +31,17 @@ export interface CtxExec {
 // Resultado de uma ação, do ponto de vista do CONTROLE DE FLUXO do pipeline:
 //  - continuar: segue para o próximo passo (passo_atual + 1);
 //  - esperar:   espera PERSISTIDA — suspende até `ate`, retoma no mesmo passo;
-//  - saltar:    desvia o pipeline para o passo de índice `para` (ramificação de
+//  - saltar:    desvia o pipeline para o passo cujo id é `destinoId` (o executor
+//               resolve id→índice atual na hora de rodar). Ramificação de
 //               verdade — o braço destino são passos de topo, então esperas
-//               dentro dele suspendem normalmente);
+//               dentro dele suspendem normalmente. Referenciar por ID (não
+//               índice) sobrevive a reordenar/remover passos.
 //  - encerrar:  conclui a execução aqui (halt — impede "vazar" de um braço pro
 //               outro numa lista plana).
 export type ResultadoAcao =
   | { tipo: 'continuar' }
   | { tipo: 'esperar'; ate: string }
-  | { tipo: 'saltar'; para: number }
+  | { tipo: 'saltar'; destinoId: string }
   | { tipo: 'encerrar' }
 
 export interface Gatilho {
