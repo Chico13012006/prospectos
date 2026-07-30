@@ -11,6 +11,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { criarMotorReal } from '@/lib/engine/scheduler'
 import { normalizarNicho, preencher } from '@/lib/engine/mensagem'
 import type { Motor } from '@/lib/engine'
+import { avaliarOperador, type Operador } from './operadores'
 
 export interface AmbienteWorkflow {
   readonly organizacaoId: string
@@ -18,6 +19,13 @@ export interface AmbienteWorkflow {
   readonly simular: boolean
   // Gatilho 'campo_data_vence': leads cujo `campo` (data) vence em até `dias`.
   selecionarLeadsComCampoVencendo(campo: string, dias: number): Promise<string[]>
+  // Gatilho 'campo_igual' (Fase 4.6): leads cujo `campo` satisfaz `operador` vs
+  // `valor` (reaproveita avaliarOperador). Serve p/ "mudou de status" e "entrou
+  // em etapa" (o enrollment idempotente dispara uma vez por lead/workflow).
+  selecionarLeadsPorCampo(campo: string, operador: string, valor: unknown): Promise<string[]>
+  // Gatilho 'sem_resposta_ha_dias' (Fase 4.6): leads que NUNCA tiveram interação
+  // tipo='resposta' e cujo `campo` (data) é mais antigo que `dias` dias.
+  selecionarLeadsSemRespostaHaDias(campo: string, dias: number): Promise<string[]>
   // Condição 'lead_respondeu': o lead já respondeu? (interação tipo='resposta',
   // gravada pelo detectarResposta do motor).
   leadRespondeu(leadId: string): Promise<boolean>
@@ -28,8 +36,9 @@ export interface AmbienteWorkflow {
   // simular). Devolve o assunto para o log da execução.
   enviarEmailTemplate(leadId: string, templateTipo: string): Promise<{ enviado: boolean; assunto: string }>
   // Ação 'criar_tarefa'/'criar_tarefa_ligacao': registra a tarefa como interação
-  // de sistema no lead.
-  criarTarefa(leadId: string, titulo: string): Promise<void>
+  // de sistema no lead, com responsável. Sem responsavelId → cai no responsável
+  // do próprio lead (lead.responsavel_id).
+  criarTarefa(leadId: string, titulo: string, responsavelId?: string | null): Promise<void>
   // Ações 'atualizar_status'/'mover_pipeline'/'atribuir_responsavel' (Fase 4.5):
   // grava UM campo do lead (whitelist de ESCRITA). No-op em simulação.
   atualizarCampoLead(leadId: string, campo: string, valor: unknown): Promise<void>
@@ -83,6 +92,48 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     return (data ?? []).map((l) => l.id as string)
   }
 
+  async selecionarLeadsPorCampo(campo: string, operador: string, valor: unknown): Promise<string[]> {
+    if (!CAMPOS_LEAD_PERMITIDOS.has(campo))
+      throw new Error(`Campo de lead não permitido no gatilho: '${campo}'`)
+    // Traz id + o campo e filtra em memória com avaliarOperador (mesma lógica da
+    // condição — sem duplicar). Org pequena; ok não empurrar todo operador p/ o SQL.
+    const { data, error } = await this.db
+      .from('leads')
+      .select(`id, ${campo}`)
+      .eq('organizacao_id', this.organizacaoId)
+    if (error) throw error
+    // `select('id, ' + campo)` dinâmico não é estaticamente tipado — cast via unknown.
+    const linhas = (data ?? []) as unknown as Record<string, unknown>[]
+    return linhas
+      .filter((l) => avaliarOperador(operador as Operador, l[campo], valor))
+      .map((l) => l.id as string)
+  }
+
+  async selecionarLeadsSemRespostaHaDias(campo: string, dias: number): Promise<string[]> {
+    if (!CAMPOS_DATA_PERMITIDOS.has(campo))
+      throw new Error(`Campo de data não permitido no gatilho: '${campo}'`)
+    const limite = new Date(Date.now() - dias * 86_400_000).toISOString()
+    // Candidatos: campo (data) mais antigo que N dias.
+    const { data: candidatos, error: e1 } = await this.db
+      .from('leads')
+      .select('id')
+      .eq('organizacao_id', this.organizacaoId)
+      .not(campo, 'is', null)
+      .lte(campo, limite)
+    if (e1) throw e1
+    // Anti-join: quem já teve interação tipo='resposta' fica de fora.
+    const { data: respostas, error: e2 } = await this.db
+      .from('interacoes')
+      .select('lead_id')
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('tipo', 'resposta')
+    if (e2) throw e2
+    const responderam = new Set((respostas ?? []).map((r) => (r as { lead_id: string }).lead_id))
+    return (candidatos ?? [])
+      .map((l) => (l as { id: string }).id)
+      .filter((id) => !responderam.has(id))
+  }
+
   async leadRespondeu(leadId: string): Promise<boolean> {
     return (await this.motor.store.contarInteracoes(leadId, 'resposta')) > 0
   }
@@ -129,14 +180,21 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     return { enviado: true, assunto }
   }
 
-  async criarTarefa(leadId: string, titulo: string): Promise<void> {
+  async criarTarefa(leadId: string, titulo: string, responsavelId?: string | null): Promise<void> {
     if (this.simular) return
+    // Responsável explícito da ação; senão, o responsável do próprio lead.
+    let responsavel = responsavelId ?? null
+    if (!responsavel) {
+      const lead = await this.motor.store.buscarLead(leadId)
+      responsavel = lead?.responsavel_id ?? null
+    }
     await this.motor.store.registrarInteracao({
       lead_id: leadId,
       tipo: 'nota',
       canal: 'sistema',
       descricao: `Tarefa (workflow): ${titulo}`,
       origem_acao: 'ia',
+      responsavel_id: responsavel,
     })
   }
 

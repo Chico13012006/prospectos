@@ -157,6 +157,29 @@ export async function processarEnrollment(
   return inscritos
 }
 
+// Inscreve UM lead específico num workflow SOB DEMANDA (gatilho 'manual' ou botão
+// "Inscrever agora"), sem esperar o poll. Mesma lógica de processarEnrollment
+// (criarExecucao + evento execucao_iniciada), idempotente por lead. O stepping
+// segue sendo do poll. Exige workflow publicado (fixa a versão vigente).
+export async function inscreverLeadManual(
+  store: WorkflowStore,
+  workflowId: string,
+  leadId: string,
+): Promise<{ jaInscrito: boolean; execucaoId?: string }> {
+  const wf = await store.buscarWorkflow(workflowId)
+  if (!wf) throw new Error(`workflow ${workflowId} não encontrado`)
+  if (wf.status !== 'publicado' || !wf.versao_atual_id)
+    throw new Error('workflow precisa estar publicado para inscrever um lead manualmente.')
+  if (await store.existeExecucaoParaLead(workflowId, leadId)) return { jaInscrito: true }
+  const ex = await store.criarExecucao({ workflow_id: workflowId, versao_id: wf.versao_atual_id, lead_id: leadId })
+  await store.registrarEvento({
+    execucao_id: ex.id,
+    tipo: 'execucao_iniciada',
+    detalhe: { versao_id: ex.versao_id, lead_id: leadId, via: 'manual' },
+  })
+  return { jaInscrito: false, execucaoId: ex.id }
+}
+
 // Um "tick" completo do poll para UMA organização (o store já é org-scoped):
 // inscreve novos e avança todas as execuções pendentes.
 export async function processarTudo(

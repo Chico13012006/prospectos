@@ -1,11 +1,11 @@
 'use client';
 
-import { use, useEffect, useMemo, useState } from 'react';
+import { createContext, use, useContext, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, Zap, Filter, PlayCircle,
-  CheckCircle2, PauseCircle, Rocket, Save, AlertTriangle,
+  CheckCircle2, PauseCircle, Rocket, Save, AlertTriangle, UserPlus, Search,
 } from 'lucide-react';
 import type { BlocoConfig, DefinicaoWorkflow, Workflow, WorkflowVersao, StatusWorkflow } from '@/lib/workflows/types';
 import {
@@ -13,6 +13,12 @@ import {
   garantirIdsAcoes, type BlocoDef, type CampoDef,
 } from '@/lib/workflows/catalogo';
 import ResumoFluxo from '@/components/workflows/ResumoFluxo';
+import { getUsuarios, getLeads } from '@/lib/api';
+import type { Usuario, Lead } from '@/lib/supabase';
+
+// Usuários da org (para o dropdown de responsável em campos tipo 'usuario'),
+// via contexto para não threadar props por LinhaBloco/SaltarSeEditor.
+const UsuariosCtx = createContext<Usuario[]>([]);
 
 const STATUS_INFO: Record<StatusWorkflow, { label: string; classes: string }> = {
   rascunho: { label: 'Rascunho', classes: 'bg-slate-500/20 text-slate-300' },
@@ -31,6 +37,7 @@ function CamposEditor({ def, config, onChange }: {
   config: Record<string, unknown>;
   onChange: (nome: string, valor: unknown) => void;
 }) {
+  const usuarios = useContext(UsuariosCtx);
   if (def.campos.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-3 mt-2">
@@ -39,7 +46,16 @@ function CamposEditor({ def, config, onChange }: {
         return (
           <label key={campo.nome} className="text-xs text-slate-400 flex flex-col gap-1">
             <span>{campo.label}</span>
-            {campo.tipo === 'select' || campo.tipo === 'booleano' ? (
+            {campo.tipo === 'usuario' ? (
+              <select
+                value={String(valor ?? '')}
+                onChange={e => onChange(campo.nome, e.target.value)}
+                className="bg-[#0f1117] border border-[#2a3147] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500/50 min-w-[12rem]"
+              >
+                <option value="">— selecione —</option>
+                {usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
+              </select>
+            ) : campo.tipo === 'select' || campo.tipo === 'booleano' ? (
               <select
                 value={String(valor ?? campo.padrao)}
                 onChange={e => onChange(campo.nome, campo.tipo === 'booleano' ? e.target.value === 'true' : e.target.value)}
@@ -179,6 +195,15 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
   const [msg, setMsg] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
+  // Usuários (dropdown de responsável) e leads (inscrição manual).
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+
+  useEffect(() => {
+    getUsuarios().then(setUsuarios).catch(() => {});
+    getLeads().then(setLeads).catch(() => {});
+  }, []);
+
   async function carregar() {
     setLoading(true);
     try {
@@ -300,6 +325,7 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
   const podeExcluir = workflow.status === 'rascunho' && !workflow.versao_atual_id;
 
   return (
+    <UsuariosCtx.Provider value={usuarios}>
     <div className="p-6 space-y-5 max-w-4xl">
       {/* Cabeçalho */}
       <div>
@@ -477,7 +503,91 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
 
       {/* Resumo visual read-only do fluxo (gatilho → público → ações → ramificação → fim) */}
       <ResumoFluxo def={def} />
+
+      {/* Inscrição manual (Fase 4.6): só faz sentido com o workflow publicado. */}
+      {workflow.status === 'publicado' && <InscricaoManual workflowId={workflow.id} leads={leads} />}
     </div>
+    </UsuariosCtx.Provider>
+  );
+}
+
+// Painel de inscrição manual de UM lead (gatilho 'manual' ou teste sob demanda).
+function InscricaoManual({ workflowId, leads }: { workflowId: string; leads: Lead[] }) {
+  const [busca, setBusca] = useState('');
+  const [selecionado, setSelecionado] = useState<Lead | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const [feedback, setFeedback] = useState<{ ok: boolean; texto: string } | null>(null);
+
+  const filtrados = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    if (!q) return [];
+    return leads
+      .filter(l => `${l.empresa} ${l.contato_nome ?? ''}`.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [busca, leads]);
+
+  async function inscrever() {
+    if (!selecionado || ocupado) return;
+    setOcupado(true); setFeedback(null);
+    try {
+      const r = await fetch(`/api/workflows/${workflowId}/inscrever`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: selecionado.id }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.erro || 'Falha ao inscrever');
+      setFeedback({ ok: true, texto: data.jaInscrito ? 'Este lead já estava inscrito.' : `Lead inscrito — execução criada (será processada no próximo tick).` });
+    } catch (e) {
+      setFeedback({ ok: false, texto: e instanceof Error ? e.message : 'Erro ao inscrever' });
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  return (
+    <section className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] p-4 space-y-2">
+      <div className="flex items-center gap-2 text-slate-200 font-semibold text-sm">
+        <UserPlus size={15} className="text-indigo-400" /> Inscrever um lead manualmente
+        <span className="text-xs font-normal text-slate-500">— sem esperar o cron</span>
+      </div>
+      <div className="relative">
+        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+        <input
+          value={selecionado ? `${selecionado.empresa}${selecionado.contato_nome ? ' · ' + selecionado.contato_nome : ''}` : busca}
+          onChange={e => { setSelecionado(null); setBusca(e.target.value); setFeedback(null); }}
+          placeholder="Buscar lead por empresa ou contato..."
+          className="w-full bg-[#0f1117] border border-[#2a3147] rounded-lg pl-8 pr-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500/50"
+        />
+        {filtrados.length > 0 && !selecionado && (
+          <div className="absolute z-10 mt-1 w-full bg-[#1a1f2e] border border-[#2a3147] rounded-lg shadow-xl max-h-56 overflow-y-auto">
+            {filtrados.map(l => (
+              <button
+                key={l.id}
+                onClick={() => { setSelecionado(l); setBusca(''); }}
+                className="block w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-[#0f1117]"
+              >
+                {l.empresa}
+                {l.contato_nome && <span className="text-slate-500"> · {l.contato_nome}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={inscrever}
+          disabled={!selecionado || ocupado}
+          className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-white font-medium disabled:opacity-50"
+          style={{ backgroundColor: '#1e3a5f' }}
+        >
+          {ocupado ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />} Inscrever agora
+        </button>
+        {feedback && (
+          <span className={`text-xs ${feedback.ok ? 'text-green-300' : 'text-red-300'}`}>{feedback.texto}</span>
+        )}
+      </div>
+    </section>
   );
 }
 

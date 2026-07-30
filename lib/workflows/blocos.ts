@@ -22,6 +22,42 @@ export const gatilhoCampoDataVence: Gatilho = {
   },
 }
 
+// --- GATILHO: campo do lead igual/compara a um valor (Fase 4.6) -------------
+// Espelho do lado do gatilho da condição `campo`. Cobre "mudou de status" E
+// "entrou em etapa" (mesma coluna leads.estagio): o enrollment é idempotente
+// (existeExecucaoParaLead), então dispara uma vez, quando o poll vê o lead no
+// estado, e nunca mais para aquele workflow.
+export const gatilhoCampoIgual: Gatilho = {
+  tipo: 'campo_igual',
+  async selecionarAlvos(ctx) {
+    const campo = String(ctx.config.campo ?? '')
+    if (!campo) return []
+    const operador = String(ctx.config.operador ?? 'igual')
+    return ctx.ambiente.selecionarLeadsPorCampo(campo, operador, ctx.config.valor)
+  },
+}
+
+// --- GATILHO: sem resposta há N dias (Fase 4.6) -----------------------------
+// Leads que NUNCA responderam e cujo `campo` (data) é mais antigo que N dias.
+export const gatilhoSemResposta: Gatilho = {
+  tipo: 'sem_resposta_ha_dias',
+  async selecionarAlvos(ctx) {
+    const campo = String(ctx.config.campo ?? 'ultimo_contato')
+    const dias = num(ctx.config.dias, 0)
+    return ctx.ambiente.selecionarLeadsSemRespostaHaDias(campo, dias)
+  },
+}
+
+// --- GATILHO: manual (Fase 4.6) — NÃO auto-inscreve via poll -----------------
+// selecionarAlvos sempre vazio: a inscrição é por ação humana (botão "Inscrever
+// agora", via inscreverLeadManual), não por varredura do cron.
+export const gatilhoManual: Gatilho = {
+  tipo: 'manual',
+  async selecionarAlvos() {
+    return []
+  },
+}
+
 // --- CONDIÇÃO: o lead respondeu? (reaproveita o sinal do detectarResposta) ---
 // config.respondeu (default true): a condição PASSA quando o estado do lead bate
 // com o esperado. Ex.: { respondeu: false } passa só se o lead NÃO respondeu.
@@ -80,8 +116,9 @@ export const acaoCriarTarefa: Acao = {
   async executar(ctx): Promise<ResultadoAcao> {
     if (!ctx.leadId) throw new Error("ação 'criar_tarefa' exige um lead")
     const titulo = String(ctx.config.titulo ?? 'Tarefa do workflow')
-    await ctx.ambiente.criarTarefa(ctx.leadId, titulo)
-    await ctx.log('tarefa_criada', { titulo })
+    const responsavelId = String(ctx.config.responsavel_id ?? '') || undefined
+    await ctx.ambiente.criarTarefa(ctx.leadId, titulo, responsavelId)
+    await ctx.log('tarefa_criada', { titulo, responsavelId: responsavelId ?? null })
     return { tipo: 'continuar' }
   },
 }
@@ -108,8 +145,9 @@ export const acaoCriarTarefaLigacao: Acao = {
   async executar(ctx): Promise<ResultadoAcao> {
     if (!ctx.leadId) throw new Error("ação 'criar_tarefa_ligacao' exige um lead")
     const titulo = String(ctx.config.titulo ?? 'Ligar para o lead')
-    await ctx.ambiente.criarTarefa(ctx.leadId, `[Ligação] ${titulo}`)
-    await ctx.log('tarefa_ligacao_criada', { titulo })
+    const responsavelId = String(ctx.config.responsavel_id ?? '') || undefined
+    await ctx.ambiente.criarTarefa(ctx.leadId, `[Ligação] ${titulo}`, responsavelId)
+    await ctx.log('tarefa_ligacao_criada', { titulo, responsavelId: responsavelId ?? null })
     return { tipo: 'continuar' }
   },
 }
@@ -227,6 +265,9 @@ export const acaoEncerrar: Acao = {
 export function registrarBlocosPadrao(registro = new RegistroWorkflows()): RegistroWorkflows {
   return registro
     .registrarGatilho(gatilhoCampoDataVence)
+    .registrarGatilho(gatilhoCampoIgual)
+    .registrarGatilho(gatilhoSemResposta)
+    .registrarGatilho(gatilhoManual)
     .registrarCondicao(condicaoLeadRespondeu)
     .registrarCondicao(condicaoCampo)
     .registrarAcao(acaoEsperar)

@@ -23,7 +23,7 @@ export type { Gatilho, Condicao, Acao, CtxExec, CtxGatilho, ResultadoAcao } from
 export { registrarBlocosPadrao } from './blocos'
 export { AmbienteSupabase } from './ambiente'
 export type { AmbienteWorkflow } from './ambiente'
-export { processarExecucao, processarEnrollment, processarTudo } from './executor'
+export { processarExecucao, processarEnrollment, processarTudo, inscreverLeadManual } from './executor'
 
 // Fábrica do store preso a uma organização (mesmo padrão de criarMotor(org)).
 export function criarWorkflowStore(organizacaoId: string, client?: SupabaseClient): SupabaseWorkflowStore {

@@ -6,8 +6,9 @@ import { describe, it, expect } from 'vitest'
 import { MemoryWorkflowStore } from '../store/memoryStore'
 import { criarWorkflow, publicar } from '../versionamento'
 import { registrarBlocosPadrao } from '../blocos'
-import { processarTudo, processarEnrollment, processarExecucao } from '../executor'
+import { processarTudo, processarEnrollment, processarExecucao, inscreverLeadManual } from '../executor'
 import type { AmbienteWorkflow } from '../ambiente'
+import { avaliarOperador, type Operador } from '../operadores'
 import type { DefinicaoWorkflow } from '../types'
 
 class AmbienteFake implements AmbienteWorkflow {
@@ -16,14 +17,25 @@ class AmbienteFake implements AmbienteWorkflow {
   alvos: string[] = []
   respondeu = new Set<string>()
   emails: { leadId: string; template: string }[] = []
-  tarefas: { leadId: string; titulo: string }[] = []
+  tarefas: { leadId: string; titulo: string; responsavelId?: string | null }[] = []
   campos: Record<string, Record<string, unknown>> = {} // leadId -> { campo: valor }
   escritas: { leadId: string; campo: string; valor: unknown }[] = []
   async selecionarLeadsComCampoVencendo() { return this.alvos }
+  async selecionarLeadsPorCampo(campo: string, operador: string, valor: unknown) {
+    return Object.entries(this.campos)
+      .filter(([, c]) => avaliarOperador(operador as Operador, c[campo], valor))
+      .map(([id]) => id)
+  }
+  async selecionarLeadsSemRespostaHaDias(campo: string, dias: number) {
+    const limite = Date.now() - dias * 86_400_000
+    return Object.entries(this.campos)
+      .filter(([id, c]) => { const t = Date.parse(String(c[campo])); return !Number.isNaN(t) && t <= limite && !this.respondeu.has(id) })
+      .map(([id]) => id)
+  }
   async leadRespondeu(leadId: string) { return this.respondeu.has(leadId) }
   async lerCampoLead(leadId: string, campo: string) { return this.campos[leadId]?.[campo] ?? null }
   async enviarEmailTemplate(leadId: string, template: string) { this.emails.push({ leadId, template }); return { enviado: true, assunto: 'assunto' } }
-  async criarTarefa(leadId: string, titulo: string) { this.tarefas.push({ leadId, titulo }) }
+  async criarTarefa(leadId: string, titulo: string, responsavelId?: string | null) { this.tarefas.push({ leadId, titulo, responsavelId }) }
   async atualizarCampoLead(leadId: string, campo: string, valor: unknown) { this.escritas.push({ leadId, campo, valor }) }
 }
 
@@ -301,6 +313,67 @@ describe('executor de workflows', () => {
     expect(tipos).toContain('responsavel_notificado')
     const wpp = eventos.find((e) => e.tipo === 'whatsapp_pendente')
     expect(wpp?.detalhe?.pendente_integracao).toBe(true)
+  })
+
+  // --- Fase 4.6: gatilhos novos + responsável na tarefa + inscrição manual ---
+
+  it('gatilho campo_igual: inscreve só os leads cujo campo bate com o valor', async () => {
+    const store = new MemoryWorkflowStore(); const amb = new AmbienteFake()
+    amb.campos = { l1: { estagio: 'follow_up' }, l2: { estagio: 'ganho' } }
+    const wfId = await publicarWorkflow(store, {
+      gatilho: { tipo: 'campo_igual', config: { campo: 'estagio', operador: 'igual', valor: 'follow_up' } },
+      condicoes: [], acoes: [{ tipo: 'criar_tarefa', config: { titulo: 't' } }],
+    })
+    expect(await processarEnrollment(store, registro, amb)).toBe(1)
+    expect(await store.existeExecucaoParaLead(wfId, 'l1')).toBe(true)
+    expect(await store.existeExecucaoParaLead(wfId, 'l2')).toBe(false)
+  })
+
+  it('gatilho sem_resposta_ha_dias: só leads SEM resposta e com data mais antiga que N dias', async () => {
+    const store = new MemoryWorkflowStore(); const amb = new AmbienteFake()
+    const antigo = new Date(Date.now() - 10 * 86_400_000).toISOString()
+    const recente = new Date().toISOString()
+    amb.campos = { velho: { ultimo_contato: antigo }, novo: { ultimo_contato: recente }, jaRespondeu: { ultimo_contato: antigo } }
+    amb.respondeu.add('jaRespondeu')
+    const wfId = await publicarWorkflow(store, {
+      gatilho: { tipo: 'sem_resposta_ha_dias', config: { campo: 'ultimo_contato', dias: 5 } },
+      condicoes: [], acoes: [{ tipo: 'criar_tarefa', config: { titulo: 't' } }],
+    })
+    expect(await processarEnrollment(store, registro, amb)).toBe(1)
+    expect(await store.existeExecucaoParaLead(wfId, 'velho')).toBe(true)
+    expect(await store.existeExecucaoParaLead(wfId, 'novo')).toBe(false) // data recente
+    expect(await store.existeExecucaoParaLead(wfId, 'jaRespondeu')).toBe(false) // já respondeu
+  })
+
+  it('gatilho manual: NÃO auto-inscreve pelo poll; inscreverLeadManual inscreve sob demanda (idempotente)', async () => {
+    const store = new MemoryWorkflowStore(); const amb = new AmbienteFake()
+    const wfId = await publicarWorkflow(store, {
+      gatilho: { tipo: 'manual', config: {} }, condicoes: [], acoes: [{ tipo: 'criar_tarefa', config: { titulo: 't' } }],
+    })
+    expect(await processarEnrollment(store, registro, amb)).toBe(0) // poll não inscreve nada
+    const r1 = await inscreverLeadManual(store, wfId, 'lead-x')
+    expect(r1.jaInscrito).toBe(false)
+    expect(await store.existeExecucaoParaLead(wfId, 'lead-x')).toBe(true)
+    const r2 = await inscreverLeadManual(store, wfId, 'lead-x')
+    expect(r2.jaInscrito).toBe(true) // não duplica
+  })
+
+  it('inscreverLeadManual exige workflow publicado', async () => {
+    const store = new MemoryWorkflowStore()
+    const wf = await criarWorkflow(store, {
+      nome: 'W', definicao: { gatilho: { tipo: 'manual', config: {} }, condicoes: [], acoes: [{ tipo: 'criar_tarefa', config: {} }] },
+    })
+    await expect(inscreverLeadManual(store, wf.id, 'l1')).rejects.toThrow(/publicado/)
+  })
+
+  it('criar_tarefa passa o responsavel_id escolhido para o ambiente', async () => {
+    const store = new MemoryWorkflowStore(); const amb = new AmbienteFake()
+    amb.alvos = ['lead-1']
+    await publicarWorkflow(store, {
+      gatilho, condicoes: [], acoes: [{ tipo: 'criar_tarefa', config: { titulo: 'T', responsavel_id: 'user-7' } }],
+    })
+    await processarTudo(store, registro, amb)
+    expect(amb.tarefas).toEqual([{ leadId: 'lead-1', titulo: 'T', responsavelId: 'user-7' }])
   })
 
   it('gatilho/condição/ação desconhecidos: erro claro do registro', () => {

@@ -12,7 +12,9 @@
 import type { BlocoConfig, DefinicaoWorkflow } from './types'
 import { OPERADORES } from './operadores'
 
-export type CampoTipo = 'texto' | 'numero' | 'select' | 'booleano'
+// 'usuario' = dropdown de usuários reais da org (carregados via getUsuarios no
+// editor; a UI resolve as opções em runtime, não são estáticas no catálogo).
+export type CampoTipo = 'texto' | 'numero' | 'select' | 'booleano' | 'usuario'
 
 export interface CampoDef {
   nome: string
@@ -45,24 +47,6 @@ const TEMPLATES_OPCOES = [
   { valor: 'follow_up_4', label: 'Follow-up 4' },
 ]
 
-export const GATILHOS: BlocoDef[] = [
-  {
-    tipo: 'campo_data_vence',
-    label: 'Data do lead vence',
-    descricao: 'Inscreve o lead quando um campo de data dele vence em até N dias.',
-    campos: [
-      {
-        nome: 'campo',
-        label: 'Campo de data',
-        tipo: 'texto',
-        padrao: 'proxima_acao_data',
-        dica: 'Coluna de data em leads (ex.: proxima_acao_data).',
-      },
-      { nome: 'dias', label: 'Dias de antecedência', tipo: 'numero', padrao: 0 },
-    ],
-  },
-]
-
 // Campos de `leads` expostos ao filtro genérico (espelham a whitelist do
 // ambiente CAMPOS_LEAD_PERMITIDOS). Rótulos amigáveis; `valor` é a coluna real.
 const CAMPOS_LEAD_OPCOES = [
@@ -80,6 +64,60 @@ const CAMPOS_LEAD_OPCOES = [
   { valor: 'proxima_acao_data', label: 'Próxima ação (data)' },
   { valor: 'created_at', label: 'Data de entrada' },
   { valor: 'perdido', label: 'Perdido (true/false)' },
+]
+
+// Só as colunas de DATA (para gatilhos temporais).
+const CAMPOS_DATA_OPCOES = [
+  { valor: 'ultimo_contato', label: 'Último contato' },
+  { valor: 'created_at', label: 'Data de entrada' },
+  { valor: 'proxima_acao_data', label: 'Próxima ação' },
+]
+
+// Operadores como opções de select (reaproveita a fonte única de operadores.ts).
+const OPERADORES_OPCOES = OPERADORES.map((o) => ({ valor: o.valor, label: o.label }))
+
+export const GATILHOS: BlocoDef[] = [
+  {
+    tipo: 'campo_data_vence',
+    label: 'Data do lead vence',
+    descricao: 'Inscreve o lead quando um campo de data dele vence em até N dias.',
+    campos: [
+      { nome: 'campo', label: 'Campo de data', tipo: 'select', padrao: 'proxima_acao_data', opcoes: CAMPOS_DATA_OPCOES },
+      { nome: 'dias', label: 'Dias de antecedência', tipo: 'numero', padrao: 0 },
+    ],
+  },
+  {
+    tipo: 'campo_igual',
+    label: 'Campo do lead (status/etapa)',
+    descricao: 'Dispara quando um campo do lead bate com um valor.',
+    campos: [
+      {
+        nome: 'campo',
+        label: 'Campo',
+        tipo: 'select',
+        padrao: 'estagio',
+        opcoes: CAMPOS_LEAD_OPCOES,
+        dica: 'Serve tanto para "mudou de status" quanto "entrou em etapa" (mesma coluna).',
+      },
+      { nome: 'operador', label: 'Operador', tipo: 'select', padrao: 'igual', opcoes: OPERADORES_OPCOES },
+      { nome: 'valor', label: 'Valor', tipo: 'texto', padrao: '' },
+    ],
+  },
+  {
+    tipo: 'sem_resposta_ha_dias',
+    label: 'Sem resposta há N dias',
+    descricao: 'Leads que nunca responderam e cujo campo de data é mais antigo que N dias.',
+    campos: [
+      { nome: 'campo', label: 'Campo de data', tipo: 'select', padrao: 'ultimo_contato', opcoes: CAMPOS_DATA_OPCOES },
+      { nome: 'dias', label: 'Dias sem resposta', tipo: 'numero', padrao: 5 },
+    ],
+  },
+  {
+    tipo: 'manual',
+    label: 'Manual (inscrição sob demanda)',
+    descricao: 'Não auto-inscreve pelo cron — use "Inscrever lead" na tela do workflow.',
+    campos: [],
+  },
 ]
 
 export const CONDICOES: BlocoDef[] = [
@@ -158,14 +196,20 @@ export const ACOES: BlocoDef[] = [
   {
     tipo: 'criar_tarefa',
     label: 'Criar tarefa',
-    descricao: 'Cria uma tarefa vinculada ao lead.',
-    campos: [{ nome: 'titulo', label: 'Título', tipo: 'texto', padrao: 'Tarefa do workflow' }],
+    descricao: 'Cria uma tarefa vinculada ao lead, com responsável.',
+    campos: [
+      { nome: 'titulo', label: 'Título', tipo: 'texto', padrao: 'Tarefa do workflow' },
+      { nome: 'responsavel_id', label: 'Responsável', tipo: 'usuario', padrao: '', dica: 'Vazio = responsável do próprio lead.' },
+    ],
   },
   {
     tipo: 'criar_tarefa_ligacao',
     label: 'Criar tarefa de ligação',
-    descricao: 'Cria uma tarefa de ligação vinculada ao lead.',
-    campos: [{ nome: 'titulo', label: 'Título', tipo: 'texto', padrao: 'Ligar para o lead' }],
+    descricao: 'Cria uma tarefa de ligação vinculada ao lead, com responsável.',
+    campos: [
+      { nome: 'titulo', label: 'Título', tipo: 'texto', padrao: 'Ligar para o lead' },
+      { nome: 'responsavel_id', label: 'Responsável', tipo: 'usuario', padrao: '', dica: 'Vazio = responsável do próprio lead.' },
+    ],
   },
   {
     tipo: 'enviar_whatsapp',
@@ -206,9 +250,9 @@ export const ACOES: BlocoDef[] = [
   {
     tipo: 'atribuir_responsavel',
     label: 'Atribuir responsável',
-    descricao: 'Define o responsável do lead (perfis/usuário, por id).',
+    descricao: 'Define o responsável do lead.',
     campos: [
-      { nome: 'responsavel_id', label: 'ID do responsável', tipo: 'texto', padrao: '', dica: 'UUID do usuário responsável.' },
+      { nome: 'responsavel_id', label: 'Responsável', tipo: 'usuario', padrao: '' },
     ],
   },
   {
