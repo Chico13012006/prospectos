@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import {
   Users, TrendingUp, ArrowRight,
-  RefreshCw, Plus, Target, Calendar, Zap, Bot,
+  RefreshCw, Plus, Target, Calendar, Zap,
 } from 'lucide-react';
 import { getStatusBadgeClasses } from '@/lib/utils';
 import { SdrPill } from '@/components/ui/SdrAvatar';
@@ -503,24 +503,6 @@ export default function DashboardPage() {
         <p className="text-xs text-slate-500 mt-2">78% da meta atingida — faltam 11 reuniões para bater o objetivo mensal.</p>
       </div>
 
-      {/* IA card */}
-      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 flex items-center justify-between card-hover animate-in stagger-10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
-            <Bot size={20} className="text-green-400" />
-          </div>
-          <div>
-            <div className="font-semibold text-slate-200">IA trabalhando 24/7</div>
-            <p className="text-sm text-slate-400">Prospectando, qualificando e gerando oportunidades para seu time.</p>
-          </div>
-        </div>
-        <Link
-          href="/configuracoes"
-          className="flex items-center gap-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 border border-indigo-500/30 px-4 py-2 rounded-lg hover:bg-indigo-500/10 transition-colors"
-        >
-          Ver automações <ArrowRight size={14} />
-        </Link>
-      </div>
     </div>
   );
 }
