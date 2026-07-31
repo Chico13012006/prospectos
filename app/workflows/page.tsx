@@ -124,7 +124,7 @@ export default function WorkflowsPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {workflows.map((wf, i) => {
             const info = STATUS_INFO[wf.status];
             const temRascunho = wf.rascunho_definicao != null;

@@ -474,6 +474,7 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
         <button
           onClick={testar}
           disabled={ocupado || simulando || problemas.length > 0}
+          aria-label="Testar (simulação)"
           className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/10 disabled:opacity-50 focus-ring"
           title={problemas[0] ?? 'Roda o fluxo em simulação, sem enviar e-mail nem criar tarefa'}
         >
@@ -529,14 +530,14 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
       <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-5 mt-5 items-start">
         {/* Coluna do editor — a "espinha" do fluxo (gatilho → condições → ações) */}
         <div>
-          <section className="card p-4">
+          <section className="card p-4 animate-in stagger-1">
             <CabecalhoEtapa n={1} Icon={Zap} cor={COR_GATILHO} titulo="Gatilho" hint="quando o lead entra no workflow" />
             <LinhaBloco opcoes={GATILHOS} bloco={def.gatilho} onChange={g => setDef({ ...def, gatilho: g })} />
           </section>
 
           <ConectorEtapa />
 
-          <section className="card p-4">
+          <section className="card p-4 animate-in stagger-2">
             <CabecalhoEtapa n={2} Icon={Filter} cor={COR_CONDICAO} titulo="Condições" hint="todas precisam passar (opcional)" />
             {def.condicoes.length === 0 && <p className="text-xs text-slate-500 mb-2">Sem condições — o gatilho basta.</p>}
             <div className="space-y-2">
@@ -560,7 +561,7 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
 
           <ConectorEtapa />
 
-          <section className="card p-4">
+          <section className="card p-4 animate-in stagger-3">
             <CabecalhoEtapa n={3} Icon={PlayCircle} cor={COR_ACAO} titulo="Ações" hint="executadas em ordem, de cima para baixo" />
             {def.acoes.length === 0 && <p className="text-xs text-amber-400/80 mb-2">Adicione ao menos uma ação para publicar.</p>}
             <div className="space-y-2">

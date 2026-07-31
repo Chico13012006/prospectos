@@ -139,7 +139,11 @@ export default function BaseLeadsPage() {
                     <tr
                       key={lead.id}
                       onClick={() => setSelectedId(lead.id)}
-                      className={`cursor-pointer transition-colors ${selecionado ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--bg-card)]'}`}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(lead.id); } }}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Abrir ${lead.empresa ?? 'lead'}`}
+                      className={`cursor-pointer transition-colors focus-ring ${selecionado ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--bg-card)]'}`}
                     >
                       <td className={`px-3 py-2.5 border-b border-[var(--border-subtle)] font-medium text-slate-100 max-w-56 truncate ${selecionado ? 'border-l-2 border-l-[var(--accent)]' : 'border-l-2 border-l-transparent'}`}>{dash(lead.empresa)}</td>
                       <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] max-w-56">
