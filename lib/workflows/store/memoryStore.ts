@@ -154,6 +154,16 @@ export class MemoryWorkflowStore implements WorkflowStore {
     return [...this.workflows.values()].filter((w) => w.status === 'publicado').map((w) => ({ ...w }))
   }
 
+  async contarExecucoesAtivasPorWorkflow(): Promise<Record<string, number>> {
+    const contagem: Record<string, number> = {}
+    for (const ex of this.execucoes.values()) {
+      if (ex.status === 'em_andamento' || ex.status === 'aguardando') {
+        contagem[ex.workflow_id] = (contagem[ex.workflow_id] ?? 0) + 1
+      }
+    }
+    return contagem
+  }
+
   async registrarEvento(evento: WorkflowExecucaoEvento): Promise<void> {
     this.eventos.push({ ...evento, id: this.seqEvento++, criado_em: evento.criado_em ?? this.agora() })
   }

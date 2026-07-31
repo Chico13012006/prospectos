@@ -1,16 +1,37 @@
 @import "tailwindcss";
 
 :root {
+  /* Superfícies (do fundo da app até o card e acima dele) */
   --bg-base: #0f1117;
   --bg-card: #1a1f2e;
   --bg-card-hover: #1e2435;
+  --bg-elevated: #222839;   /* popovers, menus, dropdowns acima do card */
+  --bg-subtle: #151a27;     /* insets/caixas DENTRO de um card */
   --bg-input: #252b3b;
+
+  /* Bordas (hierarquia de separação) */
   --border: #2a3147;
+  --border-strong: #3b435c; /* divisórias/realce (hover de item, foco) */
+  --border-subtle: #232a3d; /* separadores internos discretos */
+
+  /* Texto */
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
+
+  /* Acento (marca) + estados */
   --accent: #6366f1;
   --accent-hover: #4f46e5;
+  --accent-soft: rgba(99, 102, 241, 0.14); /* fundo translúcido p/ chips/realce */
+  --focus-ring: rgba(99, 102, 241, 0.45);
+
+  /* Status semânticos (badges de workflow, estados, KPIs) — cor sólida + versão
+     "soft" translúcida para fundos de chip. Centraliza o verde/âmbar/vermelho/azul
+     que hoje aparece inline espalhado. */
+  --success: #22c55e; --success-soft: rgba(34, 197, 94, 0.14);
+  --warning: #f59e0b; --warning-soft: rgba(245, 158, 11, 0.14);
+  --danger:  #f87171; --danger-soft: rgba(248, 113, 113, 0.14);
+  --info:    #38bdf8; --info-soft: rgba(56, 189, 248, 0.14);
 }
 
 * {
@@ -114,6 +135,31 @@ body {
 .text-primary { color: var(--text-primary); }
 .text-secondary { color: var(--text-secondary); }
 .text-muted { color: var(--text-muted); }
+
+/* Chip de status reutilizável (usa os tokens semânticos) — evita repetir o
+   bg/color inline dos badges (status de workflow, KPIs, etc.). */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.chip-success { background: var(--success-soft); color: var(--success); }
+.chip-warning { background: var(--warning-soft); color: var(--warning); }
+.chip-danger  { background: var(--danger-soft);  color: var(--danger); }
+.chip-info    { background: var(--info-soft);    color: var(--info); }
+.chip-muted   { background: rgba(148, 163, 184, 0.12); color: var(--text-secondary); }
+
+/* Anel de foco acessível padrão (teclado) — aplicado nas telas redesenhadas. */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
 
 /* Form elements — base dark. Em @layer base para vencer o preflight do
    Tailwind por ordem de origem. Utilitários Tailwind com bg-* ainda sobrescrevem. */

@@ -20,11 +20,17 @@ import type { Usuario, Lead } from '@/lib/supabase';
 // via contexto para não threadar props por LinhaBloco/SaltarSeEditor.
 const UsuariosCtx = createContext<Usuario[]>([]);
 
-const STATUS_INFO: Record<StatusWorkflow, { label: string; classes: string }> = {
-  rascunho: { label: 'Rascunho', classes: 'bg-slate-500/20 text-slate-300' },
-  publicado: { label: 'Publicado', classes: 'bg-green-500/20 text-green-300' },
-  pausado: { label: 'Pausado', classes: 'bg-amber-500/20 text-amber-300' },
+const STATUS_INFO: Record<StatusWorkflow, { label: string; chip: string }> = {
+  rascunho: { label: 'Rascunho', chip: 'chip chip-muted' },
+  publicado: { label: 'Publicado', chip: 'chip chip-success' },
+  pausado: { label: 'Pausado', chip: 'chip chip-warning' },
 };
+
+// Cores de acento das etapas do fluxo (as mesmas já usadas: gatilho âmbar,
+// condições azul, ações verde) — centralizadas para o cabeçalho de etapa.
+const COR_GATILHO = '#f59e0b';
+const COR_CONDICAO = '#38bdf8';
+const COR_ACAO = '#22c55e';
 
 const EXEC_LABEL: Record<string, string> = {
   em_andamento: 'Em andamento', aguardando: 'Aguardando', concluido: 'Concluídas',
@@ -179,6 +185,36 @@ function SaltarSeEditor({ bloco, acoes, onChange }: {
   );
 }
 
+// Cabeçalho de uma ETAPA do fluxo (Gatilho / Condições / Ações): número + ícone
+// colorido + título/hint. Dá hierarquia e senso de sequência ao editor.
+function CabecalhoEtapa({ n, Icon, cor, titulo, hint, children }: {
+  n: number; Icon: typeof Zap; cor: string; titulo: string; hint: string; children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 mb-3">
+      <span className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 relative" style={{ backgroundColor: `${cor}22`, color: cor }}>
+        <Icon size={16} />
+        <span className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-[var(--bg-base)] border border-[var(--border)] text-[10px] font-bold text-slate-400 flex items-center justify-center">{n}</span>
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold text-sm text-slate-100 leading-tight">{titulo}</div>
+        <div className="text-xs text-slate-500 leading-tight mt-0.5">{hint}</div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// Conector vertical entre as etapas — transforma 3 cards soltos numa "espinha"
+// que se lê como um fluxo de cima para baixo.
+function ConectorEtapa() {
+  return (
+    <div className="flex justify-center" aria-hidden="true">
+      <div className="w-px h-5 bg-[var(--border-strong)]" />
+    </div>
+  );
+}
+
 export default function WorkflowEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -326,34 +362,34 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
 
   return (
     <UsuariosCtx.Provider value={usuarios}>
-    <div className="p-6 space-y-5 max-w-4xl">
+    {/* Largura ampla (não centralizada): em telas largas usa o espaço de verdade,
+        em vez de deixar um vão à direita. A coluna do editor cresce; o resumo fica
+        fixo em 360px. */}
+    <div className="p-6 max-w-[110rem]">
       {/* Cabeçalho */}
-      <div>
-        <Link href="/workflows" className="text-sm text-slate-400 hover:text-slate-200 flex items-center gap-1 mb-3">
-          <ArrowLeft size={14} /> Workflows
-        </Link>
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <input
-              value={nome}
-              onChange={e => setNome(e.target.value)}
-              className="text-2xl font-bold text-slate-100 bg-transparent border-b border-transparent hover:border-[#2a3147] focus:border-blue-500/50 focus:outline-none w-full"
-            />
-            <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-500">
-              <span className={`px-2 py-0.5 rounded-full ${info.classes}`}>{info.label}</span>
-              {versaoAtual && <span>versão {versaoAtual.numero} vigente</span>}
-              {sujo && <span className="text-amber-400 flex items-center gap-1"><AlertTriangle size={11} /> alterações não salvas</span>}
-            </div>
-          </div>
+      <Link href="/workflows" className="text-sm text-slate-400 hover:text-slate-200 inline-flex items-center gap-1 mb-3 focus-ring rounded">
+        <ArrowLeft size={14} /> Workflows
+      </Link>
+      <div className="min-w-0">
+        <input
+          value={nome}
+          onChange={e => setNome(e.target.value)}
+          aria-label="Nome do workflow"
+          className="text-2xl font-bold text-slate-100 bg-transparent border-b border-transparent hover:border-[var(--border)] focus:border-[var(--accent)] focus:outline-none w-full"
+        />
+        <div className="flex items-center gap-2 mt-2 text-xs">
+          <span className={info.chip}>{info.label}</span>
+          {versaoAtual && <span className="text-slate-500">versão {versaoAtual.numero} vigente</span>}
+          {sujo && <span className="chip chip-warning"><AlertTriangle size={11} /> não salvo</span>}
         </div>
       </div>
 
       {/* Barra de ações */}
-      <div className="flex flex-wrap items-center gap-2 bg-[#1a1f2e] rounded-xl border border-[#2a3147] p-3">
+      <div className="flex flex-wrap items-center gap-2 card p-3 mt-4">
         <button
           onClick={salvarRascunho}
           disabled={ocupado || !sujo}
-          className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-slate-200 border border-[#2a3147] hover:bg-[#0f1117] disabled:opacity-50"
+          className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-slate-200 border border-[var(--border)] hover:bg-[var(--bg-base)] disabled:opacity-50 focus-ring"
         >
           <Save size={14} /> Salvar rascunho
         </button>
@@ -361,7 +397,7 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
           <button
             onClick={() => acaoCiclo('publicar')}
             disabled={ocupado || problemas.length > 0}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-white font-medium disabled:opacity-50"
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-white font-medium disabled:opacity-50 focus-ring"
             style={{ backgroundColor: '#1e6f3a' }}
             title={problemas[0]}
           >
@@ -370,142 +406,152 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
         )}
         {workflow.status === 'publicado' && (
           <button onClick={() => acaoCiclo('pausar')} disabled={ocupado}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-amber-300 border border-amber-500/30 hover:bg-amber-500/10 disabled:opacity-50">
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-amber-300 border border-amber-500/30 hover:bg-amber-500/10 disabled:opacity-50 focus-ring">
             <PauseCircle size={14} /> Pausar
           </button>
         )}
         {workflow.status === 'pausado' && (
           <button onClick={() => acaoCiclo('retomar')} disabled={ocupado}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-green-300 border border-green-500/30 hover:bg-green-500/10 disabled:opacity-50">
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-green-300 border border-green-500/30 hover:bg-green-500/10 disabled:opacity-50 focus-ring">
             <CheckCircle2 size={14} /> Retomar
           </button>
         )}
         <div className="flex-1" />
         {ocupado && <Loader2 size={16} className="animate-spin text-slate-500" />}
         {podeExcluir && (
-          <button onClick={excluir} disabled={ocupado} className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-red-400 hover:bg-red-500/10 disabled:opacity-50">
+          <button onClick={excluir} disabled={ocupado} className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-red-400 hover:bg-red-500/10 disabled:opacity-50 focus-ring">
             <Trash2 size={14} /> Excluir
           </button>
         )}
       </div>
 
       {(msg || erro) && (
-        <div className={`text-sm px-3 py-2 rounded-lg ${erro ? 'bg-red-500/10 text-red-300 border border-red-500/20' : 'bg-green-500/10 text-green-300 border border-green-500/20'}`}>
+        <div className={`text-sm px-3 py-2 rounded-lg mt-3 ${erro ? 'bg-red-500/10 text-red-300 border border-red-500/20' : 'bg-green-500/10 text-green-300 border border-green-500/20'}`}>
           {erro || msg}
         </div>
       )}
 
-      {/* Execuções (se houver) */}
-      {Object.keys(stats).length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {Object.entries(stats).map(([s, n]) => (
-            <span key={s} className="text-xs bg-[#1a1f2e] border border-[#2a3147] text-slate-300 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
-              <PlayCircle size={12} className="text-slate-500" /> {EXEC_LABEL[s] ?? s}: <span className="font-semibold text-slate-100">{n}</span>
-            </span>
-          ))}
-        </div>
-      )}
-
       {workflow.status === 'publicado' && sujo && (
-        <div className="text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 flex items-start gap-1.5">
+        <div className="text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 mt-3 flex items-start gap-1.5">
           <AlertTriangle size={13} className="mt-0.5 shrink-0" />
           Editar não altera a versão publicada nem as execuções em andamento. Suas mudanças só valem para novas execuções após “Republicar”.
         </div>
       )}
 
-      {/* Gatilho */}
-      <section className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] p-4 space-y-2">
-        <div className="flex items-center gap-2 text-slate-200 font-semibold text-sm">
-          <Zap size={15} className="text-amber-400" /> Gatilho
-          <span className="text-xs font-normal text-slate-500">— quando o lead entra no workflow</span>
-        </div>
-        <LinhaBloco opcoes={GATILHOS} bloco={def.gatilho} onChange={g => setDef({ ...def, gatilho: g })} />
-      </section>
+      {/* Layout de duas colunas: editor (esquerda) + resumo VIVO do fluxo (direita,
+          fixo ao rolar) — edita de um lado e vê o fluxo tomar forma do outro. */}
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-5 mt-5 items-start">
+        {/* Coluna do editor — a "espinha" do fluxo (gatilho → condições → ações) */}
+        <div>
+          <section className="card p-4">
+            <CabecalhoEtapa n={1} Icon={Zap} cor={COR_GATILHO} titulo="Gatilho" hint="quando o lead entra no workflow" />
+            <LinhaBloco opcoes={GATILHOS} bloco={def.gatilho} onChange={g => setDef({ ...def, gatilho: g })} />
+          </section>
 
-      {/* Condições */}
-      <section className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] p-4 space-y-2">
-        <div className="flex items-center gap-2 text-slate-200 font-semibold text-sm">
-          <Filter size={15} className="text-sky-400" /> Condições
-          <span className="text-xs font-normal text-slate-500">— todas precisam passar (opcional)</span>
-        </div>
-        {def.condicoes.length === 0 && <p className="text-xs text-slate-500">Sem condições — o gatilho basta.</p>}
-        <div className="space-y-2">
-          {def.condicoes.map((c, i) => (
-            <LinhaBloco
-              key={i}
-              opcoes={CONDICOES}
-              bloco={c}
-              onChange={novo => setDef({ ...def, condicoes: def.condicoes.map((x, j) => (j === i ? novo : x)) })}
-              onRemover={() => setDef({ ...def, condicoes: def.condicoes.filter((_, j) => j !== i) })}
-            />
-          ))}
-        </div>
-        <button
-          onClick={() => setDef({ ...def, condicoes: [...def.condicoes, blocoPadrao(CONDICOES[0])] })}
-          className="flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 mt-1"
-        >
-          <Plus size={13} /> Adicionar condição
-        </button>
-      </section>
+          <ConectorEtapa />
 
-      {/* Ações */}
-      <section className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] p-4 space-y-2">
-        <div className="flex items-center gap-2 text-slate-200 font-semibold text-sm">
-          <PlayCircle size={15} className="text-green-400" /> Ações
-          <span className="text-xs font-normal text-slate-500">— executadas em ordem</span>
-        </div>
-        {def.acoes.length === 0 && <p className="text-xs text-amber-400/80">Adicione ao menos uma ação para publicar.</p>}
-        <div className="space-y-2">
-          {def.acoes.map((a, i) => (
-            <div key={i} className="flex gap-2 items-stretch">
-              <div className="flex flex-col items-center justify-center text-[11px] text-slate-600 w-5 shrink-0 font-mono">{i + 1}</div>
-              <div className="flex-1 min-w-0">
+          <section className="card p-4">
+            <CabecalhoEtapa n={2} Icon={Filter} cor={COR_CONDICAO} titulo="Condições" hint="todas precisam passar (opcional)" />
+            {def.condicoes.length === 0 && <p className="text-xs text-slate-500 mb-2">Sem condições — o gatilho basta.</p>}
+            <div className="space-y-2">
+              {def.condicoes.map((c, i) => (
                 <LinhaBloco
-                  opcoes={ACOES}
-                  bloco={a}
-                  onChange={novo => setDef({ ...def, acoes: def.acoes.map((x, j) => (j === i ? novo : x)) })}
-                  onRemover={() => setDef({ ...def, acoes: def.acoes.filter((_, j) => j !== i) })}
-                  extra={a.tipo === 'saltar_se' ? (
-                    <SaltarSeEditor
-                      bloco={a}
-                      acoes={def.acoes}
-                      onChange={novo => setDef({ ...def, acoes: def.acoes.map((x, j) => (j === i ? novo : x)) })}
-                    />
-                  ) : undefined}
-                  controles={
-                    <div className="flex flex-col shrink-0">
-                      <button
-                        disabled={i === 0}
-                        onClick={() => setDef({ ...def, acoes: mover(def.acoes, i, -1) })}
-                        className="text-slate-500 hover:text-slate-300 disabled:opacity-30"
-                        title="Subir"
-                      ><ChevronUp size={14} /></button>
-                      <button
-                        disabled={i === def.acoes.length - 1}
-                        onClick={() => setDef({ ...def, acoes: mover(def.acoes, i, 1) })}
-                        className="text-slate-500 hover:text-slate-300 disabled:opacity-30"
-                        title="Descer"
-                      ><ChevronDown size={14} /></button>
-                    </div>
-                  }
+                  key={i}
+                  opcoes={CONDICOES}
+                  bloco={c}
+                  onChange={novo => setDef({ ...def, condicoes: def.condicoes.map((x, j) => (j === i ? novo : x)) })}
+                  onRemover={() => setDef({ ...def, condicoes: def.condicoes.filter((_, j) => j !== i) })}
                 />
+              ))}
+            </div>
+            <button
+              onClick={() => setDef({ ...def, condicoes: [...def.condicoes, blocoPadrao(CONDICOES[0])] })}
+              className="flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 mt-2.5 focus-ring rounded"
+            >
+              <Plus size={13} /> Adicionar condição
+            </button>
+          </section>
+
+          <ConectorEtapa />
+
+          <section className="card p-4">
+            <CabecalhoEtapa n={3} Icon={PlayCircle} cor={COR_ACAO} titulo="Ações" hint="executadas em ordem, de cima para baixo" />
+            {def.acoes.length === 0 && <p className="text-xs text-amber-400/80 mb-2">Adicione ao menos uma ação para publicar.</p>}
+            <div className="space-y-2">
+              {def.acoes.map((a, i) => (
+                <div key={i} className="flex gap-2 items-stretch">
+                  <div className="flex flex-col items-center justify-center text-[11px] text-slate-600 w-5 shrink-0 font-mono">{i + 1}</div>
+                  <div className="flex-1 min-w-0">
+                    <LinhaBloco
+                      opcoes={ACOES}
+                      bloco={a}
+                      onChange={novo => setDef({ ...def, acoes: def.acoes.map((x, j) => (j === i ? novo : x)) })}
+                      onRemover={() => setDef({ ...def, acoes: def.acoes.filter((_, j) => j !== i) })}
+                      extra={a.tipo === 'saltar_se' ? (
+                        <SaltarSeEditor
+                          bloco={a}
+                          acoes={def.acoes}
+                          onChange={novo => setDef({ ...def, acoes: def.acoes.map((x, j) => (j === i ? novo : x)) })}
+                        />
+                      ) : undefined}
+                      controles={
+                        <div className="flex flex-col shrink-0">
+                          <button
+                            disabled={i === 0}
+                            onClick={() => setDef({ ...def, acoes: mover(def.acoes, i, -1) })}
+                            className="text-slate-500 hover:text-slate-300 disabled:opacity-30"
+                            title="Subir"
+                            aria-label="Subir ação"
+                          ><ChevronUp size={14} /></button>
+                          <button
+                            disabled={i === def.acoes.length - 1}
+                            onClick={() => setDef({ ...def, acoes: mover(def.acoes, i, 1) })}
+                            className="text-slate-500 hover:text-slate-300 disabled:opacity-30"
+                            title="Descer"
+                            aria-label="Descer ação"
+                          ><ChevronDown size={14} /></button>
+                        </div>
+                      }
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setDef({ ...def, acoes: [...def.acoes, blocoPadrao(ACOES[0])] })}
+              className="flex items-center gap-1.5 text-xs text-green-400 hover:text-green-300 mt-2.5 focus-ring rounded"
+            >
+              <Plus size={13} /> Adicionar ação
+            </button>
+          </section>
+        </div>
+
+        {/* Coluna do resumo — fixa ao rolar (segue o editor) */}
+        <aside className="lg:sticky lg:top-6 space-y-4">
+          {Object.keys(stats).length > 0 && (
+            <div className="card p-4">
+              <div className="text-xs font-semibold text-slate-300 mb-2.5 flex items-center gap-1.5">
+                <PlayCircle size={13} className="text-slate-500" /> Execuções
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(stats).map(([s, n]) => (
+                  <span key={s} className="chip chip-muted">
+                    {EXEC_LABEL[s] ?? s}: <span className="font-bold text-slate-100">{n}</span>
+                  </span>
+                ))}
               </div>
             </div>
-          ))}
-        </div>
-        <button
-          onClick={() => setDef({ ...def, acoes: [...def.acoes, blocoPadrao(ACOES[0])] })}
-          className="flex items-center gap-1.5 text-xs text-green-400 hover:text-green-300 mt-1"
-        >
-          <Plus size={13} /> Adicionar ação
-        </button>
-      </section>
-
-      {/* Resumo visual read-only do fluxo (gatilho → público → ações → ramificação → fim) */}
-      <ResumoFluxo def={def} usuarios={usuarios} />
+          )}
+          <ResumoFluxo def={def} usuarios={usuarios} />
+        </aside>
+      </div>
 
       {/* Inscrição manual (Fase 4.6): só faz sentido com o workflow publicado. */}
-      {workflow.status === 'publicado' && <InscricaoManual workflowId={workflow.id} leads={leads} />}
+      {workflow.status === 'publicado' && (
+        <div className="mt-5">
+          <InscricaoManual workflowId={workflow.id} leads={leads} />
+        </div>
+      )}
     </div>
     </UsuariosCtx.Provider>
   );

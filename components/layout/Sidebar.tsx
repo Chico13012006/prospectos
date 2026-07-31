@@ -14,8 +14,6 @@ import {
   Workflow,
   Settings,
   Zap,
-  Bot,
-  ArrowRight,
   LogOut,
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
@@ -105,28 +103,6 @@ export default function Sidebar() {
           );
         })}
       </nav>
-
-      {/* IA trabalhando 24/7 */}
-      <div className="px-3 pb-3">
-        <div className="rounded-xl p-3.5 bg-white/5 border border-white/10">
-          <div className="flex items-center gap-2 mb-1.5">
-            <div className="flex items-center justify-center w-6 h-6 rounded-md bg-green-500/20">
-              <Bot size={13} className="text-green-400" />
-            </div>
-            <span className="text-xs font-semibold text-white">IA trabalhando 24/7</span>
-          </div>
-          <p className="text-[11px] leading-snug text-indigo-200/70 mb-2">
-            Prospectando, qualificando e gerando oportunidades para seu time.
-          </p>
-          <Link
-            href="/configuracoes"
-            className="flex items-center gap-1 text-[11px] font-medium text-green-400 hover:text-green-300 transition-colors"
-          >
-            Ver automações
-            <ArrowRight size={11} />
-          </Link>
-        </div>
-      </div>
 
       {/* Configurações */}
       <div className="px-3 pb-2 border-t border-white/10 pt-3">

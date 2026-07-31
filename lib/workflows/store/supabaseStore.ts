@@ -213,6 +213,21 @@ export class SupabaseWorkflowStore implements WorkflowStore {
     return (data as Workflow[]) ?? []
   }
 
+  async contarExecucoesAtivasPorWorkflow(): Promise<Record<string, number>> {
+    const { data, error } = await this.db
+      .from('workflow_execucoes')
+      .select('workflow_id')
+      .eq('organizacao_id', this.organizacaoId)
+      .in('status', ['em_andamento', 'aguardando'])
+    if (error) throw error
+    const contagem: Record<string, number> = {}
+    for (const row of data ?? []) {
+      const id = (row as { workflow_id: string }).workflow_id
+      contagem[id] = (contagem[id] ?? 0) + 1
+    }
+    return contagem
+  }
+
   // --- eventos ---
   async registrarEvento(evento: WorkflowExecucaoEvento): Promise<void> {
     const { error } = await this.db.from('workflow_execucao_eventos').insert({

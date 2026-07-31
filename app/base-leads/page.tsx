@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Database } from 'lucide-react';
 import { formatDate, dash } from '@/lib/utils';
-import { labelEstagio } from '@/lib/pipeline-stages';
+import { labelEstagio, corEstagio } from '@/lib/pipeline-stages';
 import { getTodosLeads, getPipelineFiltrosOpcoes, type BaseLeadsFiltros } from '@/lib/api';
 import type { Lead } from '@/lib/supabase';
 import LeadPanel from '@/components/leads/LeadPanel';
@@ -84,11 +84,21 @@ export default function BaseLeadsPage() {
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="px-6 pt-6 pb-3 shrink-0">
-        <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-          <Database size={22} className="text-indigo-400" /> Base de Leads
-        </h1>
-        <p className="text-sm text-slate-400 mt-0.5">Banco geral — todos os leads, em qualquer estado.</p>
+      <div className="px-6 pt-6 pb-3 shrink-0 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+            <Database size={22} className="text-indigo-400" /> Base de Leads
+          </h1>
+          <p className="text-sm text-slate-400 mt-0.5">Banco geral — todos os leads, em qualquer estado.</p>
+        </div>
+        {!useFallback && (
+          <div className="shrink-0 text-right">
+            <div className="text-2xl font-bold text-slate-100 leading-none tabular-nums">{total.toLocaleString('pt-BR')}</div>
+            <div className="text-xs text-slate-500 mt-1">
+              {total === 1 ? 'lead' : 'leads'}{loading ? '…' : ''}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Filtros */}
@@ -111,9 +121,9 @@ export default function BaseLeadsPage() {
         ) : (
           <table className="w-full text-sm border-separate border-spacing-0">
             <thead className="sticky top-0 z-10">
-              <tr className="text-left text-xs uppercase tracking-wide text-slate-500 bg-[#0f1117]">
+              <tr className="text-left text-xs uppercase tracking-wide text-slate-500 bg-[var(--bg-base)]">
                 {['Empresa', 'Contato', 'Responsável', 'Status', 'Follow-up', 'Cidade/UF', 'Última interação', 'Cadastrado em'].map(h => (
-                  <th key={h} className="font-semibold px-3 py-2.5 border-b border-[#2a3147] whitespace-nowrap">{h}</th>
+                  <th key={h} className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -124,25 +134,29 @@ export default function BaseLeadsPage() {
                 data.map(lead => {
                   const responsavel = lead.usuarios?.nome ?? lead.responsavel_nome ?? null;
                   const cidadeUf = [lead.cidade, lead.estado].filter(Boolean).join('/');
+                  const selecionado = selectedId === lead.id;
                   return (
                     <tr
                       key={lead.id}
                       onClick={() => setSelectedId(lead.id)}
-                      className={`cursor-pointer transition-colors ${selectedId === lead.id ? 'bg-indigo-500/10' : 'hover:bg-[#1a1f2e]'}`}
+                      className={`cursor-pointer transition-colors ${selecionado ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--bg-card)]'}`}
                     >
-                      <td className="px-3 py-2.5 border-b border-[#2a3147]/60 font-medium text-slate-100 max-w-56 truncate">{dash(lead.empresa)}</td>
-                      <td className="px-3 py-2.5 border-b border-[#2a3147]/60 max-w-56">
+                      <td className={`px-3 py-2.5 border-b border-[var(--border-subtle)] font-medium text-slate-100 max-w-56 truncate ${selecionado ? 'border-l-2 border-l-[var(--accent)]' : 'border-l-2 border-l-transparent'}`}>{dash(lead.empresa)}</td>
+                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] max-w-56">
                         <div className="text-slate-300 truncate">{dash(lead.contato_nome)}</div>
                         {lead.contato_email && <div className="text-xs text-slate-500 truncate">{lead.contato_email}</div>}
                       </td>
-                      <td className="px-3 py-2.5 border-b border-[#2a3147]/60 text-slate-300 whitespace-nowrap">{dash(responsavel)}</td>
-                      <td className="px-3 py-2.5 border-b border-[#2a3147]/60 whitespace-nowrap">
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-[#252b3b] text-slate-300">{labelEstagio(lead.estagio)}</span>
+                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{dash(responsavel)}</td>
+                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5 text-xs text-slate-300">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: corEstagio(lead.estagio) }} />
+                          {labelEstagio(lead.estagio)}
+                        </span>
                       </td>
-                      <td className="px-3 py-2.5 border-b border-[#2a3147]/60 text-slate-300 whitespace-nowrap">{etapaFollowup(lead.followups_enviados)}</td>
-                      <td className="px-3 py-2.5 border-b border-[#2a3147]/60 text-slate-300 whitespace-nowrap">{dash(cidadeUf)}</td>
-                      <td className="px-3 py-2.5 border-b border-[#2a3147]/60 text-slate-400 whitespace-nowrap">{lead.ultimo_contato ? formatDate(lead.ultimo_contato) : '—'}</td>
-                      <td className="px-3 py-2.5 border-b border-[#2a3147]/60 text-slate-400 whitespace-nowrap">{lead.created_at ? formatDate(lead.created_at) : '—'}</td>
+                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{etapaFollowup(lead.followups_enviados)}</td>
+                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{dash(cidadeUf)}</td>
+                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-400 whitespace-nowrap">{lead.ultimo_contato ? formatDate(lead.ultimo_contato) : '—'}</td>
+                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-400 whitespace-nowrap">{lead.created_at ? formatDate(lead.created_at) : '—'}</td>
                     </tr>
                   );
                 })
@@ -158,7 +172,7 @@ export default function BaseLeadsPage() {
         pageSize={PAGE}
         loading={loading}
         onPageChange={setPage}
-        className="px-6 py-3 shrink-0 border-t border-[#2a3147] bg-[#0f1117]"
+        className="px-6 py-3 shrink-0 border-t border-[var(--border)] bg-[var(--bg-base)]"
       />
 
       {/* Painel lateral completo (componente compartilhado em components/leads) */}

@@ -3,14 +3,33 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Workflow as WorkflowIcon, Plus, Loader2, X, CheckCircle2, PauseCircle, PencilLine } from 'lucide-react';
+import {
+  Workflow as WorkflowIcon, Plus, Loader2, X, CheckCircle2, PauseCircle, PencilLine,
+  Zap, Layers, Users, Filter,
+} from 'lucide-react';
 import type { Workflow, StatusWorkflow } from '@/lib/workflows/types';
+import { acharBlocoDef } from '@/lib/workflows/catalogo';
 
-const STATUS_INFO: Record<StatusWorkflow, { label: string; classes: string; Icon: typeof CheckCircle2 }> = {
-  rascunho: { label: 'Rascunho', classes: 'bg-slate-500/20 text-slate-300', Icon: PencilLine },
-  publicado: { label: 'Publicado', classes: 'bg-green-500/20 text-green-300', Icon: CheckCircle2 },
-  pausado: { label: 'Pausado', classes: 'bg-amber-500/20 text-amber-300', Icon: PauseCircle },
+// Resumo enriquecido pela API GET /api/workflows (gatilho + etapas + leads em
+// execução derivados da definição vigente e das execuções ativas).
+type WorkflowResumo = Workflow & {
+  gatilho_tipo: string | null;
+  etapas: number;
+  num_condicoes: number;
+  em_execucao: number;
 };
+
+const STATUS_INFO: Record<StatusWorkflow, { label: string; chip: string; Icon: typeof CheckCircle2 }> = {
+  rascunho: { label: 'Rascunho', chip: 'chip chip-muted', Icon: PencilLine },
+  publicado: { label: 'Publicado', chip: 'chip chip-success', Icon: CheckCircle2 },
+  pausado: { label: 'Pausado', chip: 'chip chip-warning', Icon: PauseCircle },
+};
+
+// Rótulo amigável do gatilho (via catálogo). Null = workflow sem definição ainda.
+function gatilhoLabel(tipo: string | null): string {
+  if (!tipo) return 'Sem gatilho';
+  return acharBlocoDef(tipo)?.label ?? tipo;
+}
 
 function formatarData(iso: string) {
   try {
@@ -22,7 +41,7 @@ function formatarData(iso: string) {
 
 export default function WorkflowsPage() {
   const router = useRouter();
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [workflows, setWorkflows] = useState<WorkflowResumo[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
@@ -106,25 +125,63 @@ export default function WorkflowsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
-          {workflows.map(wf => {
+          {workflows.map((wf, i) => {
             const info = STATUS_INFO[wf.status];
             const temRascunho = wf.rascunho_definicao != null;
+            const emExecucao = wf.em_execucao > 0;
             return (
               <Link
                 key={wf.id}
                 href={`/workflows/${wf.id}`}
-                className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] p-4 hover:border-[#3a4360] transition-colors block"
+                className={`card card-hover focus-ring p-4 block animate-in stagger-${Math.min(i + 1, 10)}`}
               >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <h3 className="font-semibold text-slate-100 leading-tight min-w-0 truncate">{wf.nome}</h3>
-                  <span className={`text-xs px-2 py-1 rounded-full shrink-0 flex items-center gap-1 ${info.classes}`}>
-                    <info.Icon size={12} /> {info.label}
+                {/* Cabeçalho: ícone + nome + status */}
+                <div className="flex items-start gap-3 mb-3.5">
+                  <span className="flex items-center justify-center w-9 h-9 rounded-lg shrink-0 bg-[var(--accent-soft)] text-[var(--accent)]">
+                    <WorkflowIcon size={17} />
+                  </span>
+                  <h3 className="font-semibold text-slate-100 leading-snug min-w-0 truncate flex-1 pt-1">{wf.nome}</h3>
+                  <span className={`${info.chip} shrink-0`}>
+                    <info.Icon size={11} /> {info.label}
                   </span>
                 </div>
-                <div className="text-xs text-slate-500">
-                  Atualizado em {formatarData(wf.atualizado_em)}
+
+                {/* Métricas do fluxo — dado real derivado da definição/execuções */}
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="rounded-lg bg-[var(--bg-subtle)] border border-[var(--border-subtle)] px-2.5 py-2">
+                    <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">
+                      <Zap size={11} className="text-amber-400/80" /> Gatilho
+                    </div>
+                    <div className="text-xs font-medium text-slate-200 truncate" title={gatilhoLabel(wf.gatilho_tipo)}>
+                      {gatilhoLabel(wf.gatilho_tipo)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-[var(--bg-subtle)] border border-[var(--border-subtle)] px-2.5 py-2">
+                    <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">
+                      <Layers size={11} className="text-sky-400/80" /> Etapas
+                    </div>
+                    <div className="text-xs font-medium text-slate-200">
+                      {wf.etapas}
+                      {wf.num_condicoes > 0 && (
+                        <span className="text-slate-500 font-normal"> · <Filter size={9} className="inline -mt-0.5" /> {wf.num_condicoes}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className={`rounded-lg px-2.5 py-2 border ${emExecucao ? 'bg-[var(--success-soft)] border-[var(--success)]/30' : 'bg-[var(--bg-subtle)] border-[var(--border-subtle)]'}`}>
+                    <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">
+                      <Users size={11} className={emExecucao ? 'text-[var(--success)]' : 'text-slate-500'} /> Em execução
+                    </div>
+                    <div className={`text-xs font-semibold ${emExecucao ? 'text-[var(--success)]' : 'text-slate-400'}`}>
+                      {wf.em_execucao} {wf.em_execucao === 1 ? 'lead' : 'leads'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rodapé: data + pendência de publicação */}
+                <div className="text-xs text-slate-500 flex items-center gap-1.5">
+                  <span>Atualizado em {formatarData(wf.atualizado_em)}</span>
                   {wf.status !== 'rascunho' && temRascunho && (
-                    <span className="text-amber-400/80"> · alterações não publicadas</span>
+                    <span className="chip chip-warning">alterações não publicadas</span>
                   )}
                 </div>
               </Link>

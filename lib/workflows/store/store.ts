@@ -61,6 +61,9 @@ export interface WorkflowStore {
   execucoesPendentes(agoraISO: string): Promise<WorkflowExecucao[]>
   // Workflows publicados (status='publicado') — candidatos a enrollment.
   workflowsPublicados(): Promise<Workflow[]>
+  // Contagem de execuções ATIVAS (em_andamento|aguardando) por workflow_id — a
+  // lista usa para "N leads em execução" sem puxar todas as linhas.
+  contarExecucoesAtivasPorWorkflow(): Promise<Record<string, number>>
 
   // --- eventos (log append-only) ---
   registrarEvento(evento: WorkflowExecucaoEvento): Promise<void>

@@ -7,13 +7,33 @@ import { criarWorkflow } from '@/lib/workflows'
 
 export const runtime = 'nodejs'
 
-// GET — lista os workflows da organização (para a tela de lista).
+// GET — lista os workflows da organização (para a tela de lista). Enriquece cada
+// um com um RESUMO derivado da definição vigente (rascunho se houver; senão a
+// versão publicada) — gatilho + nº de etapas/condições — e a contagem de leads
+// em execução agora. Tudo dado real; nenhuma coluna nova inventada.
 export async function GET() {
   const ctx = await resolverContexto()
   if (ctx instanceof NextResponse) return ctx
   try {
     const workflows = await ctx.store.listarWorkflows()
-    return NextResponse.json({ workflows })
+    const ativos = await ctx.store.contarExecucoesAtivasPorWorkflow()
+    const enriquecidos = await Promise.all(
+      workflows.map(async (wf) => {
+        let def = wf.rascunho_definicao
+        if (!def && wf.versao_atual_id) {
+          const versao = await ctx.store.buscarVersao(wf.versao_atual_id)
+          def = versao?.definicao ?? null
+        }
+        return {
+          ...wf,
+          gatilho_tipo: def?.gatilho?.tipo ?? null,
+          etapas: def?.acoes?.length ?? 0,
+          num_condicoes: def?.condicoes?.length ?? 0,
+          em_execucao: ativos[wf.id] ?? 0,
+        }
+      }),
+    )
+    return NextResponse.json({ workflows: enriquecidos })
   } catch (err) {
     console.error('[workflows] GET erro:', err)
     return NextResponse.json({ erro: 'Erro ao listar workflows' }, { status: 500 })
