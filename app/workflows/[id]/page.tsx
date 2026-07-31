@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, Zap, Filter, PlayCircle,
   CheckCircle2, PauseCircle, Rocket, Save, AlertTriangle, UserPlus, Search,
+  FlaskConical, Users, X,
 } from 'lucide-react';
 import type { BlocoConfig, DefinicaoWorkflow, Workflow, WorkflowVersao, StatusWorkflow } from '@/lib/workflows/types';
 import {
@@ -31,6 +32,16 @@ const STATUS_INFO: Record<StatusWorkflow, { label: string; chip: string }> = {
 const COR_GATILHO = '#f59e0b';
 const COR_CONDICAO = '#38bdf8';
 const COR_ACAO = '#22c55e';
+
+// Trava de segurança (Fase 5): acima deste nº de leads casados pelo gatilho,
+// publicar exige confirmação explícita (evita disparo amplo sem aviso).
+const LIMITE_TRAVA = 20;
+
+// Resultado da simulação "Testar" (POST /api/workflows/[id]/simular).
+type SimResultado = {
+  alvos: number;
+  amostra: { leadId: string; nome: string; status: string; passos: string[] }[];
+};
 
 const EXEC_LABEL: Record<string, string> = {
   em_andamento: 'Em andamento', aguardando: 'Aguardando', concluido: 'Concluídas',
@@ -235,6 +246,12 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
 
+  // Fase 5 — trava de segurança (confirmação antes de publicar gatilho amplo) e
+  // simulação ("Testar" sem efeito real).
+  const [confirmPub, setConfirmPub] = useState<{ alvos: number } | null>(null);
+  const [simulando, setSimulando] = useState(false);
+  const [simResult, setSimResult] = useState<SimResultado | null>(null);
+
   useEffect(() => {
     getUsuarios().then(setUsuarios).catch(() => {});
     getLeads().then(setLeads).catch(() => {});
@@ -325,6 +342,67 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
     }
   }
 
+  // Publicação com TRAVA (Fase 5): salva o rascunho, consulta a prévia de quantos
+  // leads o gatilho casaria AGORA e, se passar do limite, pede confirmação antes
+  // de congelar a versão. Abaixo do limite, publica direto.
+  async function iniciarPublicacao() {
+    if (problemas.length) { setErro(problemas[0]); return; }
+    const ok = await salvarRascunho();
+    if (!ok) return;
+    setOcupado(true); setErro(null); setMsg(null);
+    try {
+      const r = await fetch(`/api/workflows/${id}/previa`);
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.erro || 'Falha na prévia');
+      const alvos = Number(data?.alvos ?? 0);
+      if (alvos > LIMITE_TRAVA) { setConfirmPub({ alvos }); return; }
+      await executarPublicacao();
+    } catch {
+      setErro('Não consegui calcular quantos leads seriam inscritos. Tente publicar de novo.');
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function executarPublicacao() {
+    setConfirmPub(null); setOcupado(true); setMsg(null); setErro(null);
+    try {
+      const r = await fetch(`/api/workflows/${id}/acao`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acao: 'publicar' }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.erro || 'Falha ao publicar');
+      await carregar();
+      setMsg('Workflow publicado.');
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao publicar');
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  // Simulação "Testar" (Fase 5): roda o fluxo em modo simulação (sem efeito real)
+  // sobre a definição ATUAL do formulário e mostra o que aconteceria.
+  async function testar() {
+    setSimulando(true); setSimResult(null); setErro(null); setMsg(null);
+    try {
+      const r = await fetch(`/api/workflows/${id}/simular`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ definicao: def }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.erro || 'Falha ao simular');
+      setSimResult(data as SimResultado);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao simular');
+    } finally {
+      setSimulando(false);
+    }
+  }
+
   async function excluir() {
     if (!confirm('Excluir este rascunho? Esta ação não pode ser desfeita.')) return;
     setOcupado(true); setErro(null);
@@ -393,9 +471,17 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
         >
           <Save size={14} /> Salvar rascunho
         </button>
+        <button
+          onClick={testar}
+          disabled={ocupado || simulando || problemas.length > 0}
+          className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/10 disabled:opacity-50 focus-ring"
+          title={problemas[0] ?? 'Roda o fluxo em simulação, sem enviar e-mail nem criar tarefa'}
+        >
+          {simulando ? <Loader2 size={14} className="animate-spin" /> : <FlaskConical size={14} />} Testar
+        </button>
         {workflow.status !== 'pausado' && (
           <button
-            onClick={() => acaoCiclo('publicar')}
+            onClick={iniciarPublicacao}
             disabled={ocupado || problemas.length > 0}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg text-white font-medium disabled:opacity-50 focus-ring"
             style={{ backgroundColor: '#1e6f3a' }}
@@ -542,6 +628,42 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
               </div>
             </div>
           )}
+
+          {/* Resultado da simulação "Testar" (Fase 5) — sem efeito real */}
+          {simResult && (
+            <div className="card p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <FlaskConical size={13} className="text-indigo-400" /> Simulação
+                </div>
+                <button onClick={() => setSimResult(null)} className="text-slate-500 hover:text-slate-300 focus-ring rounded" aria-label="Fechar simulação">
+                  <X size={14} />
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500 mb-2.5 leading-snug">
+                Sem envios reais. O gatilho casa <span className="font-semibold text-slate-300">{simResult.alvos}</span> lead{simResult.alvos === 1 ? '' : 's'} agora.
+                {simResult.amostra.length > 0 && ` Amostra de ${simResult.amostra.length}:`}
+              </p>
+              {simResult.amostra.length === 0 ? (
+                <p className="text-xs text-slate-500">Nenhum lead casa o gatilho agora — nada a simular.</p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {simResult.amostra.map((a) => (
+                    <li key={a.leadId} className="text-xs">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="font-medium text-slate-200 truncate">{a.nome}</span>
+                        <span className={`chip ${a.status === 'concluido' ? 'chip-success' : a.status === 'erro' ? 'chip-danger' : 'chip-muted'}`}>{a.status}</span>
+                      </div>
+                      <ol className="ml-1 border-l border-[var(--border)] pl-2.5 space-y-0.5 text-slate-400">
+                        {a.passos.map((p, i) => <li key={i}>{p}</li>)}
+                      </ol>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           <ResumoFluxo def={def} usuarios={usuarios} />
         </aside>
       </div>
@@ -550,6 +672,35 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
       {workflow.status === 'publicado' && (
         <div className="mt-5">
           <InscricaoManual workflowId={workflow.id} leads={leads} />
+        </div>
+      )}
+
+      {/* Trava de segurança (Fase 5): confirmação de disparo amplo antes de publicar. */}
+      {confirmPub && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => !ocupado && setConfirmPub(null)}>
+          <div className="bg-[#1a1f2e] rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-amber-500/15 text-amber-400 shrink-0"><AlertTriangle size={18} /></span>
+              <h3 className="font-bold text-lg text-slate-100">Confirmar publicação</h3>
+            </div>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Este gatilho casa <span className="font-bold text-amber-300 inline-flex items-center gap-1"><Users size={13} /> {confirmPub.alvos} leads</span> agora. Ao publicar, o próximo tick do cron inscreve todos de uma vez — uma execução por lead.
+            </p>
+            <p className="text-xs text-slate-500 mt-2">
+              Acima do limite de segurança de {LIMITE_TRAVA}. Se não era essa a intenção, revise o gatilho/condições antes de publicar.
+            </p>
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setConfirmPub(null)} disabled={ocupado} className="text-sm px-4 py-2 rounded-lg text-slate-300 hover:bg-[#0f1117] disabled:opacity-50 focus-ring">Cancelar</button>
+              <button
+                onClick={executarPublicacao}
+                disabled={ocupado}
+                className="text-sm px-4 py-2 rounded-lg text-white font-medium flex items-center gap-2 disabled:opacity-50 focus-ring"
+                style={{ backgroundColor: '#b45309' }}
+              >
+                {ocupado && <Loader2 size={14} className="animate-spin" />} Publicar mesmo assim
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
