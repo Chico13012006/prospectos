@@ -10,7 +10,6 @@ import {
   BrainCircuit,
   Calendar,
   Users,
-  FileText,
   Workflow,
   Settings,
   Zap,
@@ -25,7 +24,6 @@ const mainNav = [
   { href: '/reunioes', icon: Calendar, label: 'Reuniões' },
   { href: '/inteligencia-comercial', icon: BrainCircuit, label: 'Inteligência Comercial' },
   { href: '/equipe', icon: Users, label: 'Equipe' },
-  { href: '/templates', icon: FileText, label: 'Templates' },
   { href: '/workflows', icon: Workflow, label: 'Workflows' },
 ];
 
