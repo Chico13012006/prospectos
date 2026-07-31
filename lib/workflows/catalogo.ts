@@ -329,8 +329,18 @@ export function definicaoVazia(): DefinicaoWorkflow {
   return { gatilho: blocoPadrao(GATILHOS[0]), condicoes: [], acoes: [] }
 }
 
+// Rótulo mínimo de usuário para resolver campos tipo 'usuario' (id → nome) no
+// resumo. A lista real de usuários só existe em runtime (getUsuarios no editor),
+// por isso entra como parâmetro opcional — não dá para embutir no catálogo.
+export interface UsuarioRotulo {
+  id: string
+  nome: string
+}
+
 // Resumo legível de um bloco, para cards/listas. Ex.: "Enviar e-mail · Follow-up 1".
-export function descreverBloco(bloco: BlocoConfig): string {
+// Passe `usuarios` para resolver campos tipo 'usuario' (ex.: responsavel_id) do
+// UUID cru para o nome; sem a lista, mantém o valor cru (fallback).
+export function descreverBloco(bloco: BlocoConfig, usuarios?: UsuarioRotulo[]): string {
   const def = acharBlocoDef(bloco.tipo)
   if (!def) return bloco.tipo
   const partes: string[] = []
@@ -339,6 +349,8 @@ export function descreverBloco(bloco: BlocoConfig): string {
     if (bruto === undefined || bruto === '' || bruto === null) continue
     let valor = String(bruto)
     if (campo.opcoes) valor = campo.opcoes.find((o) => o.valor === String(bruto))?.label ?? valor
+    else if (campo.tipo === 'usuario' && usuarios)
+      valor = usuarios.find((u) => u.id === String(bruto))?.nome ?? valor
     partes.push(valor)
   }
   return partes.length ? `${def.label} · ${partes.join(' · ')}` : def.label

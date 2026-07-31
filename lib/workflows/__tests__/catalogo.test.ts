@@ -75,4 +75,14 @@ describe('catálogo de blocos (UI)', () => {
   it('descreverBloco cai no tipo cru para bloco desconhecido', () => {
     expect(descreverBloco({ tipo: 'inexistente', config: {} })).toBe('inexistente')
   })
+
+  it('descreverBloco resolve campo tipo usuario (responsavel_id → nome) quando há lista', () => {
+    const usuarios = [{ id: 'u-1', nome: 'Francisco' }]
+    const bloco = { tipo: 'criar_tarefa', config: { titulo: 'Ligar', responsavel_id: 'u-1' } }
+    expect(descreverBloco(bloco, usuarios)).toBe('Criar tarefa · Ligar · Francisco')
+    // Sem lista (fallback): mantém o UUID cru.
+    expect(descreverBloco(bloco)).toBe('Criar tarefa · Ligar · u-1')
+    // Id fora da lista: também cai no cru.
+    expect(descreverBloco(bloco, [{ id: 'outro', nome: 'X' }])).toBe('Criar tarefa · Ligar · u-1')
+  })
 })

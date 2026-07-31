@@ -69,7 +69,7 @@ export class GmailProvider implements EmailProvider {
     return this.transporter
   }
 
-  async enviar(para: string, assunto: string, corpo: string): Promise<void> {
+  async enviar(para: string, assunto: string, corpo: string, html?: string): Promise<void> {
     if (engineConfig.modoEnsaio) {
       log.info('[ENSAIO] Gmail NÃO enviado (modoEnsaio)', { para, assunto })
       return
@@ -78,7 +78,8 @@ export class GmailProvider implements EmailProvider {
       from: this.cred.user,
       to: para,
       subject: assunto,
-      text: corpo,
+      text: corpo, // fallback p/ clientes sem HTML
+      ...(html ? { html } : {}),
     })
     log.ok('E-mail enviado via Gmail (SMTP)', {
       remetente: this.cred.user,

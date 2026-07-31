@@ -10,7 +10,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { criarMotorReal } from '@/lib/engine/scheduler'
 import { normalizarNicho, preencher } from '@/lib/engine/mensagem'
+import { log } from '@/lib/engine/logger'
 import type { Motor } from '@/lib/engine'
+import type { Lead } from '@/lib/engine/types'
 import { avaliarOperador, type Operador } from './operadores'
 
 export interface AmbienteWorkflow {
@@ -182,12 +184,11 @@ export class AmbienteSupabase implements AmbienteWorkflow {
 
   async criarTarefa(leadId: string, titulo: string, responsavelId?: string | null): Promise<void> {
     if (this.simular) return
+    // Buscamos o lead também para o fallback de responsável E para o corpo da
+    // notificação (empresa/contato).
+    const lead = await this.motor.store.buscarLead(leadId)
     // Responsável explícito da ação; senão, o responsável do próprio lead.
-    let responsavel = responsavelId ?? null
-    if (!responsavel) {
-      const lead = await this.motor.store.buscarLead(leadId)
-      responsavel = lead?.responsavel_id ?? null
-    }
+    const responsavel = responsavelId ?? lead?.responsavel_id ?? null
     await this.motor.store.registrarInteracao({
       lead_id: leadId,
       tipo: 'nota',
@@ -196,6 +197,50 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       origem_acao: 'ia',
       responsavel_id: responsavel,
     })
+    // A tarefa (interação) já está gravada acima. A notificação por e-mail é
+    // best-effort: qualquer falha aqui é apenas logada, nunca propagada.
+    await this.notificarResponsavelTarefa(leadId, responsavel, titulo, lead)
+  }
+
+  // Avisa por e-mail o responsável de uma tarefa recém-criada — mesma infra da
+  // notificação de closer (this.motor.email.enviar, gated por MODO_ENSAIO dentro
+  // do GmailProvider). Best-effort: sem responsável/e-mail, ou falha na busca/envio,
+  // não quebra a criação da tarefa — só loga.
+  private async notificarResponsavelTarefa(
+    leadId: string,
+    responsavelId: string | null,
+    titulo: string,
+    lead: Lead | null,
+  ): Promise<void> {
+    if (!responsavelId) return
+    try {
+      const usuario = await this.motor.store.buscarUsuario(responsavelId)
+      if (!usuario?.email) {
+        log.aviso('Responsável da tarefa sem e-mail cadastrado — sem notificação.', {
+          leadId,
+          responsavelId,
+        })
+        return
+      }
+      const empresa = lead?.empresa ?? '(lead)'
+      const contato = lead?.contato_nome ?? lead?.contato_email ?? '-'
+      // Texto puro = fallback (clientes sem HTML). Mantém o formato de antes.
+      const corpo = [
+        'Você foi definido como responsável por uma nova tarefa gerada por um workflow.',
+        '',
+        `Tarefa  : ${titulo}`,
+        `Empresa : ${empresa}`,
+        `Contato : ${contato}`,
+      ].join('\n')
+      const html = montarEmailTarefaHtml({ nome: usuario.nome, titulo, empresa, contato, leadId })
+      await this.motor.email.enviar(usuario.email, `Nova tarefa: ${titulo}`, corpo, html)
+    } catch (e) {
+      log.erro('Falha ao notificar responsável da tarefa (tarefa criada mesmo assim).', {
+        leadId,
+        responsavelId,
+        erro: e instanceof Error ? e.message : String(e),
+      })
+    }
   }
 
   async atualizarCampoLead(leadId: string, campo: string, valor: unknown): Promise<void> {
@@ -209,4 +254,85 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       .eq('id', leadId)
     if (error) throw error
   }
+}
+
+// Escapa texto do usuário para interpolar com segurança no HTML do e-mail.
+function escaparHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+// E-mail transacional (HTML) da notificação de tarefa. Regras de e-mail: layout
+// por TABELAS + estilos INLINE (nada de flexbox/CSS externo), compatível com os
+// clientes de e-mail. Acento verde (#22c55e, o mesmo do ícone da sidebar), fundo
+// branco. O botão leva a /leads/{id}, que redireciona para o LeadPanel real.
+function montarEmailTarefaHtml(dados: {
+  nome: string
+  titulo: string
+  empresa: string
+  contato: string
+  leadId: string
+}): string {
+  const nome = escaparHtml(dados.nome)
+  const titulo = escaparHtml(dados.titulo)
+  const empresa = escaparHtml(dados.empresa)
+  const contato = escaparHtml(dados.contato)
+  const base = process.env.NEXT_PUBLIC_SITE_URL ?? ''
+  const leadUrl = escaparHtml(`${base}/leads/${dados.leadId}`)
+  const VERDE = '#22c55e'
+  const linha = (rotulo: string, valor: string) =>
+    `<tr>
+      <td style="padding:5px 0;color:#64748b;font-size:14px;width:96px;vertical-align:top;">${rotulo}</td>
+      <td style="padding:5px 0;color:#0f172a;font-size:14px;font-weight:bold;">${valor}</td>
+    </tr>`
+  return `<!doctype html>
+<html lang="pt-BR">
+<body style="margin:0;padding:0;background-color:#f4f5f7;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">
+        <tr>
+          <td style="padding:20px 28px;border-bottom:1px solid #eef0f2;">
+            <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+              <td width="32" style="width:32px;height:32px;background-color:${VERDE};border-radius:8px;text-align:center;vertical-align:middle;color:#ffffff;font-size:16px;font-weight:bold;line-height:32px;">&#9889;</td>
+              <td style="padding-left:10px;vertical-align:middle;">
+                <div style="font-size:15px;font-weight:bold;color:#0f172a;line-height:1.15;">ProspectOS</div>
+                <div style="font-size:12px;color:#6366f1;line-height:1.15;">InovaCode</div>
+              </td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px;">
+            <p style="margin:0 0 14px;font-size:16px;color:#0f172a;">Olá, ${nome},</p>
+            <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#334155;">Você foi definido como responsável por uma nova tarefa gerada por um workflow.</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;">
+              <tr><td style="padding:14px 18px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  ${linha('Tarefa', titulo)}
+                  ${linha('Empresa', empresa)}
+                  ${linha('Contato', contato)}
+                </table>
+              </td></tr>
+            </table>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 4px;"><tr>
+              <td style="background-color:${VERDE};border-radius:8px;">
+                <a href="${leadUrl}" target="_blank" style="display:inline-block;padding:12px 22px;font-size:14px;font-weight:bold;color:#ffffff;text-decoration:none;">Ver lead no ProspectOS</a>
+              </td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:18px 28px;border-top:1px solid #eef0f2;background-color:#fafafa;">
+            <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.5;">Esta é uma mensagem automática do ProspectOS. Não responda a este e-mail.</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
 }

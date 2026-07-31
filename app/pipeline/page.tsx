@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Settings, Plus, Loader2 } from 'lucide-react';
 import { getPipelineFiltrosOpcoes } from '@/lib/api';
 import PipelineColumn from '@/components/pipeline/PipelineColumn';
@@ -9,7 +10,18 @@ import GlobalFilters, { type GlobalFilterState } from '@/components/pipeline/Glo
 import LeadPanel from '@/components/leads/LeadPanel';
 import { COLUNAS_KANBAN, COLUNAS_CADENCIA } from '@/lib/pipeline-stages';
 
+// useSearchParams() exige um limite de Suspense (Next) — por isso o conteúdo real
+// da página vive em PipelineInner e o default export só o envolve.
 export default function PipelinePage() {
+  return (
+    <Suspense fallback={null}>
+      <PipelineInner />
+    </Suspense>
+  );
+}
+
+function PipelineInner() {
+  const searchParams = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<GlobalFilterState>({ search: '', responsavel: '', segmento: '', canal: '' });
   // Tabela é a visão PADRÃO (alto volume de leads); Kanban fica restrito a
@@ -30,6 +42,14 @@ export default function PipelinePage() {
       .then(opts => { setFiltroOpcoes(opts); setLoading(false); })
       .catch(err => { console.error('Erro ao carregar pipeline:', err); setUseFallback(true); setLoading(false); });
   }, []);
+
+  // Deep-link: /pipeline?lead=<id> (ex.: botão do e-mail de tarefa) já abre o
+  // LeadPanel daquele lead. searchParams é estável, então roda uma vez; não
+  // reabre sozinho quando o usuário fecha o painel manualmente.
+  useEffect(() => {
+    const leadParam = searchParams.get('lead');
+    if (leadParam) setSelectedId(leadParam);
+  }, [searchParams]);
 
   // Supabase é fonte ativa quando carregou sem erro (mesmo que vazio)
   const usingSupabase = !useFallback && !loading;

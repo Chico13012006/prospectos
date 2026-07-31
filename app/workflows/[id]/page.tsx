@@ -502,7 +502,7 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
       </section>
 
       {/* Resumo visual read-only do fluxo (gatilho → público → ações → ramificação → fim) */}
-      <ResumoFluxo def={def} />
+      <ResumoFluxo def={def} usuarios={usuarios} />
 
       {/* Inscrição manual (Fase 4.6): só faz sentido com o workflow publicado. */}
       {workflow.status === 'publicado' && <InscricaoManual workflowId={workflow.id} leads={leads} />}

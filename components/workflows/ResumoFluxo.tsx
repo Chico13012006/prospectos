@@ -6,7 +6,7 @@
 // Puro: lê a definição em edição; não altera nada. Sem canvas.
 import { Zap, Filter, Clock, GitBranch, Flag, PlayCircle, CornerDownRight, ArrowDown } from 'lucide-react';
 import type { BlocoConfig, DefinicaoWorkflow } from '@/lib/workflows/types';
-import { acharBlocoDef, descreverBloco } from '@/lib/workflows/catalogo';
+import { acharBlocoDef, descreverBloco, type UsuarioRotulo } from '@/lib/workflows/catalogo';
 
 function rotuloPasso(acoes: BlocoConfig[], indice: number): string {
   const b = acoes[indice];
@@ -29,7 +29,7 @@ const Bolha = ({ Icon, cor }: { Icon: typeof Zap; cor: string }) => (
   </span>
 );
 
-function FluxoPasso({ bloco, indice, acoes }: { bloco: BlocoConfig; indice: number; acoes: BlocoConfig[] }) {
+function FluxoPasso({ bloco, indice, acoes, usuarios }: { bloco: BlocoConfig; indice: number; acoes: BlocoConfig[]; usuarios?: UsuarioRotulo[] }) {
   const n = <span className="text-[11px] font-mono text-slate-600 w-5 shrink-0 text-right">{indice + 1}</span>;
 
   if (bloco.tipo === 'esperar') {
@@ -64,7 +64,7 @@ function FluxoPasso({ bloco, indice, acoes }: { bloco: BlocoConfig; indice: numb
           {n}
           <Bolha Icon={GitBranch} cor="bg-sky-500/20 text-sky-300" />
           <span className="text-sm text-slate-200">
-            Ramificar — se <span className="text-sky-300">{cond ? descreverBloco(cond) : 'condição'}</span>
+            Ramificar — se <span className="text-sky-300">{cond ? descreverBloco(cond, usuarios) : 'condição'}</span>
           </span>
         </div>
         <div className="ml-7 mt-1 space-y-0.5 text-xs">
@@ -87,12 +87,12 @@ function FluxoPasso({ bloco, indice, acoes }: { bloco: BlocoConfig; indice: numb
     <li className="flex items-center gap-2">
       {n}
       <Bolha Icon={PlayCircle} cor="bg-green-500/20 text-green-300" />
-      <span className="text-sm text-slate-300">{descreverBloco(bloco)}</span>
+      <span className="text-sm text-slate-300">{descreverBloco(bloco, usuarios)}</span>
     </li>
   );
 }
 
-export default function ResumoFluxo({ def }: { def: DefinicaoWorkflow }) {
+export default function ResumoFluxo({ def, usuarios }: { def: DefinicaoWorkflow; usuarios?: UsuarioRotulo[] }) {
   const acoes = def.acoes ?? [];
   const condicoes = def.condicoes ?? [];
   return (
@@ -103,7 +103,7 @@ export default function ResumoFluxo({ def }: { def: DefinicaoWorkflow }) {
           <span className="w-5 shrink-0" />
           <Bolha Icon={Zap} cor="bg-amber-500/20 text-amber-300" />
           <span className="text-sm text-slate-200">
-            Gatilho — <span className="text-amber-200/90">{descreverBloco(def.gatilho)}</span>
+            Gatilho — <span className="text-amber-200/90">{descreverBloco(def.gatilho, usuarios)}</span>
           </span>
         </li>
 
@@ -112,7 +112,7 @@ export default function ResumoFluxo({ def }: { def: DefinicaoWorkflow }) {
             <span className="w-5 shrink-0" />
             <Bolha Icon={Filter} cor="bg-sky-500/20 text-sky-300" />
             <span className="text-sm text-slate-300">
-              Público — {condicoes.map((c) => descreverBloco(c)).join(' E ')}
+              Público — {condicoes.map((c) => descreverBloco(c, usuarios)).join(' E ')}
             </span>
           </li>
         )}
@@ -120,7 +120,7 @@ export default function ResumoFluxo({ def }: { def: DefinicaoWorkflow }) {
         {acoes.length === 0 ? (
           <li className="ml-7 text-xs text-amber-400/80">Sem ações ainda.</li>
         ) : (
-          acoes.map((a, i) => <FluxoPasso key={i} bloco={a} indice={i} acoes={acoes} />)
+          acoes.map((a, i) => <FluxoPasso key={i} bloco={a} indice={i} acoes={acoes} usuarios={usuarios} />)
         )}
 
         <li className="flex items-center gap-2 pt-1">
