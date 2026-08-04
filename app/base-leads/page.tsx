@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Database } from 'lucide-react';
+import { Database, Plus, FileSpreadsheet } from 'lucide-react';
 import { formatDate, dash } from '@/lib/utils';
 import { labelEstagio, corEstagio } from '@/lib/pipeline-stages';
 import { getTodosLeads, getPipelineFiltrosOpcoes, type BaseLeadsFiltros } from '@/lib/api';
 import type { Lead } from '@/lib/supabase';
 import LeadPanel from '@/components/leads/LeadPanel';
+import NovoLeadModal from '@/components/leads/NovoLeadModal';
+import ImportarLeadsModal from '@/components/leads/ImportarLeadsModal';
 import FiltrosBase, { FILTRO_VAZIO, type BaseFiltroForm } from '@/components/base/FiltrosBase';
 import { EstadoTabela, PaginacaoTabela } from '@/components/ui/tabela';
 
@@ -28,6 +30,7 @@ export default function BaseLeadsPage() {
   const [useFallback, setUseFallback] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [modal, setModal] = useState<null | 'novo' | 'importar'>(null);
 
   // Opções dos selects + sonda de conexão.
   useEffect(() => {
@@ -91,14 +94,31 @@ export default function BaseLeadsPage() {
           </h1>
           <p className="text-sm text-slate-400 mt-0.5">Banco geral — todos os leads, em qualquer estado.</p>
         </div>
-        {!useFallback && (
-          <div className="shrink-0 text-right">
-            <div className="text-2xl font-bold text-slate-100 leading-none tabular-nums">{total.toLocaleString('pt-BR')}</div>
-            <div className="text-xs text-slate-500 mt-1">
-              {total === 1 ? 'lead' : 'leads'}{loading ? '…' : ''}
-            </div>
+        <div className="shrink-0 flex items-center gap-3">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setModal('importar')}
+              className="flex items-center gap-2 text-sm text-slate-300 border border-[#2a3147] px-3 py-2 rounded-lg hover:bg-[#0f1117]"
+            >
+              <FileSpreadsheet size={14} /> Importar leads
+            </button>
+            <button
+              onClick={() => setModal('novo')}
+              className="flex items-center gap-2 text-sm font-medium text-white px-4 py-2 rounded-lg"
+              style={{ backgroundColor: '#1e3a5f' }}
+            >
+              <Plus size={14} /> Novo lead
+            </button>
           </div>
-        )}
+          {!useFallback && (
+            <div className="text-right">
+              <div className="text-2xl font-bold text-slate-100 leading-none tabular-nums">{total.toLocaleString('pt-BR')}</div>
+              <div className="text-xs text-slate-500 mt-1">
+                {total === 1 ? 'lead' : 'leads'}{loading ? '…' : ''}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Filtros */}
@@ -187,6 +207,13 @@ export default function BaseLeadsPage() {
         usingSupabase={!useFallback}
         contexto="base"
       />
+
+      {modal === 'novo' && (
+        <NovoLeadModal onClose={() => setModal(null)} onCreated={() => setReloadKey(k => k + 1)} />
+      )}
+      {modal === 'importar' && (
+        <ImportarLeadsModal onClose={() => setModal(null)} onImported={() => setReloadKey(k => k + 1)} />
+      )}
     </div>
   );
 }

@@ -15,7 +15,9 @@
     "engine:scheduler": "tsx scripts/engine-scheduler.ts",
     "engine:cadencia-once": "tsx scripts/engine-cadencia-once.ts",
     "engine:cadencia-dry": "tsx scripts/engine-cadencia-dry.ts",
-    "prospeccao:hotelaria": "tsx scripts/prospeccao-freetier-hotelaria.ts"
+    "prospeccao:hotelaria": "tsx scripts/prospeccao-freetier-hotelaria.ts",
+    "import:hubspot": "tsx scripts/importar-hubspot.ts",
+    "popular:responsavel": "tsx scripts/popular-responsavel.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

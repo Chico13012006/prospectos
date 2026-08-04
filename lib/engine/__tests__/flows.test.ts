@@ -200,6 +200,23 @@ describe('Fluxo 4 — followUp', () => {
     expect(r.enviados).toBe(0)
   })
 
+  it('CC do responsável: com responsavel_id real, o follow-up vai com o comercial em cópia', async () => {
+    const closer = { id: 'u1', nome: 'Francisco', email: 'fran@inovacode.com.br' }
+    const lead = makeLead({ estagio: 'primeiro_contato', proxima_acao_data: ONTEM, responsavel_id: 'u1' })
+    const store = new MemoryStore([lead], [closer])
+    const r = await followUp(store, email)
+    expect(r.enviados).toBe(1)
+    expect(email.enviados[0].cc).toBe('fran@inovacode.com.br')
+  })
+
+  it('lead legado (sem responsavel_id): follow-up vai SEM cc, sem quebrar', async () => {
+    const lead = makeLead({ estagio: 'primeiro_contato', proxima_acao_data: ONTEM, responsavel_id: undefined })
+    const store = new MemoryStore([lead])
+    const r = await followUp(store, email)
+    expect(r.enviados).toBe(1)
+    expect(email.enviados[0].cc).toBeUndefined()
+  })
+
   it('NÃO-REENVIO: respeita o máximo de follow-ups (3)', async () => {
     const lead = makeLead({ estagio: 'follow_up', proxima_acao_data: ONTEM })
     const store = new MemoryStore([lead])

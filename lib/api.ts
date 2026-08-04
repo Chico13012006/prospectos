@@ -37,7 +37,7 @@ export async function getLeads() {
 // Filtro "Responsável": o dropdown lista `usuarios.nome` (ex.: "Francisco"),
 // mas os leads guardam a atribuição de DUAS formas: `responsavel_id` (FK para
 // usuarios — fluxo normal da plataforma) e `responsavel_nome` (texto legado do
-// import HubSpot via scripts/popular-responsavel.cjs, com o nome COMPLETO do
+// import HubSpot via scripts/popular-responsavel.ts, com o nome COMPLETO do
 // CSV, ex.: "Francisco Rufino"). Por isso o filtro casa por id OU por PREFIXO
 // do nome — `eq` nunca acharia "Francisco Rufino" a partir de "Francisco".
 // O id é resolvido com uma query leve em `usuarios`, cacheada no módulo
@@ -372,6 +372,24 @@ export async function getLeadsStats() {
     .select('estagio, score, responsavel_id, created_at, canal_preferencial, segmento, estado')
   if (error || !data) return null
   return data
+}
+
+// INTELIGÊNCIA COMERCIAL (dado real mínimo p/ apresentação): dois KPIs reais,
+// escopados à organização pela MESMA trava de RLS da Base de Leads (client de
+// cookie/SSR — auth.uid() resolve as policies). Usa count HEAD (não traz linha,
+// só o total) — barato mesmo com a base cheia. "Conversões" = leads em
+// estagio='ganho' (único estágio de fechamento hoje, ver lib/pipeline-stages).
+export async function getInteligenciaComercialResumo(): Promise<{
+  totalLeads: number
+  conversoes: number
+}> {
+  const [totalRes, ganhoRes] = await Promise.all([
+    supabase.from('leads').select('id', { count: 'exact', head: true }),
+    supabase.from('leads').select('id', { count: 'exact', head: true }).eq('estagio', 'ganho'),
+  ])
+  if (totalRes.error) throw totalRes.error
+  if (ganhoRes.error) throw ganhoRes.error
+  return { totalLeads: totalRes.count ?? 0, conversoes: ganhoRes.count ?? 0 }
 }
 
 export async function getLeadsRecentes(limit = 10) {

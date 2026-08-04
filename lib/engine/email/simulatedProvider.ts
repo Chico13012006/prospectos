@@ -7,17 +7,18 @@ import { log } from '../logger'
 
 export class SimulatedProvider implements EmailProvider {
   private caixa: MensagemRecebida[]
-  public readonly enviados: { para: string; assunto: string; corpo: string }[] = []
+  public readonly enviados: { para: string; assunto: string; corpo: string; cc?: string }[] = []
 
   constructor(caixaEntrada: MensagemRecebida[] = []) {
     this.caixa = caixaEntrada
   }
 
-  async enviar(para: string, assunto: string, corpo: string): Promise<void> {
-    this.enviados.push({ para, assunto, corpo })
+  async enviar(para: string, assunto: string, corpo: string, _html?: string, cc?: string): Promise<void> {
+    this.enviados.push({ para, assunto, corpo, cc })
     log.info('[ENSAIO] e-mail NÃO enviado (simulado)', {
       para,
       assunto,
+      cc,
       previa: corpo.slice(0, 120),
     })
   }

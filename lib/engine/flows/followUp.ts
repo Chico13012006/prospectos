@@ -64,7 +64,16 @@ export async function followUp(
 
     const destino = proximoEstagio(lead.estagio)
     const msg = await montarEmail(store, lead, { tipo: 'follow_up', numero: jaEnviados + 1 })
-    await email.enviar(lead.contato_email, msg.assunto, msg.corpo)
+    // CC do comercial responsável no follow-up automático (só aqui, não no
+    // primeiro contato). Depende de responsavel_id REAL (FK p/ usuarios): leads
+    // antigos do HubSpot só têm responsavel_nome (texto), sem FK — esses vão sem
+    // CC, como antes, sem quebrar nada.
+    let cc: string | undefined
+    if (lead.responsavel_id) {
+      const responsavel = await store.buscarUsuario(lead.responsavel_id)
+      cc = responsavel?.email ?? undefined
+    }
+    await email.enviar(lead.contato_email, msg.assunto, msg.corpo, undefined, cc)
     await store.registrarInteracao({
       lead_id: lead.id,
       tipo: 'follow_up',
