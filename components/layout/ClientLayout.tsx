@@ -8,7 +8,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const pathname = usePathname();
 
   // Páginas de autenticação/onboarding são renderizadas em tela cheia, sem o sidebar
-  if (pathname === '/login' || pathname === '/definir-senha' || pathname === '/meu-perfil') {
+  if (pathname === '/login' || pathname === '/definir-senha' || pathname === '/meu-perfil' || pathname === '/criar-organizacao') {
     return <>{children}</>;
   }
 

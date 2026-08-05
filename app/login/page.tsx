@@ -76,6 +76,11 @@ export default function LoginPage() {
             {carregando ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
+
+        <p className="text-center text-slate-500 text-sm mt-6">
+          Nova empresa?{' '}
+          <a href="/criar-organizacao" className="text-indigo-400 hover:text-indigo-300">Criar organização</a>
+        </p>
       </div>
     </div>
   );
