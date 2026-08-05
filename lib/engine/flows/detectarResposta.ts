@@ -7,6 +7,7 @@
 import { OWNER_ENGINE } from '../config'
 import { log } from '../logger'
 import { ESTAGIOS_EM_CADENCIA, dominioDoLead } from '../templates'
+import { calcularScore, horasEntre } from '../scoring'
 import type { EmailProvider } from '../email/provider'
 import type { Store } from '../store/store'
 import type { Queue } from '../queue'
@@ -83,10 +84,14 @@ export async function detectarResposta(
     }
 
     // 4) Resposta real → PAUSAR a cadência na hora e registrar.
+    // Score dinâmico (item 2.8): respondeu + bônus por velocidade (tempo entre
+    // o último contato enviado e esta resposta).
+    const horas = horasEntre(lead.ultimo_contato, msg.em)
     await store.atualizarLead(lead.id, {
       estagio: 'interessado',
       proxima_acao: 'aguardando_closer',
       proxima_acao_data: null,
+      score: calcularScore({ respondeu: true, horasAteResposta: horas }),
     })
     await store.registrarInteracao({
       lead_id: lead.id,

@@ -164,6 +164,7 @@ export async function getPipelineFiltrosOpcoes(): Promise<{
 export type LeadOrdenavel =
   | 'empresa' | 'segmento' | 'canal_preferencial' | 'estagio'
   | 'ultimo_contato' | 'created_at' | 'responsavel_nome' | 'contato_cargo'
+  | 'score'
 
 export interface BaseLeadsFiltros {
   busca?: string

@@ -20,6 +20,14 @@ function etapaFollowup(n?: number): string {
   return n >= 4 ? '4º+' : `${n}º`;
 }
 
+// Cor do score (0-100): frio (baixo) → quente (alto). Score alto = respondeu rápido.
+function corScore(score?: number): string {
+  const s = score ?? 0;
+  if (s >= 85) return '#22c55e';
+  if (s >= 65) return '#eab308';
+  return '#64748b';
+}
+
 export default function BaseLeadsPage() {
   const [form, setForm] = useState<BaseFiltroForm>(FILTRO_VAZIO);
   const [filtroOpcoes, setFiltroOpcoes] = useState<{ responsaveis: string[]; segmentos: string[]; canais: string[] }>({ responsaveis: [], segmentos: [], canais: [] });
@@ -31,6 +39,8 @@ export default function BaseLeadsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [modal, setModal] = useState<null | 'novo' | 'importar'>(null);
+  // Ordenação da tabela (item 2.8): clique no cabeçalho "Score" ordena por score.
+  const [ordenarPor, setOrdenarPor] = useState<{ campo: 'score'; asc: boolean } | null>(null);
 
   // Opções dos selects + sonda de conexão.
   useEffect(() => {
@@ -61,7 +71,13 @@ export default function BaseLeadsPage() {
     interacaoDe: formDebounced.interacaoDe ? `${formDebounced.interacaoDe}T00:00:00` : null,
     interacaoAte: formDebounced.interacaoAte ? `${formDebounced.interacaoAte}T23:59:59.999` : null,
     atalho: formDebounced.atalho || undefined,
-  }), [formDebounced]);
+    ordenarPor: ordenarPor ?? undefined,
+  }), [formDebounced, ordenarPor]);
+
+  // Alterna a ordenação por score: 1º clique = maior→menor, 2º = menor→maior, 3º = limpa.
+  const toggleOrdenarScore = useCallback(() => {
+    setOrdenarPor(prev => (prev == null ? { campo: 'score', asc: false } : prev.asc ? null : { campo: 'score', asc: true }));
+  }, []);
 
   // Troca de filtro volta para a primeira página.
   useEffect(() => { setPage(0); }, [filtros]);
@@ -142,14 +158,26 @@ export default function BaseLeadsPage() {
           <table className="w-full text-sm border-separate border-spacing-0">
             <thead className="sticky top-0 z-10">
               <tr className="text-left text-xs uppercase tracking-wide text-slate-500 bg-[var(--bg-base)]">
-                {['Empresa', 'Contato', 'Responsável', 'Status', 'Follow-up', 'Cidade/UF', 'Última interação', 'Cadastrado em'].map(h => (
+                {['Empresa', 'Contato', 'Responsável', 'Status', 'Follow-up'].map(h => (
+                  <th key={h} className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">{h}</th>
+                ))}
+                <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">
+                  <button
+                    onClick={toggleOrdenarScore}
+                    className="inline-flex items-center gap-1 uppercase tracking-wide hover:text-slate-300 transition-colors focus-ring rounded"
+                    title="Ordenar por score"
+                  >
+                    Score {ordenarPor ? (ordenarPor.asc ? '↑' : '↓') : '↕'}
+                  </button>
+                </th>
+                {['Cidade/UF', 'Última interação', 'Cadastrado em'].map(h => (
                   <th key={h} className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {data.length === 0 ? (
-                <EstadoTabela colSpan={8} loading={loading} />
+                <EstadoTabela colSpan={9} loading={loading} />
               ) : (
                 data.map(lead => {
                   const responsavel = lead.usuarios?.nome ?? lead.responsavel_nome ?? null;
@@ -178,6 +206,12 @@ export default function BaseLeadsPage() {
                         </span>
                       </td>
                       <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{etapaFollowup(lead.followups_enviados)}</td>
+                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5 text-slate-300 tabular-nums">
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: corScore(lead.score) }} />
+                          {lead.score ?? '—'}
+                        </span>
+                      </td>
                       <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{dash(cidadeUf)}</td>
                       <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-400 whitespace-nowrap">{lead.ultimo_contato ? formatDate(lead.ultimo_contato) : '—'}</td>
                       <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-400 whitespace-nowrap">{lead.created_at ? formatDate(lead.created_at) : '—'}</td>
