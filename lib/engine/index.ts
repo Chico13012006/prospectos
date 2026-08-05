@@ -6,7 +6,7 @@ import { log } from './logger'
 import { Queue } from './queue'
 import { SupabaseStore } from './store/supabaseStore'
 import { SimulatedProvider } from './email/simulatedProvider'
-import { GmailProvider, lerCredenciaisGmail } from './email/gmailProvider'
+import { GmailProvider, lerCredenciaisGmail, type PapelEmail } from './email/gmailProvider'
 import type { Store } from './store/store'
 import type { EmailProvider } from './email/provider'
 import { direcionarCloser } from './flows/direcionarCloser'
@@ -17,23 +17,29 @@ import { marcarExecucaoFollowup, verificarSaudeFollowup } from './saude'
 
 export interface Motor {
   store: Store
+  // Conta de FOLLOW-UP (cadência). É o provedor "padrão" do motor.
   email: EmailProvider
+  // Conta de PROSPECÇÃO (1º contato/abordagem + aviso ao closer). Item 2.7.
+  // Cai na mesma conta de `email` enquanto a 2ª credencial não estiver setada.
+  emailProspeccao: EmailProvider
   fila: Queue
 }
 
-// Escolhe o provedor: Gmail só quando houver credenciais E não estivermos em
-// ensaio; caso contrário, simulado (que apenas loga o que faria).
-export function escolherEmailProvider(): EmailProvider {
-  const cred = lerCredenciaisGmail()
+// Escolhe o provedor de um PAPEL: Gmail só quando houver credenciais daquele
+// papel (com fallback p/ a conta única) E não estivermos em ensaio; caso
+// contrário, simulado (que apenas loga o que faria).
+export function escolherEmailProvider(papel: PapelEmail = 'followup'): EmailProvider {
+  const cred = lerCredenciaisGmail(papel)
   if (cred && !engineConfig.modoEnsaio) return new GmailProvider(cred)
   if (engineConfig.modoEnsaio) log.info('Motor em MODO_ENSAIO: e-mails serão apenas simulados.')
   return new SimulatedProvider()
 }
 
-// Registra os handlers da fila (hoje: direcionar ao closer).
+// Registra os handlers da fila (hoje: direcionar ao closer). O aviso ao closer
+// sai pela conta de PROSPECÇÃO (item 2.7).
 export function registrarHandlers(motor: Motor) {
   motor.fila.registrar('direcionar_closer', (p) =>
-    direcionarCloser(motor.store, motor.email, p as { leadId: string; textoResposta: string }),
+    direcionarCloser(motor.store, motor.emailProspeccao, p as { leadId: string; textoResposta: string }),
   )
 }
 
@@ -43,7 +49,10 @@ export function registrarHandlers(motor: Motor) {
 export function criarMotor(organizacaoId: string, overrides?: Partial<Motor>): Motor {
   const motor: Motor = {
     store: overrides?.store ?? new SupabaseStore(organizacaoId),
-    email: overrides?.email ?? escolherEmailProvider(),
+    email: overrides?.email ?? escolherEmailProvider('followup'),
+    // Prospecção: usa o override explícito; senão o mesmo `email` injetado
+    // (compat. com testes que passam só `email`); senão a conta de prospecção.
+    emailProspeccao: overrides?.emailProspeccao ?? overrides?.email ?? escolherEmailProvider('prospeccao'),
     fila: overrides?.fila ?? new Queue(),
   }
   registrarHandlers(motor)

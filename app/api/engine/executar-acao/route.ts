@@ -28,7 +28,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ erro: 'Lead não encontrado' }, { status: 404 })
     }
     const motor = criarMotor(org)
-    const r = await executarAcao(motor.store, motor.email, { leadId: body.lead_id })
+    // 1º contato (abordagem) sai pela conta de PROSPECÇÃO (item 2.7).
+    const r = await executarAcao(motor.store, motor.emailProspeccao, { leadId: body.lead_id })
     return NextResponse.json(r, { status: r.ok ? 200 : 409 })
   } catch (err) {
     console.error('[engine/executar-acao] erro:', err)
