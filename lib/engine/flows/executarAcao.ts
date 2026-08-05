@@ -3,7 +3,7 @@
 // Busca o lead, decide o próximo estágio, monta o e-mail pelo template, envia,
 // registra a interação e avança o estágio. Respeita owner='engine', limite
 // diário e idempotência (nunca reenvia o mesmo estágio ao mesmo lead).
-import { OWNER_ENGINE, getEngineConfig } from '../config'
+import { OWNER_ENGINE, getEngineConfig, proximaDataFollowup } from '../config'
 import { log } from '../logger'
 import { proximoEstagio, tipoDoEnvio } from '../templates'
 import { montarEmail } from '../mensagem'
@@ -88,12 +88,16 @@ export async function executarAcao(
   })
 
   const agora = new Date()
-  const proxima = new Date(agora.getTime() + cfg.horasEntreFollowups * 3600_000)
+  // Próxima data-alvo pela cadência de dias (item 3). Após o 1º contato
+  // (abordagem) ancora em `agora` (= 1º contato) → 1º follow-up em dias[0].
+  const jaEnviados = tipo === 'follow_up' ? followupsEnviados : 0
+  const alvoAtual = tipo === 'follow_up' && lead.proxima_acao_data ? new Date(lead.proxima_acao_data) : null
+  const proximaISO = proximaDataFollowup(cfg.diasFollowups, jaEnviados, alvoAtual, agora)
   await store.atualizarLead(lead.id, {
     estagio: destino,
     ultimo_contato: agora.toISOString(),
-    proxima_acao: 'follow_up',
-    proxima_acao_data: proxima.toISOString(),
+    proxima_acao: proximaISO ? 'follow_up' : null,
+    proxima_acao_data: proximaISO,
     followups_enviados: followupsEnviados,
   })
 

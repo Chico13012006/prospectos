@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { DIAS_FOLLOWUPS_PADRAO } from '../config'
 import { MemoryStore } from '../store/memoryStore'
 import { SimulatedProvider } from '../email/simulatedProvider'
 import { Queue } from '../queue'
@@ -217,10 +218,10 @@ describe('Fluxo 4 — followUp', () => {
     expect(email.enviados[0].cc).toBeUndefined()
   })
 
-  it('NÃO-REENVIO: respeita o máximo de follow-ups (3)', async () => {
+  it('NÃO-REENVIO: respeita o máximo de follow-ups (8)', async () => {
     const lead = makeLead({ estagio: 'follow_up', proxima_acao_data: ONTEM })
     const store = new MemoryStore([lead])
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 8; i++) {
       await store.registrarInteracao({ lead_id: lead.id, tipo: 'follow_up', canal: 'email', descricao: 'x', origem_acao: 'ia' })
     }
     const r = await followUp(store, email)
@@ -238,7 +239,7 @@ describe('Fluxo 4 — followUp', () => {
   it('SAÍDA AUTOMÁTICA: esgotou os follow-ups + tempo vencido → sem_resposta', async () => {
     const lead = makeLead({ estagio: 'follow_up', proxima_acao_data: ONTEM })
     const store = new MemoryStore([lead])
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 8; i++) {
       await store.registrarInteracao({ lead_id: lead.id, tipo: 'follow_up', canal: 'email', descricao: 'x', origem_acao: 'ia' })
     }
     const r = await followUp(store, email)
@@ -249,10 +250,10 @@ describe('Fluxo 4 — followUp', () => {
   })
 
   it('NÃO encerra antes de esgotar ou se o tempo não venceu', async () => {
-    // Esgotou os 3, mas o tempo ainda não venceu (proxima_acao_data no futuro).
+    // Esgotou os 8, mas o tempo ainda não venceu (proxima_acao_data no futuro).
     const lead = makeLead({ estagio: 'follow_up', proxima_acao_data: AMANHA })
     const store = new MemoryStore([lead])
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 8; i++) {
       await store.registrarInteracao({ lead_id: lead.id, tipo: 'follow_up', canal: 'email', descricao: 'x', origem_acao: 'ia' })
     }
     const r = await followUp(store, email)
@@ -269,6 +270,55 @@ describe('Fluxo 4 — followUp', () => {
     const r = await followUp(store, email)
     expect(r.enviados).toBe(2)
     expect(email.enviados).toHaveLength(2)
+  })
+})
+
+// CRITÉRIO DE ACEITE do item 3: um lead simulado passa pelas 8 etapas NOS DIAS
+// CERTOS (3/7/14/30/60/90/120/180 a partir do 1º contato) e sai para
+// 'sem_resposta' depois do 8º sem resposta. Usa fake timers p/ avançar o relógio
+// até cada data-alvo — como cada follow-up cai num dia diferente, o limite
+// diário (2) não interfere.
+describe('Fluxo 4 — cadência 3/7/14/30/60/90/120/180 (item 3)', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('envia os 8 follow-ups nos dias certos e encerra em sem_resposta', async () => {
+    const T0 = new Date('2026-01-01T09:00:00Z') // "1º contato"
+    vi.useFakeTimers()
+    vi.setSystemTime(T0)
+
+    // Estado logo após o 1º contato: 1º follow-up agendado para T0 + 3 dias.
+    const primeiroAlvo = new Date(T0.getTime() + DIAS_FOLLOWUPS_PADRAO[0] * 86_400_000)
+    const lead = makeLead({
+      estagio: 'follow_up',
+      followups_enviados: 0,
+      ultimo_contato: T0.toISOString(),
+      proxima_acao_data: primeiroAlvo.toISOString(),
+    })
+    const store = new MemoryStore([lead])
+    const email = new SimulatedProvider()
+
+    for (let k = 0; k < DIAS_FOLLOWUPS_PADRAO.length; k++) {
+      // Avança o relógio para logo depois da data-alvo do follow-up nº k+1.
+      vi.setSystemTime(new Date(T0.getTime() + DIAS_FOLLOWUPS_PADRAO[k] * 86_400_000 + 3_600_000))
+      const r = await followUp(store, email)
+      expect(r.enviados).toBe(1)
+      expect(await store.contarInteracoes(lead.id, 'follow_up')).toBe(k + 1)
+
+      const atual = (await store.buscarLead(lead.id))!
+      if (k < DIAS_FOLLOWUPS_PADRAO.length - 1) {
+        // Próximo alvo = T0 + dias[k+1] EXATO (ancorado, sem drift pelo +1h).
+        const esperado = new Date(T0.getTime() + DIAS_FOLLOWUPS_PADRAO[k + 1] * 86_400_000)
+        expect(atual.proxima_acao_data).toBe(esperado.toISOString())
+      }
+    }
+
+    // 8 enviados; nenhum a mais. Passado o tempo, encerra em sem_resposta.
+    expect(await store.contarInteracoes(lead.id, 'follow_up')).toBe(8)
+    vi.setSystemTime(new Date(T0.getTime() + 200 * 86_400_000))
+    const fim = await followUp(store, email)
+    expect(fim.enviados).toBe(0)
+    expect(fim.encerrados).toBe(1)
+    expect((await store.buscarLead(lead.id))!.estagio).toBe('sem_resposta')
   })
 })
 

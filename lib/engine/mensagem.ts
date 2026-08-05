@@ -16,9 +16,6 @@ export interface Envio {
   numero?: number
 }
 
-// Maior nº de follow-up com template próprio (follow_up_1..4). Acima disso, cap.
-const MAX_TIPO_FOLLOWUP = 4
-
 // Sinônimos de segmento (free-text do lead) → chave canônica de nicho. A maioria
 // dos nichos já casa direto pelo nome (oticas, varejo, ...); aqui ficam só os
 // apelidos que não batem 1:1. Tudo passa antes por remoção de acento + lowercase.
@@ -56,10 +53,14 @@ export function normalizarNicho(segmento?: string | null): string | null {
 }
 
 // Estágio do funil → `tipo` da tabela de templates.
+// Item 3: MESMO template/tom em TODAS as 8 etapas de follow-up (confirmado com o
+// Chico). O motor usa sempre o `follow_up_1` — o número (envio.numero) só define
+// o ESPAÇAMENTO da cadência (dias), nunca o conteúdo. follow_up_2/3/4 continuam
+// na tabela mas o motor não os seleciona mais (evita, por ex., repetir o
+// "última mensagem" do follow_up_4 nas etapas 5-8).
 function tipoTemplate(envio: Envio): string {
   if (envio.tipo === 'abordagem') return 'primeiro_contato'
-  const n = Math.min(Math.max(envio.numero ?? 1, 1), MAX_TIPO_FOLLOWUP)
-  return `follow_up_${n}`
+  return 'follow_up_1'
 }
 
 function primeiroNome(nomeCompleto?: string | null): string {

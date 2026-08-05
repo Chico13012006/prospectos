@@ -5,7 +5,7 @@
 //
 // Quem já respondeu NUNCA entra aqui: a pausa do Fluxo 2 tira o lead da esteira
 // (estagio='interessado'), e leadsParaFollowup só devolve estágios em cadência.
-import { getEngineConfig } from '../config'
+import { getEngineConfig, proximaDataFollowup } from '../config'
 import { log } from '../logger'
 import { proximoEstagio } from '../templates'
 import { montarEmail } from '../mensagem'
@@ -89,14 +89,19 @@ export async function followUp(
     })
 
     const agora = new Date()
-    const proxima = new Date(agora.getTime() + cfg.horasEntreFollowups * 3600_000)
+    // Agenda o próximo follow-up pela cadência de dias (item 3), ancorado na
+    // data-alvo atual (drift-free). null = era o último da sequência → o lead
+    // será encerrado (sem_resposta) quando o tempo vencer (leadsEsgotados...).
+    const sent = jaEnviados + 1
+    const alvoAtual = lead.proxima_acao_data ? new Date(lead.proxima_acao_data) : null
+    const proximaISO = proximaDataFollowup(cfg.diasFollowups, sent, alvoAtual, agora)
     await store.atualizarLead(lead.id, {
       estagio: destino,
       ultimo_contato: agora.toISOString(),
-      proxima_acao: 'follow_up',
-      proxima_acao_data: proxima.toISOString(),
-      // Mantém o cache (migration 0003) em dia: este envio é o follow-up nº jaEnviados+1.
-      followups_enviados: jaEnviados + 1,
+      proxima_acao: proximaISO ? 'follow_up' : null,
+      proxima_acao_data: proximaISO,
+      // Mantém o cache (migration 0003) em dia: este envio é o follow-up nº `sent`.
+      followups_enviados: sent,
     })
 
     enviados++

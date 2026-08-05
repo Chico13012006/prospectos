@@ -37,9 +37,17 @@ export const engineConfig = {
     return num(process.env.HORAS_ENTRE_FOLLOWUPS, 48)
   },
 
-  // Máximo de follow-ups por lead antes de parar a cadência.
+  // Cadência de follow-up: dias corridos A PARTIR DO 1º CONTATO em que cada
+  // follow-up deve sair (item 3). Substitui o intervalo fixo único + MAX_FOLLOWUPS.
+  // Configurável por env DIAS_FOLLOWUPS (csv crescente); default 3/7/14/30/60/90/120/180.
+  get diasFollowups(): number[] {
+    return parseDiasFollowups(process.env.DIAS_FOLLOWUPS) ?? DIAS_FOLLOWUPS_PADRAO
+  },
+
+  // Máximo de follow-ups por lead = tamanho da sequência de dias (source of
+  // truth). O antigo MAX_FOLLOWUPS fixo foi substituído pela cadência (item 3).
   get maxFollowups(): number {
-    return num(process.env.MAX_FOLLOWUPS, 3)
+    return this.diasFollowups.length
   },
 
   // Espaçamento entre envios dentro de um mesmo lote (minutos). Protege a
@@ -67,8 +75,9 @@ export const engineConfig = {
 
 export interface ConfigMotor {
   maxEnviosDia: number
-  horasEntreFollowups: number
-  maxFollowups: number
+  horasEntreFollowups: number // legado — só fallback de elegibilidade sem proxima_acao_data
+  maxFollowups: number // = diasFollowups.length
+  diasFollowups: number[] // dias corridos a partir do 1º contato p/ cada follow-up
   intervaloEntreEnviosMin: number
   diasSemanaAtivos: number[] // convenção JS Date.getDay(): 0=domingo..6=sábado
   closerEmailFallback: string
@@ -76,6 +85,38 @@ export interface ConfigMotor {
 
 // Dias ativos quando não há linha no banco: seg-sex (comportamento histórico).
 const DIAS_SEMANA_PADRAO = [1, 2, 3, 4, 5]
+
+// Nova cadência (item 3): 8 follow-ups em dias corridos a partir do 1º contato.
+// Mesmo template/tom em todas as etapas — só muda o espaçamento.
+export const DIAS_FOLLOWUPS_PADRAO = [3, 7, 14, 30, 60, 90, 120, 180]
+
+// 'csv' → array de dias CRESCENTE e positivo (senão null → usa o padrão).
+function parseDiasFollowups(csv: string | undefined): number[] | null {
+  if (typeof csv !== 'string') return null
+  const dias = csv.split(',').map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0)
+  const crescente = dias.length > 0 && dias.every((d, i) => i === 0 || d > dias[i - 1])
+  return crescente ? dias : null
+}
+
+const MS_DIA = 86_400_000
+
+// Data-alvo do PRÓXIMO follow-up depois de já ter enviado `jaEnviados`
+// (0 = acabou de fazer o 1º contato → agenda o 1º follow-up). Ancorada na
+// data-alvo ATUAL (drift-free: equivale a offset absoluto a partir do 1º
+// contato, mesmo se o disparo atrasar um dia); sem ela, ancora em `agora`.
+// Devolve null quando a sequência acabou (não há próximo follow-up).
+export function proximaDataFollowup(
+  dias: number[],
+  jaEnviados: number,
+  alvoAtual: Date | null,
+  agora: Date,
+): string | null {
+  const idx = jaEnviados // índice 0-based do próximo follow-up na sequência
+  if (idx < 0 || idx >= dias.length) return null
+  const gap = idx === 0 ? dias[0] : dias[idx] - dias[idx - 1]
+  const base = alvoAtual ?? agora
+  return new Date(base.getTime() + gap * MS_DIA).toISOString()
+}
 
 const CACHE_TTL_MS = 30_000
 // Cache por organização: a config de cadência agora é 1 linha por org
@@ -86,6 +127,7 @@ function configDoEnv(): ConfigMotor {
   return {
     maxEnviosDia: engineConfig.maxEnviosDia,
     horasEntreFollowups: engineConfig.horasEntreFollowups,
+    diasFollowups: engineConfig.diasFollowups,
     maxFollowups: engineConfig.maxFollowups,
     intervaloEntreEnviosMin: engineConfig.intervaloEntreEnviosMin,
     diasSemanaAtivos: DIAS_SEMANA_PADRAO,
@@ -131,7 +173,10 @@ export async function getEngineConfig(organizacaoId?: string): Promise<ConfigMot
         valor = {
           maxEnviosDia: Number.isFinite(data.max_envios_dia) ? data.max_envios_dia : valor.maxEnviosDia,
           horasEntreFollowups: Number.isFinite(data.horas_entre_followups) ? data.horas_entre_followups : valor.horasEntreFollowups,
-          maxFollowups: Number.isFinite(data.max_followups) ? data.max_followups : valor.maxFollowups,
+          diasFollowups: valor.diasFollowups,
+          // A contagem vem da sequência de dias (item 3), não mais da coluna
+          // max_followups (mantida só p/ compat/exibição na tela de Parâmetros).
+          maxFollowups: valor.diasFollowups.length,
           intervaloEntreEnviosMin: Number.isFinite(data.intervalo_entre_envios_min) ? data.intervalo_entre_envios_min : valor.intervaloEntreEnviosMin,
           diasSemanaAtivos: parseDiasSemana(data.dias_semana_ativos) ?? valor.diasSemanaAtivos,
           closerEmailFallback: data.closer_email_fallback || valor.closerEmailFallback,

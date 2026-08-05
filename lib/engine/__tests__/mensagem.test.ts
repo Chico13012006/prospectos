@@ -59,8 +59,8 @@ describe('montarEmail — seleção com fallback', () => {
   })
 })
 
-describe('montarEmail — follow-ups e threading', () => {
-  it('follow-up é genérico e o assunto threada do 1º contato do nicho', async () => {
+describe('montarEmail — follow-ups e threading (item 3: mesmo template nas 8 etapas)', () => {
+  it('follow-up threada do 1º contato do nicho e usa o follow_up_1', async () => {
     const lead = makeLead({ segmento: 'Óticas', empresa: 'VejaBem' })
     const fup1 = await montarEmail(store, lead, { tipo: 'follow_up', numero: 1 })
     // assunto = "Re: " + assunto do 1º contato de Óticas
@@ -70,27 +70,19 @@ describe('montarEmail — follow-ups e threading', () => {
 
   it('follow-up sem segmento threada do 1º contato GENÉRICO', async () => {
     const lead = makeLead({ segmento: '', empresa: 'Piloto SA' })
-    const fup2 = await montarEmail(store, lead, { tipo: 'follow_up', numero: 2 })
-    expect(fup2.assunto).toBe('Re: Piloto SA — perdas no estoque')
-    expect(fup2.corpo).toContain('vou ser direto')
+    const fup = await montarEmail(store, lead, { tipo: 'follow_up', numero: 2 })
+    expect(fup.assunto).toBe('Re: Piloto SA — perdas no estoque')
+    // mesmo conteúdo do follow_up_1, independentemente do número.
+    expect(fup.corpo).toContain('Passando por aqui novamente')
   })
 
-  it('follow-up 3 oferece um exemplo e pede só "sim"', async () => {
+  it('TODAS as 8 etapas usam o MESMO conteúdo — só muda o espaçamento (item 3)', async () => {
     const lead = makeLead({ segmento: '', empresa: 'Piloto SA' })
-    const fup3 = await montarEmail(store, lead, { tipo: 'follow_up', numero: 3 })
-    expect(fup3.corpo).toContain('um exemplo rápido')
-    expect(fup3.corpo).toContain('responder "sim"')
-  })
-
-  it('follow-up 4 é o encerramento (última tentativa)', async () => {
-    const lead = makeLead({ segmento: '', empresa: 'Piloto SA' })
-    const fup4 = await montarEmail(store, lead, { tipo: 'follow_up', numero: 4 })
-    expect(fup4.corpo).toContain('última mensagem')
-  })
-
-  it('nº de follow-up acima do máximo usa o último template (cap em 4)', async () => {
-    const lead = makeLead({ segmento: '', empresa: 'Piloto SA' })
-    const fup = await montarEmail(store, lead, { tipo: 'follow_up', numero: 9 })
-    expect(fup.corpo).toContain('última mensagem') // follow_up_4
+    const corpos: string[] = []
+    for (let n = 1; n <= 8; n++) {
+      corpos.push((await montarEmail(store, lead, { tipo: 'follow_up', numero: n })).corpo)
+    }
+    expect(new Set(corpos).size).toBe(1) // idêntico em todas as etapas
+    expect(corpos[0]).toContain('Passando por aqui novamente')
   })
 })
