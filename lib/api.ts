@@ -1,6 +1,6 @@
 import type { Lead, Interacao, Usuario, Template } from './supabase'
 import { createSupabaseBrowserClient } from './supabase-browser'
-import { ESTAGIOS_RESERVATORIO } from './pipeline-stages'
+import { ESTAGIOS_RESERVATORIO, estagiosDoStatus } from './pipeline-stages'
 
 // Camada de dados do browser. ANTES: usava o client anon "cru" de lib/supabase.ts
 // (createClient com anonKey, sessão em localStorage), que NÃO compartilhava o
@@ -141,14 +141,19 @@ export async function getPipelineFiltrosOpcoes(): Promise<{
   segmentos: string[]
   canais: string[]
 }> {
-  const [usuariosRes, segRes] = await Promise.all([
-    supabase.from('usuarios').select('nome').eq('ativo', true),
-    supabase.from('leads').select('segmento').not('segmento', 'is', null),
-  ])
-  if (usuariosRes.error) throw usuariosRes.error
-  if (segRes.error) throw segRes.error
-  const responsaveis = [...new Set((usuariosRes.data ?? []).map(u => u.nome).filter(Boolean))].sort() as string[]
-  const segmentos = [...new Set((segRes.data ?? []).map(s => s.segmento).filter(Boolean))].sort() as string[]
+  // Responsáveis derivam do que os LEADS realmente carregam (responsavel_nome),
+  // não de usuarios.nome. O filtro casa por responsavel_nome (ilike prefixo) /
+  // responsavel_id — e hoje responsavel_id é null em 100% dos leads (import
+  // HubSpot só preencheu o nome). Listar usuarios.nome trazia opções que NÃO
+  // batem com os nomes dos leads: ex. "Francisco Rufs" (usuario admin) nunca é
+  // prefixo de "Francisco Rufino" (nome no lead) → o filtro voltava 0 sempre.
+  // Derivar do próprio dado garante que toda opção do dropdown traz resultado.
+  // Ver [[leads-responsavel-data-model]]. Uma única varredura de coluna serve
+  // aos dois selects (responsáveis + nichos).
+  const { data, error } = await supabase.from('leads').select('responsavel_nome, segmento')
+  if (error) throw error
+  const responsaveis = [...new Set((data ?? []).map(l => l.responsavel_nome).filter(Boolean))].sort() as string[]
+  const segmentos = [...new Set((data ?? []).map(l => l.segmento).filter(Boolean))].sort() as string[]
   return { responsaveis, segmentos, canais: CANAIS_FIXOS }
 }
 
@@ -193,7 +198,7 @@ export async function getTodosLeads(
   if (f.responsavel) q = q.or(await filtroResponsavelOr(f.responsavel))
   if (f.segmento) q = q.eq('segmento', f.segmento)
   if (f.canal) q = q.eq('canal_preferencial', f.canal)
-  if (f.estagio) q = q.eq('estagio', f.estagio)
+  if (f.estagio) q = q.in('estagio', estagiosDoStatus(f.estagio))
   else if (f.estagios && f.estagios.length) q = q.in('estagio', f.estagios)
   if (typeof f.followups === 'number') q = q.eq('followups_enviados', f.followups)
   else if (f.followups) q = q.gte('followups_enviados', f.followups.gte)

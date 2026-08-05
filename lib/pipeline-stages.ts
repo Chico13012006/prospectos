@@ -88,6 +88,18 @@ export function labelEstagio(estagio?: string | null): string {
   return ESTAGIO_LABELS[estagio] ?? estagio
 }
 
+// Filtro "Status" da Base de Leads: um valor escolhido pode corresponder a
+// VÁRIOS estágios internos que compartilham o mesmo rótulo (ex.: "Em Follow-up"
+// = follow_up + follow_up_1 + follow_up_2; "Respondeu" = interessado + respondeu;
+// "Novos Leads" = novos_leads + novo). Sem expandir, o eq exato perde os leads
+// equivalentes. Devolve todos os estágios com o mesmo rótulo do valor escolhido.
+export function estagiosDoStatus(value: string): string[] {
+  const label = ESTAGIO_LABELS[value]
+  if (!label) return [value]
+  const grupo = Object.keys(ESTAGIO_LABELS).filter(k => ESTAGIO_LABELS[k] === label)
+  return grupo.length ? grupo : [value]
+}
+
 // Cor do estágio (mesma paleta das colunas do Kanban) — usada no pill de
 // Status da Tabela para dar contexto visual sem precisar abrir o card.
 export function corEstagio(estagio?: string | null): string {
