@@ -2,13 +2,12 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Settings, Plus, Loader2 } from 'lucide-react';
+import { Settings, Loader2 } from 'lucide-react';
 import { getPipelineFiltrosOpcoes } from '@/lib/api';
 import PipelineColumn from '@/components/pipeline/PipelineColumn';
 import LeadsTableView from '@/components/pipeline/LeadsTableView';
 import GlobalFilters, { type GlobalFilterState } from '@/components/pipeline/GlobalFilters';
 import LeadPanel from '@/components/leads/LeadPanel';
-import NovoLeadModal from '@/components/leads/NovoLeadModal';
 import { COLUNAS_KANBAN, COLUNAS_CADENCIA } from '@/lib/pipeline-stages';
 
 // useSearchParams() exige um limite de Suspense (Next) — por isso o conteúdo real
@@ -28,7 +27,6 @@ function PipelineInner() {
   // Tabela é a visão PADRÃO (alto volume de leads); Kanban fica restrito a
   // quem já respondeu/tem interesse/virou oportunidade (COLUNAS_KANBAN).
   const [vista, setVista] = useState<'tabela' | 'comercial' | 'cadencia'>('tabela'); // aba do board
-  const [novoLeadAberto, setNovoLeadAberto] = useState(false);
   const [filtroOpcoes, setFiltroOpcoes] = useState<{ responsaveis: string[]; segmentos: string[]; canais: string[] }>({ responsaveis: [], segmentos: [], canais: [] });
   const [reloadKey, setReloadKey] = useState(0); // bump -> colunas refazem o fetch (após mutação)
   const [loading, setLoading] = useState(true);
@@ -67,13 +65,6 @@ function PipelineInner() {
         <div className="flex gap-3">
           <button className="flex items-center gap-2 text-sm text-slate-300 border border-[#2a3147] px-3 py-2 rounded-lg hover:bg-[#0f1117]">
             <Settings size={14} /> Configurar automações
-          </button>
-          <button
-            onClick={() => setNovoLeadAberto(true)}
-            className="flex items-center gap-2 text-sm font-medium text-white px-4 py-2 rounded-lg"
-            style={{ backgroundColor: '#1e3a5f' }}
-          >
-            <Plus size={14} /> Novo lead
           </button>
         </div>
       </div>
@@ -173,10 +164,6 @@ function PipelineInner() {
         usingSupabase={usingSupabase}
         contexto="pipeline"
       />
-
-      {novoLeadAberto && (
-        <NovoLeadModal onClose={() => setNovoLeadAberto(false)} onCreated={bumpReload} />
-      )}
     </div>
   );
 }
