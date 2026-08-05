@@ -9,6 +9,7 @@ import { getEngineConfig } from '../config'
 import { log } from '../logger'
 import { proximoEstagio } from '../templates'
 import { montarEmail } from '../mensagem'
+import { corpoHtmlComOptout, rodapeTextoOptout } from '../optout'
 import type { EmailProvider } from '../email/provider'
 import type { Store } from '../store/store'
 
@@ -73,7 +74,11 @@ export async function followUp(
       const responsavel = await store.buscarUsuario(lead.responsavel_id)
       cc = responsavel?.email ?? undefined
     }
-    await email.enviar(lead.contato_email, msg.assunto, msg.corpo, undefined, cc)
+    // Rodapé de opt-out (LGPD/deliverability): versão HTML com link de
+    // cancelamento + fallback em texto. O link é específico do lead (token HMAC).
+    const html = corpoHtmlComOptout(msg.corpo, lead.id)
+    const corpoComRodape = msg.corpo + rodapeTextoOptout(lead.id)
+    await email.enviar(lead.contato_email, msg.assunto, corpoComRodape, html, cc)
     await store.registrarInteracao({
       lead_id: lead.id,
       tipo: 'follow_up',

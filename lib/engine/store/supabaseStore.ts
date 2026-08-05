@@ -132,6 +132,8 @@ export class SupabaseStore implements Store {
       .eq('organizacao_id', this.organizacaoId)
       .eq('owner', OWNER_ENGINE)
       .eq('perdido', false)
+      // Opt-out (item 2.4): quem pediu p/ sair nunca mais é contatado pelo motor.
+      .eq('optout', false)
       .in('estagio', ESTAGIOS_EM_CADENCIA)
     if (error) throw error
 
