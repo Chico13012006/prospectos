@@ -49,6 +49,30 @@ export async function POST(req: NextRequest) {
       organizacao_id: convidante.organizacao_id,
     });
 
+    // Garante a linha correspondente em `usuarios` (ligada por e-mail EXATO) já
+    // no convite. Antes o convite só criava acesso de login (perfis) e NÃO a
+    // linha em usuarios — foi o que causou o bug de CC do follow-up (Rufs/Rufino):
+    // leads.responsavel_id aponta p/ usuarios, e sem essa linha o motor não achava
+    // o responsável. Idempotente: se já existe usuarios com este e-mail na org,
+    // não duplica. Ver [[leads-responsavel-data-model]] e lib/leads/responsavel.ts.
+    const emailNorm = String(email).trim().toLowerCase();
+    const { data: jaExiste } = await supabaseAdmin
+      .from('usuarios')
+      .select('id')
+      .eq('organizacao_id', convidante.organizacao_id)
+      .ilike('email', emailNorm);
+    if (!jaExiste || jaExiste.length === 0) {
+      const base: string[] = String(nome || emailNorm).split(/\s+/).filter(Boolean);
+      const iniciais = base.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
+      await supabaseAdmin.from('usuarios').insert({
+        nome: nome || null,
+        email: emailNorm,
+        ativo: true,
+        avatar_iniciais: iniciais || null,
+        organizacao_id: convidante.organizacao_id,
+      });
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[equipe/convidar] erro interno:', err);
