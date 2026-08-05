@@ -7,6 +7,10 @@
     {
       "path": "/api/workflows/processar",
       "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/engine/follow-up?modo=healthcheck",
+      "schedule": "0 15 * * *"
     }
   ]
 }

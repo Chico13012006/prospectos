@@ -13,6 +13,7 @@ import { direcionarCloser } from './flows/direcionarCloser'
 import { detectarResposta } from './flows/detectarResposta'
 import { followUp } from './flows/followUp'
 import { executarAcao } from './flows/executarAcao'
+import { marcarExecucaoFollowup, verificarSaudeFollowup } from './saude'
 
 export interface Motor {
   store: Store
@@ -101,6 +102,9 @@ export async function cadenciaDiaria(motor: Motor, opts?: { forcar?: boolean }) 
   const resp = await detectarResposta(motor.store, motor.email, motor.fila)
   await motor.fila.processar()
   const fu = await followUp(motor.store, motor.email)
+  // Telemetria de saúde (item 2.5): carimba execução bem-sucedida do follow-up.
+  // organizacaoId pode ser undefined em contexto sem org (MemoryStore/testes).
+  if (motor.store.organizacaoId) await marcarExecucaoFollowup(motor.store.organizacaoId)
   const escaninho = motor.fila.escaninhoErro()
   log.info('=== Cadência diária concluída ===', {
     respostas: resp.respostas,
@@ -130,6 +134,19 @@ export async function cadenciaTodasOrgs(opts?: { forcar?: boolean }) {
     }
   }
   return { organizacoes: orgs.length, porOrg }
+}
+
+// Healthcheck do cron (item 2.5): varre as orgs ativas e alerta as que estão com
+// o follow-up parado além do limite. Independente da cadência — pensado p/ um
+// cron separado, que dispara o alerta mesmo se o cron de follow-up morreu de vez.
+export async function healthcheckFollowupTodasOrgs() {
+  const orgs = await listarOrganizacoesAtivas()
+  const email = escolherEmailProvider()
+  let alertadas = 0
+  for (const org of orgs) {
+    if (await verificarSaudeFollowup(org, email)) alertadas++
+  }
+  return { organizacoes: orgs.length, alertadas }
 }
 
 // Re-exports úteis aos endpoints/testes.

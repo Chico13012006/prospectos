@@ -4,7 +4,8 @@
 // o Fluxo 4, e ?forcar=1 para ignorar a checagem de dia útil.
 import { NextResponse } from 'next/server'
 import { autorizar } from '@/lib/engine/http'
-import { criarMotor, cadenciaTodasOrgs, followUp, listarOrganizacoesAtivas } from '@/lib/engine'
+import { criarMotor, cadenciaTodasOrgs, followUp, listarOrganizacoesAtivas, healthcheckFollowupTodasOrgs } from '@/lib/engine'
+import { marcarExecucaoFollowup } from '@/lib/engine/saude'
 
 export const runtime = 'nodejs'
 
@@ -13,8 +14,14 @@ async function executar(req: Request) {
   if (negado) return negado
   const url = new URL(req.url)
   const forcar = url.searchParams.get('forcar') === '1'
-  const soFollowup = url.searchParams.get('modo') === 'followup'
+  const modo = url.searchParams.get('modo')
+  const soFollowup = modo === 'followup'
   try {
+    // Healthcheck (item 2.5): só checa staleness e alerta — não roda cadência.
+    // Alvo de um cron independente, para pegar o caso do cron principal morto.
+    if (modo === 'healthcheck') {
+      return NextResponse.json(await healthcheckFollowupTodasOrgs())
+    }
     // Multi-tenant: o cron varre TODAS as organizações ativas (não tem
     // auth.uid()); cada org roda com seu motor escopado.
     if (soFollowup) {
@@ -23,6 +30,7 @@ async function executar(req: Request) {
       for (const org of orgs) {
         const motor = criarMotor(org)
         porOrg[org] = await followUp(motor.store, motor.email)
+        await marcarExecucaoFollowup(org) // telemetria de saúde
       }
       return NextResponse.json({ organizacoes: orgs.length, porOrg })
     }
