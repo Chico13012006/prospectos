@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { Suspense, useMemo, useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Calculator, Minus, Plus, Info, Check, Loader2, Search, X } from 'lucide-react';
 import {
   PRODUTOS, PRAZO_COMODATO_MESES, calcularCompra, calcularComodato,
@@ -15,11 +16,35 @@ const MODELOS: { id: ModeloComercial; label: string; sub: string }[] = [
   { id: 'comodato', label: 'Comodato', sub: `Entrada + mensalidade · ${PRAZO_COMODATO_MESES} meses` },
 ];
 
+// Deep-link do copiloto (item 8): ?modelo=comodato&itens=coletor:1,impressora:2
+// pré-preenche o simulador com os equipamentos identificados na reunião.
+function lerParamsIniciais(sp: URLSearchParams): {
+  modelo: ModeloComercial;
+  qtds: Record<ProdutoId, number>;
+} {
+  const qtds: Record<ProdutoId, number> = { coletor: 0, impressora: 0, totem: 0, pdv: 0, mesa_rfid: 0 };
+  const idsValidos = new Set(PRODUTOS.map((p) => p.id));
+  for (const par of (sp.get('itens') ?? '').split(',')) {
+    const [id, q] = par.split(':');
+    if (idsValidos.has(id as ProdutoId)) qtds[id as ProdutoId] = Math.max(0, Math.floor(Number(q) || 0));
+  }
+  const modelo: ModeloComercial = sp.get('modelo') === 'compra' ? 'compra' : 'comodato';
+  return { modelo, qtds };
+}
+
 export default function SimuladorPage() {
-  const [modelo, setModelo] = useState<ModeloComercial>('comodato');
-  const [qtds, setQtds] = useState<Record<ProdutoId, number>>({
-    coletor: 0, impressora: 0, totem: 0, pdv: 0, mesa_rfid: 0,
-  });
+  return (
+    <Suspense fallback={null}>
+      <SimuladorInner />
+    </Suspense>
+  );
+}
+
+function SimuladorInner() {
+  const searchParams = useSearchParams();
+  const inicial = useMemo(() => lerParamsIniciais(new URLSearchParams(searchParams.toString())), [searchParams]);
+  const [modelo, setModelo] = useState<ModeloComercial>(inicial.modelo);
+  const [qtds, setQtds] = useState<Record<ProdutoId, number>>(inicial.qtds);
   // Overrides do valor negociado (null = seguir a sugestão do sistema).
   const [valorNegociado, setValorNegociado] = useState<number | null>(null);
   const [mensalFinal, setMensalFinal] = useState<number | null>(null);

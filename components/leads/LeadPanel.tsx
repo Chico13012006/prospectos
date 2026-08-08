@@ -101,6 +101,9 @@ function getTipoInteracaoBadge(tipo: string, descricao?: string): { label: strin
   // Item 6: proposta comercial registrada pelo simulador.
   if (tipo === 'nota' && descricao?.startsWith('Proposta comercial'))
     return { label: 'Proposta comercial', classes: 'bg-indigo-500/20 text-indigo-300' };
+  // Item 8: análise do copiloto pós-reunião.
+  if (tipo === 'nota' && descricao?.startsWith('Copiloto pós-reunião'))
+    return { label: 'Copiloto pós-reunião', classes: 'bg-violet-500/20 text-violet-300' };
   if (tipo === 'nota') return { label: 'Nota', classes: 'bg-[#252b3b] text-slate-300' };
   if (tipo === 'reuniao') return { label: 'Reunião', classes: 'bg-amber-500/20 text-amber-400' };
   return { label: tipo, classes: 'bg-[#252b3b] text-slate-300' };

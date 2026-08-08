@@ -12,6 +12,7 @@ import {
   Users,
   Workflow,
   Calculator,
+  Sparkles,
   Settings,
   Zap,
   LogOut,
@@ -25,6 +26,7 @@ const mainNav = [
   { href: '/reunioes', icon: Calendar, label: 'Reuniões' },
   { href: '/inteligencia-comercial', icon: BrainCircuit, label: 'Inteligência Comercial' },
   { href: '/simulador', icon: Calculator, label: 'Simulador' },
+  { href: '/copiloto', icon: Sparkles, label: 'Copiloto' },
   { href: '/equipe', icon: Users, label: 'Equipe' },
   { href: '/workflows', icon: Workflow, label: 'Workflows' },
 ];

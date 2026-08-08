@@ -325,6 +325,26 @@ export async function gerarInsightLead(leadId: string): Promise<InsightComercial
   return insight as InsightComercialLead
 }
 
+// COPILOTO PÓS-REUNIÃO (item 8): manda a transcrição colada + o lead e recebe a
+// análise estruturada da IA. Import de tipo (erasado no build — não puxa o
+// módulo server-only da IA pro bundle do browser).
+export async function analisarReuniaoCopiloto(
+  leadId: string | null,
+  transcricao: string,
+): Promise<import('./ia/copilotoReuniao').AnaliseReuniao> {
+  const res = await fetch('/api/copiloto', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ leadId, transcricao }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.erro ?? `Erro ${res.status}`)
+  }
+  const { analise } = await res.json()
+  return analise as import('./ia/copilotoReuniao').AnaliseReuniao
+}
+
 // Registra uma interação/nota no histórico
 export async function registrarNota(leadId: string, descricao: string, tipo: string = 'nota'): Promise<void> {
   const { error } = await supabase

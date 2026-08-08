@@ -6,6 +6,9 @@ export default defineConfig({
     alias: {
       // Espelha o paths "@/*" -> "./*" do tsconfig.
       '@': fileURLToPath(new URL('.', import.meta.url)),
+      // 'server-only' lança fora de um Server Component; nos testes vira no-op
+      // para exercitar a lógica pura de módulos server-only (ex.: lib/ia/*).
+      'server-only': fileURLToPath(new URL('./lib/__tests__/stub-server-only.ts', import.meta.url)),
     },
   },
   test: {
