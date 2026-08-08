@@ -11,6 +11,7 @@ import {
   Calendar,
   Users,
   Workflow,
+  Calculator,
   Settings,
   Zap,
   LogOut,
@@ -23,6 +24,7 @@ const mainNav = [
   { href: '/base-leads', icon: Database, label: 'Base de Leads' },
   { href: '/reunioes', icon: Calendar, label: 'Reuniões' },
   { href: '/inteligencia-comercial', icon: BrainCircuit, label: 'Inteligência Comercial' },
+  { href: '/simulador', icon: Calculator, label: 'Simulador' },
   { href: '/equipe', icon: Users, label: 'Equipe' },
   { href: '/workflows', icon: Workflow, label: 'Workflows' },
 ];
