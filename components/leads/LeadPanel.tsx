@@ -95,6 +95,9 @@ function getTipoInteracaoBadge(tipo: string, descricao?: string): { label: strin
   // Handoff do motor: gravado como tipo='nota' com descrição "Encaminhado ao closer…"
   if (tipo === 'nota' && descricao?.startsWith('Encaminhado ao closer'))
     return { label: 'Encaminhado ao closer', classes: 'bg-amber-500/20 text-amber-400' };
+  // Item 7: auto-reply de ausência → sugestão de contato alternativo (motor/IA).
+  if (tipo === 'nota' && descricao?.startsWith('Contato alternativo sugerido'))
+    return { label: 'Contato alternativo sugerido', classes: 'bg-cyan-500/20 text-cyan-400' };
   if (tipo === 'nota') return { label: 'Nota', classes: 'bg-[#252b3b] text-slate-300' };
   if (tipo === 'reuniao') return { label: 'Reunião', classes: 'bg-amber-500/20 text-amber-400' };
   return { label: tipo, classes: 'bg-[#252b3b] text-slate-300' };

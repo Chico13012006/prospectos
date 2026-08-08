@@ -4,7 +4,7 @@ import { MemoryStore } from '../store/memoryStore'
 import { SimulatedProvider } from '../email/simulatedProvider'
 import { Queue } from '../queue'
 import { executarAcao } from '../flows/executarAcao'
-import { detectarResposta, ehAutoResposta } from '../flows/detectarResposta'
+import { detectarResposta, ehAutoResposta, MARCADOR_CONTATO_ALT } from '../flows/detectarResposta'
 import { direcionarCloser } from '../flows/direcionarCloser'
 import { followUp } from '../flows/followUp'
 import type { MensagemRecebida } from '../types'
@@ -100,6 +100,50 @@ describe('Fluxo 2 — detectarResposta', () => {
     // sanity da heurística pura
     expect(ehAutoResposta(msg({ assunto: 'Resposta automática de férias' }))).toBe(true)
     expect(ehAutoResposta(msg({ assunto: 'Re: proposta', corpo: 'topo!' }))).toBe(false)
+  })
+
+  it('ITEM 7: auto-reply de ausência → registra sugestão de contato alternativo', async () => {
+    const lead = makeLead({ estagio: 'follow_up', contato_email: 'ana@acme.com.br' })
+    const store = new MemoryStore([lead])
+    email.injetar(
+      msg({
+        de: 'ana@acme.com.br',
+        assunto: 'Estou de férias',
+        corpo: 'Estarei ausente. Na minha ausência, falar com Beltrano (beltrano@acme.com.br).',
+        automatica: true,
+      }),
+    )
+    // Extrator fake (no lugar da IA): devolve o contato alternativo do corpo.
+    const extrairContatos = vi.fn(async () => [{ nome: 'Beltrano', email: 'beltrano@acme.com.br' }])
+
+    const r = await detectarResposta(store, email, fila, { extrairContatos })
+
+    expect(extrairContatos).toHaveBeenCalledOnce()
+    expect(r.respostas).toBe(0)
+    expect(r.ignoradas).toBe(1) // segue contando como ignorada p/ o fluxo de resposta
+    expect(r.contatosAlternativos).toBe(1)
+    // Não pausou a cadência nem virou "interessado".
+    expect((await store.buscarLead(lead.id))!.estagio).toBe('follow_up')
+    expect(fila.pendentes()).toBe(0)
+    // Registrou UMA nota de sugestão, com o marcador e o contato no texto.
+    const notas = store.interacoes.filter((i) => i.lead_id === lead.id && i.tipo === 'nota')
+    expect(notas).toHaveLength(1)
+    expect(notas[0].descricao.startsWith(MARCADOR_CONTATO_ALT)).toBe(true)
+    expect(notas[0].descricao).toContain('beltrano@acme.com.br')
+    expect(notas[0].origem_acao).toBe('ia')
+  })
+
+  it('ITEM 7: sem contato alternativo no corpo → não registra nota', async () => {
+    const lead = makeLead({ estagio: 'follow_up', contato_email: 'ana@acme.com.br' })
+    const store = new MemoryStore([lead])
+    email.injetar(msg({ de: 'ana@acme.com.br', assunto: 'Out of office', automatica: true }))
+    const extrairContatos = vi.fn(async () => []) // IA não achou ninguém
+
+    const r = await detectarResposta(store, email, fila, { extrairContatos })
+
+    expect(r.contatosAlternativos).toBe(0)
+    expect(r.ignoradas).toBe(1)
+    expect(store.interacoes.filter((i) => i.tipo === 'nota')).toHaveLength(0)
   })
 
   it('CASAMENTO POR DOMÍNIO (resposta encaminhada)', async () => {

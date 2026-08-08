@@ -14,6 +14,7 @@ import { detectarResposta } from './flows/detectarResposta'
 import { followUp } from './flows/followUp'
 import { executarAcao } from './flows/executarAcao'
 import { marcarExecucaoFollowup, verificarSaudeFollowup } from './saude'
+import { extrairContatosAlternativos } from '@/lib/ia/contatosAlternativos'
 
 export interface Motor {
   store: Store
@@ -108,7 +109,9 @@ export async function cadenciaDiaria(motor: Motor, opts?: { forcar?: boolean }) 
     organizacaoId: motor.store.organizacaoId,
     modoEnsaio: engineConfig.modoEnsaio,
   })
-  const resp = await detectarResposta(motor.store, motor.email, motor.fila)
+  const resp = await detectarResposta(motor.store, motor.email, motor.fila, {
+    extrairContatos: extrairContatosAlternativos, // item 7 (auto-guarda se IA off)
+  })
   await motor.fila.processar()
   const fu = await followUp(motor.store, motor.email)
   // Telemetria de saúde (item 2.5): carimba execução bem-sucedida do follow-up.
@@ -118,6 +121,7 @@ export async function cadenciaDiaria(motor: Motor, opts?: { forcar?: boolean }) 
   log.info('=== Cadência diária concluída ===', {
     respostas: resp.respostas,
     ignoradas: resp.ignoradas,
+    contatosAlternativos: resp.contatosAlternativos,
     followupsEnviados: fu.enviados,
     jobsComErro: escaninho.length,
   })
