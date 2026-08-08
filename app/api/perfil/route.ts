@@ -31,20 +31,36 @@ export async function POST(req: NextRequest) {
 
     const { nome, nicho, avatar_url, telefone } = await req.json();
 
+    const admin = createSupabaseAdminClient();
+
+    // Papel do próprio usuário é a fonte de verdade (nunca o payload). Decide se
+    // ele pode alterar o nicho.
+    const { data: perfilAtual } = await admin
+      .from('perfis')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (!perfilAtual) return NextResponse.json({ erro: 'Perfil não encontrado para este usuário.' }, { status: 404 });
+
     // UPDATE (não upsert): o perfil já existe (criado no onboarding/convite). O
     // upsert fazia INSERT...ON CONFLICT, e o braço de INSERT viola o NOT NULL de
     // organizacao_id (multi-tenant, migrations 0006/0007) — quebrando todo save.
     // Update por id só mexe nas colunas do formulário e preserva organizacao_id/role.
-    const admin = createSupabaseAdminClient();
-    const { data: atualizado, error } = await admin
+    const campos: Record<string, unknown> = { nome, avatar_url, telefone: telefone || null };
+
+    // SEGURANÇA (item 1): o NICHO só é alterável por ADMIN. Para usuário comum, o
+    // nicho vem do convite (definido pelo admin) e é IMUTÁVEL — ignoramos qualquer
+    // valor vindo do cliente (frontend OU requisição manual à API). Ver doc de
+    // ajustes: "a rota que processa o primeiro acesso deve ignorar/rejeitar
+    // qualquer nicho vindo do payload, usando sempre o valor gravado no convite".
+    if (perfilAtual.role === 'admin') campos.nicho = nicho;
+
+    const { error } = await admin
       .from('perfis')
-      .update({ nome, nicho, avatar_url, telefone: telefone || null })
-      .eq('id', user.id)
-      .select('id')
-      .maybeSingle();
+      .update(campos)
+      .eq('id', user.id);
 
     if (error) return NextResponse.json({ erro: error.message }, { status: 400 });
-    if (!atualizado) return NextResponse.json({ erro: 'Perfil não encontrado para este usuário.' }, { status: 404 });
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ erro: 'Erro interno' }, { status: 500 });

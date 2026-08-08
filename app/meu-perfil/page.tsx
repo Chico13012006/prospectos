@@ -2,21 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Camera, CheckCircle } from 'lucide-react';
-
-const NICHOS = [
-  'Hotelaria',
-  'Óticas',
-  'Agronegócio',
-  'Indústria',
-  'Logística',
-  'Saúde',
-  'Varejo',
-  'Tecnologia',
-  'Construção Civil',
-  'Educação',
-  'Todos os nichos',
-];
+import { Camera, CheckCircle, Lock } from 'lucide-react';
 
 function avatarUrl(nome: string | null, email: string) {
   const seed = nome || email;
@@ -79,7 +65,9 @@ export default function MeuPerfilPage() {
     const res = await fetch('/api/perfil', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome, telefone, nicho, avatar_url: avatarPreview }),
+      // Nicho NÃO é enviado: no primeiro acesso ele é definido pelo convite do
+      // admin e travado (o backend também ignora nicho de usuário comum).
+      body: JSON.stringify({ nome, telefone, avatar_url: avatarPreview }),
     });
 
     if (res.ok) {
@@ -164,16 +152,14 @@ export default function MeuPerfilPage() {
             />
           </div>
 
-          {/* Nicho */}
+          {/* Nicho — travado: definido pela organização que convidou (item 1) */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Nicho / Segmento</label>
-            <select
-              value={nicho} onChange={e => setNicho(e.target.value)}
-              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#1a1f2e]"
-            >
-              <option value="">Selecione seu segmento</option>
-              {NICHOS.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
+            <div className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm bg-[#0f1117] text-slate-400 flex items-center gap-2 cursor-not-allowed">
+              <Lock size={13} className="text-slate-500 shrink-0" />
+              <span>{nicho || 'Definido pela sua organização'}</span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">Definido pela organização que convidou você.</p>
           </div>
 
           {erro && <p className="text-red-500 text-sm">{erro}</p>}

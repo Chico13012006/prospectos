@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Camera, Save, Lock, User } from 'lucide-react';
+// (Lock também usado no campo de nicho travado para usuário comum — item 1.)
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
 const NICHOS = [
@@ -21,6 +22,7 @@ export default function PerfilPage() {
   const [nome, setNome] = useState('');
   const [telefone, setTelefone] = useState('');
   const [nicho, setNicho] = useState('');
+  const [role, setRole] = useState<string>('');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -44,6 +46,7 @@ export default function PerfilPage() {
           setNome(data.perfil.nome || '');
           setTelefone(data.perfil.telefone || '');
           setNicho(data.perfil.nicho || '');
+          setRole(data.perfil.role || '');
           setAvatarPreview(data.perfil.avatar_url || null);
         }
       })
@@ -188,16 +191,26 @@ export default function PerfilPage() {
             />
           </div>
 
-          {/* Nicho */}
+          {/* Nicho — editável só por admin; usuário comum vê travado (item 1) */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Nicho / Segmento</label>
-            <select
-              value={nicho} onChange={e => setNicho(e.target.value)}
-              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#1a1f2e]"
-            >
-              <option value="">Selecione seu segmento</option>
-              {NICHOS.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
+            {role === 'admin' ? (
+              <select
+                value={nicho} onChange={e => setNicho(e.target.value)}
+                className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#1a1f2e]"
+              >
+                <option value="">Selecione seu segmento</option>
+                {NICHOS.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            ) : (
+              <>
+                <div className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm bg-[#0f1117] text-slate-400 flex items-center gap-2 cursor-not-allowed">
+                  <Lock size={13} className="text-slate-500 shrink-0" />
+                  <span>{nicho || 'Definido pela sua organização'}</span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">Somente um administrador pode alterar o nicho.</p>
+              </>
+            )}
           </div>
 
           {feedbackPerfil && (
