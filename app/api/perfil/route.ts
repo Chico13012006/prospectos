@@ -31,12 +31,20 @@ export async function POST(req: NextRequest) {
 
     const { nome, nicho, avatar_url, telefone } = await req.json();
 
+    // UPDATE (não upsert): o perfil já existe (criado no onboarding/convite). O
+    // upsert fazia INSERT...ON CONFLICT, e o braço de INSERT viola o NOT NULL de
+    // organizacao_id (multi-tenant, migrations 0006/0007) — quebrando todo save.
+    // Update por id só mexe nas colunas do formulário e preserva organizacao_id/role.
     const admin = createSupabaseAdminClient();
-    const { error } = await admin
+    const { data: atualizado, error } = await admin
       .from('perfis')
-      .upsert({ id: user.id, nome, nicho, avatar_url, telefone: telefone || null });
+      .update({ nome, nicho, avatar_url, telefone: telefone || null })
+      .eq('id', user.id)
+      .select('id')
+      .maybeSingle();
 
     if (error) return NextResponse.json({ erro: error.message }, { status: 400 });
+    if (!atualizado) return NextResponse.json({ erro: 'Perfil não encontrado para este usuário.' }, { status: 404 });
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ erro: 'Erro interno' }, { status: 500 });

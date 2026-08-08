@@ -19,6 +19,7 @@ export default function PerfilPage() {
 
   const [email, setEmail] = useState('');
   const [nome, setNome] = useState('');
+  const [telefone, setTelefone] = useState('');
   const [nicho, setNicho] = useState('');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -41,6 +42,7 @@ export default function PerfilPage() {
         setEmail(data.email || '');
         if (data.perfil) {
           setNome(data.perfil.nome || '');
+          setTelefone(data.perfil.telefone || '');
           setNicho(data.perfil.nicho || '');
           setAvatarPreview(data.perfil.avatar_url || null);
         }
@@ -69,7 +71,7 @@ export default function PerfilPage() {
     const res = await fetch('/api/perfil', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome, nicho, avatar_url: avatarPreview }),
+      body: JSON.stringify({ nome, telefone, nicho, avatar_url: avatarPreview }),
     });
     if (res.ok) {
       setFeedbackPerfil({ tipo: 'sucesso', msg: 'Perfil atualizado com sucesso!' });
@@ -172,6 +174,16 @@ export default function PerfilPage() {
             <input
               type="text" value={nome} onChange={e => setNome(e.target.value)} required
               placeholder="Seu nome"
+              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          {/* Telefone */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Telefone</label>
+            <input
+              type="tel" value={telefone} onChange={e => setTelefone(e.target.value)}
+              placeholder="(11) 90000-0000"
               className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
