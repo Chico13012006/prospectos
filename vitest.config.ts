@@ -10,7 +10,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['lib/engine/__tests__/**/*.test.ts', 'lib/workflows/__tests__/**/*.test.ts', 'lib/leads/__tests__/**/*.test.ts'],
+    include: ['lib/engine/__tests__/**/*.test.ts', 'lib/workflows/__tests__/**/*.test.ts', 'lib/leads/__tests__/**/*.test.ts', 'lib/__tests__/**/*.test.ts'],
     setupFiles: ['lib/engine/__tests__/setup.ts'],
   },
 })

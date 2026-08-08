@@ -418,6 +418,34 @@ export async function getInteligenciaComercialResumo(): Promise<{
   return { totalLeads: totalRes.count ?? 0, conversoes: ganhoRes.count ?? 0 }
 }
 
+// INTELIGÊNCIA COMERCIAL COMPLETA (item 5): carrega o dado bruto mínimo — leads
+// (colunas usadas nas agregações) + interações dos últimos 180 dias — escopado à
+// organização pela RLS (client de cookie/SSR). A agregação é feita em memória
+// pelas funções puras de lib/inteligencia.ts. As interações são limitadas por
+// data e colunas para não puxar a tabela inteira ao browser.
+export async function getDadosInteligenciaComercial(): Promise<{
+  leads: import('./inteligencia').LeadIC[]
+  interacoes: import('./inteligencia').InteracaoIC[]
+}> {
+  const desde180 = new Date()
+  desde180.setDate(desde180.getDate() - 180)
+  const [leadsRes, interacoesRes] = await Promise.all([
+    supabase
+      .from('leads')
+      .select('id, empresa, estagio, score, canal_preferencial, segmento, estado, created_at, ultimo_contato, responsavel_nome, followups_enviados'),
+    supabase
+      .from('interacoes')
+      .select('tipo, canal, created_at, lead_id')
+      .gte('created_at', desde180.toISOString()),
+  ])
+  if (leadsRes.error) throw leadsRes.error
+  if (interacoesRes.error) throw interacoesRes.error
+  return {
+    leads: (leadsRes.data ?? []) as import('./inteligencia').LeadIC[],
+    interacoes: (interacoesRes.data ?? []) as import('./inteligencia').InteracaoIC[],
+  }
+}
+
 export async function getLeadsRecentes(limit = 10) {
   const { data, error } = await supabase
     .from('leads')

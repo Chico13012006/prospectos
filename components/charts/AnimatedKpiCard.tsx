@@ -19,6 +19,7 @@ export default function AnimatedKpiCard({
   iconColor = 'text-indigo-400',
   iconBg = 'bg-indigo-500/20',
   sparkline,
+  suffix = '',
   loading = false,
   className = '',
 }: {
@@ -31,6 +32,8 @@ export default function AnimatedKpiCard({
   iconBg?: string
   /** Pontos normalizados 0-100 (opcional). Sem eles usa uma curva padrão discreta. */
   sparkline?: number[]
+  /** Sufixo após o número (ex.: '%'). Opcional. */
+  suffix?: string
   loading?: boolean
   className?: string
 }) {
@@ -86,7 +89,7 @@ export default function AnimatedKpiCard({
           </span>
         )}
       </div>
-      <div className="text-3xl font-bold text-slate-100 tabular-nums">{display.toLocaleString('pt-BR')}</div>
+      <div className="text-3xl font-bold text-slate-100 tabular-nums">{display.toLocaleString('pt-BR')}{suffix}</div>
       <svg viewBox="0 0 100 24" preserveAspectRatio="none" className="w-full h-6">
         <defs>
           <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
