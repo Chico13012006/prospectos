@@ -4,12 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   X, Star, ExternalLink, Mail, Phone,
   MessageSquare, Bot, User, ArrowRight, CheckCircle,
-  FileText, Bell, Loader2, Clock, Plus,
+  FileText, Bell, Loader2, Clock, Plus, Sparkles,
 } from 'lucide-react';
 import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatDate, formatDateTime } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
 import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
-import { getLeadById, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao, updateLead } from '@/lib/api';
+import { getLeadById, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao, updateLead, gerarInsightLead } from '@/lib/api';
+import type { InsightComercialLead } from '@/lib/api';
 import type { Lead, Interacao } from '@/lib/supabase';
 import { ESTAGIOS_MANUAIS } from '@/lib/pipeline-stages';
 
@@ -125,6 +126,13 @@ const CANAL_INFO: Record<string, { label: string; Icon: typeof Bot; classes: str
   telefone: { label: 'Telefone', Icon: Phone, classes: 'bg-purple-500/20 text-purple-400' },
 };
 
+// Cores do badge de aderência da Inteligência Comercial (item 4).
+const ADERENCIA_BADGE: Record<InsightComercialLead['aderencia'], string> = {
+  alta: 'bg-green-500/20 text-green-400',
+  media: 'bg-amber-500/20 text-amber-400',
+  baixa: 'bg-red-500/20 text-red-400',
+};
+
 function scoreColor(score: number): string {
   if (score >= 70) return '#16a34a';
   if (score < 50) return '#f97316';
@@ -167,6 +175,10 @@ export default function LeadPanel({
   const [feedbackAcao, setFeedbackAcao] = useState<string | null>(null);
   const [confirmandoLiberar, setConfirmandoLiberar] = useState(false);
   const [liberando, setLiberando] = useState(false);
+  // Inteligência Comercial (item 4): gerada sob demanda pela IA.
+  const [insight, setInsight] = useState<InsightComercialLead | null>(null);
+  const [insightLoading, setInsightLoading] = useState(false);
+  const [insightErro, setInsightErro] = useState<string | null>(null);
 
   // Carrega (ou recarrega) as interações reais do lead selecionado
   const carregarInteracoes = useCallback(async () => {
@@ -196,6 +208,9 @@ export default function LeadPanel({
     setConfirmandoPerdido(false);
     setConfirmandoLiberar(false);
     setFeedbackAcao(null);
+    setInsight(null);
+    setInsightErro(null);
+    setInsightLoading(false);
     setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' });
     if (selectedId) {
       getLeadById(selectedId).then(setSelectedLead).catch(() => setSelectedLead(null));
@@ -323,6 +338,22 @@ export default function LeadPanel({
       setFeedbackAcao(`✗ ${motivo && traducao[motivo] ? traducao[motivo] : motivo ?? 'Erro ao executar ação. Tente novamente.'}`);
     } finally {
       setExecutando(false);
+    }
+  }
+
+  // Gera a leitura comercial do lead via IA (item 4). Sob demanda, no clique.
+  async function handleGerarInsight() {
+    if (!selectedId) return;
+    setInsightLoading(true);
+    setInsightErro(null);
+    try {
+      const dados = await gerarInsightLead(selectedId);
+      setInsight(dados);
+    } catch (err) {
+      console.error('Erro ao gerar inteligência comercial:', err);
+      setInsightErro(err instanceof Error ? err.message : 'Não foi possível gerar a análise.');
+    } finally {
+      setInsightLoading(false);
     }
   }
 
@@ -550,6 +581,66 @@ export default function LeadPanel({
             <p className="text-xs text-slate-300 leading-relaxed line-clamp-3">
               {selectedEmpresa.observacoes ?? 'Sem resumo disponível.'}
             </p>
+          </div>
+
+          {/* Inteligência Comercial · IA (item 4) — gerada sob demanda */}
+          <div className="px-5 py-3 border-b border-[#2a3147]">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Sparkles size={12} className="text-amber-400" />
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Inteligência Comercial · IA</span>
+              {insight && (
+                <button
+                  type="button"
+                  onClick={handleGerarInsight}
+                  disabled={insightLoading}
+                  className="ml-auto text-xs text-indigo-400 hover:underline disabled:opacity-50"
+                >
+                  Regerar
+                </button>
+              )}
+            </div>
+
+            {!insight && !insightLoading && (
+              <button
+                type="button"
+                onClick={handleGerarInsight}
+                className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 py-2 rounded-lg transition-colors"
+              >
+                <Sparkles size={13} /> Gerar análise comercial
+              </button>
+            )}
+
+            {insightLoading && (
+              <div className="flex items-center gap-2 text-slate-500 py-2">
+                <Loader2 size={13} className="animate-spin" />
+                <span className="text-xs">Analisando o lead com IA...</span>
+              </div>
+            )}
+
+            {insightErro && !insightLoading && (
+              <p className="text-xs text-red-400 mt-1">{insightErro}</p>
+            )}
+
+            {insight && !insightLoading && (
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-slate-500">Aderência à solução:</span>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${ADERENCIA_BADGE[insight.aderencia]}`}>
+                    {insight.aderencia}
+                  </span>
+                </div>
+                {([
+                  { label: 'Oportunidade', value: insight.oportunidade },
+                  { label: 'Dor provável', value: insight.dor },
+                  { label: 'Abordagem sugerida', value: insight.abordagem },
+                ] as const).map(item => (
+                  <div key={item.label}>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-0.5">{item.label}</div>
+                    <p className="text-xs text-slate-300 leading-relaxed">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Registrar interação */}

@@ -305,6 +305,26 @@ export async function executarAcao(
   return res.json()
 }
 
+// INTELIGÊNCIA COMERCIAL POR LEAD (sprint item 4): dispara a rota server-side
+// que chama a IA (Haiku) e devolve a leitura comercial do lead. Sob demanda —
+// não é chamada no load do painel para não gastar tokens à toa.
+export interface InsightComercialLead {
+  aderencia: 'alta' | 'media' | 'baixa'
+  oportunidade: string
+  dor: string
+  abordagem: string
+}
+
+export async function gerarInsightLead(leadId: string): Promise<InsightComercialLead> {
+  const res = await fetch(`/api/leads/${leadId}/insight`, { method: 'POST' })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.erro ?? `Erro ${res.status}`)
+  }
+  const { insight } = await res.json()
+  return insight as InsightComercialLead
+}
+
 // Registra uma interação/nota no histórico
 export async function registrarNota(leadId: string, descricao: string, tipo: string = 'nota'): Promise<void> {
   const { error } = await supabase
