@@ -14,6 +14,7 @@ import { detectarResposta } from './flows/detectarResposta'
 import { followUp } from './flows/followUp'
 import { executarAcao } from './flows/executarAcao'
 import { marcarExecucaoFollowup, verificarSaudeFollowup } from './saude'
+import { enviarRelatorioSemanal, coletarKpisSemana, montarEmailRelatorio } from './relatorioSemanal'
 import { extrairContatosAlternativos } from '@/lib/ia/contatosAlternativos'
 
 export interface Motor {
@@ -160,6 +161,36 @@ export async function healthcheckFollowupTodasOrgs() {
     if (await verificarSaudeFollowup(org, email)) alertadas++
   }
   return { organizacoes: orgs.length, alertadas }
+}
+
+// Relatório semanal (item 7): envia o resumo da semana de CADA org ativa ao
+// Chico (ALERT_EMAIL). Um erro numa org não derruba as outras. Alvo de um cron
+// semanal (mesmo padrão do follow-up).
+export async function relatorioSemanalTodasOrgs() {
+  const orgs = await listarOrganizacoesAtivas()
+  const email = escolherEmailProvider('followup')
+  const porOrg: Record<string, unknown> = {}
+  for (const org of orgs) {
+    try {
+      porOrg[org] = await enviarRelatorioSemanal(org, email)
+    } catch (e) {
+      log.erro('Relatório semanal falhou para uma organização', {
+        organizacaoId: org,
+        erro: e instanceof Error ? e.message : String(e),
+      })
+      porOrg[org] = { erro: e instanceof Error ? e.message : String(e) }
+    }
+  }
+  return { organizacoes: orgs.length, porOrg }
+}
+
+// PRÉVIA (item 7): gera o e-mail da 1ª org ativa SEM enviar — pra o Chico ver o
+// formato antes de deixar o cron rodando sozinho.
+export async function previaRelatorioSemanal() {
+  const orgs = await listarOrganizacoesAtivas()
+  if (orgs.length === 0) return { erro: 'Nenhuma organização ativa.' }
+  const kpis = await coletarKpisSemana(orgs[0])
+  return { organizacaoId: orgs[0], kpis, email: montarEmailRelatorio(kpis) }
 }
 
 // Re-exports úteis aos endpoints/testes.
