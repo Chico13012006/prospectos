@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   X, Star, ExternalLink, Mail, Phone,
   MessageSquare, Bot, User, ArrowRight, CheckCircle,
-  FileText, Bell, Loader2, Clock, Plus, Sparkles, Repeat, Copy, Maximize2, Check,
+  FileText, Bell, Loader2, Clock, Plus, Sparkles, Repeat, Copy, Maximize2, Check, Settings,
 } from 'lucide-react';
 import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatDate, formatDateTime } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
@@ -127,6 +127,32 @@ function getStatusInteracao(tipo: string): { label: string; classes: string } | 
   return null;
 }
 
+// --- Aba Conversa: reorganização do histórico ---
+// Total de follow-ups da cadência (3/7/14/30/60/90/120/180 — item 3). Usado para
+// numerar cada etapa ("Follow-up N de 8"), já que TODAS usam o mesmo template e
+// sem o número parecem duplicadas.
+const TOTAL_FOLLOWUPS = 8;
+
+// Os envios do motor guardam a descrição como "**assunto**\n\ncorpo". Separa os
+// dois pra mostrar o assunto como título e o corpo truncável.
+function parseMensagem(descricao: string): { assunto: string | null; corpo: string } {
+  const m = descricao.match(/^\*\*([\s\S]+?)\*\*\n\n([\s\S]*)$/);
+  if (m) return { assunto: m[1].trim(), corpo: m[2].trim() };
+  return { assunto: null, corpo: descricao };
+}
+
+// Notas que SÃO conteúdo relevante (não log): handoff, contato alt, proposta,
+// copiloto. As demais notas de plataforma/sistema (mudança/normalização de
+// estágio, perdido, liberado) são LOG interno — exibidas de forma discreta.
+const NOTAS_RELEVANTES = ['Encaminhado ao closer', 'Contato alternativo sugerido', 'Proposta comercial', 'Copiloto pós-reunião'];
+function ehLogSistema(i: Interacao): boolean {
+  if (i.tipo !== 'nota') return false;
+  const d = i.descricao ?? '';
+  if (NOTAS_RELEVANTES.some((p) => d.startsWith(p))) return false;
+  if (/^(Estágio|Lead marcado como perdido|Lead liberado)/.test(d)) return true;
+  return i.canal === 'plataforma' || i.canal === 'sistema';
+}
+
 // Rótulo, ícone e cor do canal (valores em minúsculo no Supabase)
 const CANAL_INFO: Record<string, { label: string; Icon: typeof Bot; classes: string }> = {
   email: { label: 'Email', Icon: Mail, classes: 'bg-[#252b3b] text-slate-300' },
@@ -195,6 +221,11 @@ export default function LeadPanel({
   const [mensagemLoading, setMensagemLoading] = useState(false);
   const [mensagemErro, setMensagemErro] = useState<string | null>(null);
   const [mensagemCopiada, setMensagemCopiada] = useState(false);
+  // Aba Conversa: mensagens expandidas (corpo completo). Reset ao trocar de lead.
+  const [msgsExpandidas, setMsgsExpandidas] = useState<Set<string>>(new Set());
+  const toggleExpandir = (id: string) => setMsgsExpandidas(s => {
+    const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n;
+  });
 
   // Carrega (ou recarrega) as interações reais do lead selecionado
   const carregarInteracoes = useCallback(async () => {
@@ -232,6 +263,7 @@ export default function LeadPanel({
     setMensagemErro(null);
     setMensagemLoading(false);
     setMensagemCopiada(false);
+    setMsgsExpandidas(new Set());
     setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' });
     if (selectedId) {
       getLeadById(selectedId).then(setSelectedLead).catch(() => setSelectedLead(null));
@@ -419,6 +451,17 @@ export default function LeadPanel({
     && !selectedLead.perdido && ESTAGIOS_CADENCIA.includes(selectedLead.estagio);
   // Últimas 3 interações para a "Atividade recente" da aba Visão geral.
   const atividadeRecente = interacoes.slice(0, 3);
+
+  // Numera cada follow-up pela ordem cronológica (o 1º enviado = "Follow-up 1").
+  // `interacoes` vem em ordem decrescente; ordenamos ascendente só p/ ranquear.
+  const followupNumero = useMemo(() => {
+    const m = new Map<string, number>();
+    interacoes
+      .filter((i) => i.tipo.startsWith('follow_up')) // cobre follow_up e follow_up_N (dado antigo)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      .forEach((i, idx) => m.set(i.id, idx + 1));
+    return m;
+  }, [interacoes]);
 
   const panelTimeSince = selectedEmpresa
     ? (selectedEmpresa.ultimo_contato
@@ -897,31 +940,54 @@ export default function LeadPanel({
             ) : interacoes.length === 0 ? (
               <p className="text-xs text-slate-500">Nenhuma interação registrada ainda.</p>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 {interacoes.map(interacao => {
-                  const cfg = INTERACAO_TIPO[interacao.tipo] ?? INTERACAO_TIPO.nota;
                   const isIA = interacao.origem_acao === 'ia';
-                  const Icon = isIA ? Bot : cfg.Icon;
+
+                  // (2) Log de sistema/manutenção: estilo discreto (uma linha, dim,
+                  // itálico) — é registro interno, não conversa com o cliente.
+                  if (ehLogSistema(interacao)) {
+                    return (
+                      <div key={interacao.id} className="flex items-center gap-2 text-[11px] text-slate-500 py-0.5 pl-1">
+                        <Settings size={11} className="text-slate-600 shrink-0" />
+                        <span className="truncate flex-1 italic">{interacao.descricao}</span>
+                        <span className="shrink-0 text-slate-600">{new Date(interacao.created_at).toLocaleDateString('pt-BR')}</span>
+                      </div>
+                    );
+                  }
+
+                  // Conversa: card com rótulo. (1) Follow-up numerado ("N de 8"),
+                  // (3) corpo truncado com "Ver mensagem completa".
+                  const badge = getTipoInteracaoBadge(interacao.tipo, interacao.descricao);
+                  const rotulo =
+                    interacao.tipo.startsWith('follow_up') ? `Follow-up ${followupNumero.get(interacao.id) ?? '?'} de ${TOTAL_FOLLOWUPS}`
+                    : interacao.tipo === 'abordagem' ? '1º contato'
+                    : badge.label;
+                  const { assunto, corpo } = parseMensagem(interacao.descricao || '');
+                  const expandida = msgsExpandidas.has(interacao.id);
+                  const longa = corpo.length > 160 || corpo.split('\n').length > 3;
+                  const tipoBase = interacao.tipo.startsWith('follow_up') ? 'follow_up' : interacao.tipo;
+                  const Icon = isIA ? Bot : (INTERACAO_TIPO[tipoBase] ?? INTERACAO_TIPO.nota).Icon;
                   return (
-                    <div key={interacao.id} className="flex items-start gap-2.5">
-                      <div className="w-5 h-5 rounded-full bg-[#252b3b] flex items-center justify-center shrink-0 mt-0.5">
-                        <Icon size={10} className={isIA ? 'text-blue-500' : cfg.color} />
+                    <div key={interacao.id} className="rounded-lg border border-[#2a3147] bg-[#0f1117] p-2.5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Icon size={11} className={isIA ? 'text-blue-500' : 'text-slate-400'} />
+                        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${badge.classes}`}>{rotulo}</span>
+                        <span className="text-[11px] text-slate-500 ml-auto shrink-0">
+                          {new Date(interacao.created_at).toLocaleDateString('pt-BR')} · {isIA ? 'IA' : 'Manual'}
+                        </span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs text-slate-300">
-                          {interacao.descricao || cfg.label}
-                          {interacao.canal && (
-                            <span className="text-slate-500"> · {interacao.canal}</span>
-                          )}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {new Date(interacao.created_at).toLocaleDateString('pt-BR')}
-                          <span className="ml-1.5">{isIA ? '· IA' : '· Manual'}</span>
-                          {interacao.usuarios?.nome && (
-                            <span className="ml-1.5">· {interacao.usuarios.nome}</span>
-                          )}
-                        </div>
-                      </div>
+                      {assunto && <div className="text-xs font-medium text-slate-300 mb-0.5 truncate">{assunto}</div>}
+                      {corpo && (
+                        <p className={`text-xs text-slate-400 leading-relaxed whitespace-pre-wrap ${!expandida && longa ? 'line-clamp-3' : ''}`}>
+                          {corpo}
+                        </p>
+                      )}
+                      {longa && (
+                        <button onClick={() => toggleExpandir(interacao.id)} className="text-[11px] text-indigo-400 hover:underline mt-1">
+                          {expandida ? 'Ver menos' : 'Ver mensagem completa'}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
