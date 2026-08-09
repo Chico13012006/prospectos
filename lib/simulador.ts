@@ -134,6 +134,15 @@ export function percentualDesconto(valorTabela: number, valorFinal: number): num
   return Math.round((1 - valorFinal / valorTabela) * 1000) / 10
 }
 
+// INVERSO do percentualDesconto (simulador bidirecional, item 5): valor final a
+// partir de um % de desconto sobre a tabela. SEMPRE parte da `valorTabela`
+// imutável — nunca encadeia um final sobre o outro — evitando acúmulo de
+// arredondamento entre as duas direções. Clampa o % em [0, 100].
+export function valorComDesconto(valorTabela: number, descontoPct: number): number {
+  const p = Math.min(100, Math.max(0, descontoPct))
+  return Math.max(0, Math.round(valorTabela * (1 - p / 100)))
+}
+
 export function formatarBRL(valor: number): string {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 }

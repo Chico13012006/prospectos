@@ -2,10 +2,10 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Minus, Plus, Info, Check, Loader2, Search, X } from 'lucide-react';
+import { Minus, Plus, Info, Check, Loader2, Search, X, TrendingDown } from 'lucide-react';
 import {
   PRODUTOS, PRAZO_COMODATO_MESES, calcularCompra, calcularComodato,
-  percentualDesconto, totalItens, formatarBRL,
+  percentualDesconto, valorComDesconto, totalItens, formatarBRL,
   type ModeloComercial, type ProdutoId, type ItemProposta,
 } from '@/lib/simulador';
 import { getLeads, registrarNota } from '@/lib/api';
@@ -41,16 +41,20 @@ export default function SimuladorPanel() {
   const inicial = useMemo(() => lerParamsIniciais(new URLSearchParams(searchParams.toString())), [searchParams]);
   const [modelo, setModelo] = useState<ModeloComercial>(inicial.modelo);
   const [qtds, setQtds] = useState<Record<ProdutoId, number>>(inicial.qtds);
-  // Overrides do valor negociado (null = seguir a sugestão do sistema).
-  const [valorNegociado, setValorNegociado] = useState<number | null>(null);
-  const [mensalFinal, setMensalFinal] = useState<number | null>(null);
-  const [entradaFinal, setEntradaFinal] = useState<number | null>(null);
+  // Valores FINAIS negociados são a fonte única de verdade (null = usar a
+  // sugestão). O desconto é sempre DERIVADO do final vs. a tabela (imutável), e
+  // editar o desconto recalcula o final a partir da tabela — nunca encadeando um
+  // final sobre o outro (sem ciclo, sem acúmulo de arredondamento). Item 5.
+  const [valorFinalOv, setValorFinalOv] = useState<number | null>(null);
+  const [mensalFinalOv, setMensalFinalOv] = useState<number | null>(null);
+  const [entradaFinalOv, setEntradaFinalOv] = useState<number | null>(null);
 
   const itens: ItemProposta[] = useMemo(
     () => PRODUTOS.map((p) => ({ produto: p.id, qtd: qtds[p.id] })).filter((i) => i.qtd > 0),
     [qtds],
   );
   const qtdTotal = totalItens(itens);
+  const temItens = qtdTotal > 0;
 
   const compra = useMemo(() => calcularCompra(itens), [itens]);
   const comodato = useMemo(() => calcularComodato(itens), [itens]);
@@ -59,17 +63,27 @@ export default function SimuladorPanel() {
     setQtds((q) => ({ ...q, [id]: Math.max(0, v) }));
   }
 
-  // Valores efetivos (override do vendedor ou sugestão do sistema).
-  const compraFinal = valorNegociado ?? compra.valorSugerido;
-  const mensalEfetivo = mensalFinal ?? comodato.mensalSugerido;
-  const entradaEfetiva = entradaFinal ?? comodato.entradaSugerida;
+  // Referências IMUTÁVEIS (tabela oficial). Compra: valor total. Comodato:
+  // mensalidade (soma dos avulsos) e entrada de referência (estimativa cheia).
+  const refCompra = compra.valorTabela;
+  const refMensal = comodato.mensalTabela;
+  const refEntrada = comodato.entradaSugerida;
 
-  const descontoCompra = percentualDesconto(compra.valorTabela, compraFinal);
-  const descontoComodato = percentualDesconto(comodato.mensalTabela, mensalEfetivo);
-  const totalContrato = entradaEfetiva + mensalEfetivo * PRAZO_COMODATO_MESES;
+  // Finais efetivos: override do vendedor OU a sugestão do sistema.
+  const valorFinal = valorFinalOv ?? compra.valorSugerido;
+  const mensalFinal = mensalFinalOv ?? comodato.mensalSugerido;
+  const entradaFinal = entradaFinalOv ?? comodato.entradaSugerida;
 
-  const desconto = modelo === 'compra' ? descontoCompra : descontoComodato;
-  const temItens = qtdTotal > 0;
+  const descontoCompra = percentualDesconto(refCompra, valorFinal);
+  const descontoMensal = percentualDesconto(refMensal, mensalFinal);
+  const descontoEntrada = percentualDesconto(refEntrada, entradaFinal);
+
+  const totalContrato = entradaFinal + mensalFinal * PRAZO_COMODATO_MESES;
+  const totalTabelaContrato = refEntrada + refMensal * PRAZO_COMODATO_MESES;
+  const economiaCompra = Math.max(0, refCompra - valorFinal);
+  const economiaContrato = Math.max(0, totalTabelaContrato - totalContrato);
+
+  const desconto = modelo === 'compra' ? descontoCompra : descontoMensal;
 
   return (
     <div className="space-y-5">
@@ -91,9 +105,9 @@ export default function SimuladorPanel() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Itens */}
-        <div className="lg:col-span-2 card p-5">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+        {/* Equipamentos */}
+        <div className="lg:col-span-3 card p-5">
           <h2 className="font-semibold text-slate-200 mb-3">Equipamentos</h2>
           <div className="space-y-1.5">
             {PRODUTOS.map((p) => {
@@ -131,117 +145,163 @@ export default function SimuladorPanel() {
               );
             })}
           </div>
+
+          <div className="flex items-start gap-2 text-xs text-slate-500 mt-4 pt-4 border-t border-[#2a3147]">
+            <Info size={14} className="text-slate-400 shrink-0 mt-0.5" />
+            <p>
+              O desconto é apenas <b>calculado e exibido</b> — não há trava de aprovação nesta versão.
+              Os valores sugeridos são uma estimativa inicial editável. O preço de fato é sempre
+              negociado; ajuste o valor final <b>ou</b> o percentual de desconto.
+            </p>
+          </div>
         </div>
 
-        {/* Resumo */}
-        <div className="card p-5 flex flex-col gap-4 h-fit">
+        {/* Resumo da proposta */}
+        <div className="lg:col-span-2 card p-5 flex flex-col gap-4 h-fit lg:sticky lg:top-4">
           <h2 className="font-semibold text-slate-200">Resumo da proposta</h2>
 
           {!temItens ? (
-            <p className="text-sm text-slate-500 py-6 text-center">
-              Adicione equipamentos para ver o total.
+            <p className="text-sm text-slate-500 py-8 text-center">
+              Adicione equipamentos para montar a proposta.
             </p>
           ) : modelo === 'compra' ? (
             <>
-              <LinhaResumo label="Valor de tabela" value={formatarBRL(compra.valorTabela)} />
-              <CampoValor
-                label="Valor negociado" value={compraFinal}
-                sugestao={compra.valorSugerido} onChange={setValorNegociado}
-                onReset={() => setValorNegociado(null)} tocado={valorNegociado !== null}
+              {/* Destaque */}
+              <Destaque
+                titulo="Valor final"
+                valor={formatarBRL(valorFinal)}
+                tabela={formatarBRL(refCompra)}
+                desconto={descontoCompra}
+                economia={economiaCompra}
               />
-              <BadgeDesconto desconto={descontoCompra} />
+              <EditorDesconto
+                label="Negociação"
+                referencia={refCompra}
+                final={valorFinal}
+                onChange={setValorFinalOv}
+              />
             </>
           ) : (
             <>
-              <LinhaResumo label="Mensalidade de tabela" value={`${formatarBRL(comodato.mensalTabela)}/mês`} />
-              <LinhaResumo label="Desconto de bundle sugerido" value={`${Math.round(comodato.descontoSugerido * 100)}%`} sub />
-              <CampoValor
-                label="Mensalidade final" sufixo="/mês" value={mensalEfetivo}
-                sugestao={comodato.mensalSugerido} onChange={setMensalFinal}
-                onReset={() => setMensalFinal(null)} tocado={mensalFinal !== null}
+              {/* Destaque: total do contrato */}
+              <Destaque
+                titulo={`Total do contrato (${PRAZO_COMODATO_MESES}m)`}
+                valor={formatarBRL(totalContrato)}
+                tabela={formatarBRL(totalTabelaContrato)}
+                economia={economiaContrato}
+                linha2={`${formatarBRL(mensalFinal)}/mês · entrada ${formatarBRL(entradaFinal)}`}
               />
-              <CampoValor
-                label="Entrada" value={entradaEfetiva}
-                sugestao={comodato.entradaSugerida} onChange={setEntradaFinal}
-                onReset={() => setEntradaFinal(null)} tocado={entradaFinal !== null}
+              <EditorDesconto
+                label="Mensalidade"
+                sufixo="/mês"
+                referencia={refMensal}
+                final={mensalFinal}
+                onChange={setMensalFinalOv}
               />
-              <LinhaResumo label={`Total do contrato (${PRAZO_COMODATO_MESES}m)`} value={formatarBRL(totalContrato)} />
-              <BadgeDesconto desconto={descontoComodato} />
+              <EditorDesconto
+                label="Entrada"
+                referencia={refEntrada}
+                final={entradaFinal}
+                onChange={setEntradaFinalOv}
+              />
             </>
           )}
 
           {temItens && <RegistrarProposta
             resumo={montarResumo(modelo, itens, {
-              compraFinal, mensalEfetivo, entradaEfetiva, totalContrato,
-              tabelaCompra: compra.valorTabela, mensalTabela: comodato.mensalTabela, desconto,
+              valorFinal, mensalFinal, entradaFinal, totalContrato,
+              refCompra, refMensal, refEntrada,
+              descontoCompra, descontoMensal, descontoEntrada,
             })}
           />}
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Nota de v1 */}
-      <div className="flex items-start gap-2 text-xs text-slate-500 bg-[#1a1f2e] border border-[#2a3147] rounded-lg px-4 py-3 max-w-3xl">
-        <Info size={14} className="text-slate-400 shrink-0 mt-0.5" />
-        <p>
-          O desconto é apenas <b>calculado e exibido</b> — não há trava de aprovação nesta versão.
-          Os valores sugeridos (desconto de bundle e entrada) são uma estimativa inicial editável,
-          a ser calibrada. O preço de fato é sempre negociado; ajuste os campos livremente.
-        </p>
+// Bloco de destaque: valor final/total em evidência, com desconto e economia.
+function Destaque({ titulo, valor, tabela, desconto, economia, linha2 }: {
+  titulo: string; valor: string; tabela: string; desconto?: number; economia: number; linha2?: string;
+}) {
+  return (
+    <div className="rounded-xl bg-gradient-to-br from-indigo-500/15 to-indigo-500/5 border border-indigo-500/30 p-4">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-slate-400">{titulo}</span>
+        {desconto !== undefined && desconto > 0 && (
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
+            −{desconto.toLocaleString('pt-BR')}%
+          </span>
+        )}
+      </div>
+      <div className="text-2xl font-bold text-slate-100 mt-1 tabular-nums">{valor}</div>
+      {linha2 && <div className="text-xs text-slate-400 mt-0.5">{linha2}</div>}
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5 text-xs">
+        <span className="text-slate-500">Tabela cheia: <span className="line-through">{tabela}</span></span>
+        {economia > 0 && (
+          <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
+            <TrendingDown size={12} /> economia {formatarBRL(economia)}
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
-function LinhaResumo({ label, value, sub }: { label: string; value: string; sub?: boolean }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className={`text-sm ${sub ? 'text-slate-500' : 'text-slate-400'}`}>{label}</span>
-      <span className={`font-semibold ${sub ? 'text-slate-400 text-sm' : 'text-slate-100'}`}>{value}</span>
-    </div>
-  );
-}
-
-// Campo de valor editável com botão de reset para a sugestão do sistema.
-function CampoValor({
-  label, value, sugestao, sufixo = '', onChange, onReset, tocado,
-}: {
-  label: string; value: number; sugestao: number; sufixo?: string;
-  onChange: (v: number) => void; onReset: () => void; tocado: boolean;
+// Editor bidirecional: o vendedor ajusta o VALOR FINAL ou o % de DESCONTO; os
+// dois espelham o mesmo número (fonte única = final). O % sempre recalcula o
+// final a partir da `referencia` imutável (nunca encadeia), evitando ciclo e
+// acúmulo de arredondamento. Atalhos 5/10/15% + valor personalizado.
+function EditorDesconto({ label, sufixo = '', referencia, final, onChange }: {
+  label: string; sufixo?: string; referencia: number; final: number; onChange: (v: number) => void;
 }) {
+  const desconto = percentualDesconto(referencia, final);
+  const aplicarPct = (pct: number) => onChange(valorComDesconto(referencia, pct));
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <label className="text-sm text-slate-400">{label}</label>
-        {tocado && (
-          <button onClick={onReset} className="text-[11px] text-indigo-400 hover:underline">
-            usar sugestão ({sugestao.toLocaleString('pt-BR')})
+    <div className="rounded-lg border border-[#2a3147] bg-[#0f1117] p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-slate-300">{label}</span>
+        <span className="text-[11px] text-slate-500">tabela {formatarBRL(referencia)}{sufixo}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] text-slate-500 block mb-0.5">Valor final</label>
+          <div className="flex items-center gap-1 border border-[#2a3147] rounded-md px-2 py-1.5 bg-[#1a1f2e] focus-within:ring-1 focus-within:ring-indigo-500">
+            <span className="text-slate-500 text-xs">R$</span>
+            <input
+              type="number" min={0} value={final}
+              onChange={(e) => onChange(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+              className="w-full bg-transparent text-sm text-slate-100 focus:outline-none tabular-nums"
+            />
+            {sufixo && <span className="text-slate-500 text-[10px]">{sufixo}</span>}
+          </div>
+        </div>
+        <div>
+          <label className="text-[10px] text-slate-500 block mb-0.5">Desconto</label>
+          <div className="flex items-center gap-1 border border-[#2a3147] rounded-md px-2 py-1.5 bg-[#1a1f2e] focus-within:ring-1 focus-within:ring-indigo-500">
+            <input
+              type="number" min={0} max={100} step={0.5} value={desconto}
+              onChange={(e) => aplicarPct(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+              className="w-full bg-transparent text-sm text-slate-100 focus:outline-none tabular-nums"
+            />
+            <span className="text-slate-500 text-xs">%</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5">
+        {[5, 10, 15].map((p) => (
+          <button key={p} type="button" onClick={() => aplicarPct(p)}
+            className="text-[11px] px-2 py-0.5 rounded-md border border-[#2a3147] text-slate-300 hover:bg-[#1a1f2e] transition-colors">
+            {p}%
+          </button>
+        ))}
+        {final !== referencia && (
+          <button type="button" onClick={() => onChange(referencia)}
+            className="text-[11px] text-indigo-400 hover:underline ml-auto">
+            tabela cheia
           </button>
         )}
       </div>
-      <div className="flex items-center gap-1 border border-[#2a3147] rounded-lg px-3 py-2 bg-[#0f1117] focus-within:ring-1 focus-within:ring-indigo-500">
-        <span className="text-slate-500 text-sm">R$</span>
-        <input
-          type="number" min={0} value={value}
-          onChange={(e) => onChange(Math.max(0, Math.round(Number(e.target.value) || 0)))}
-          className="flex-1 bg-transparent text-slate-100 text-sm focus:outline-none tabular-nums"
-        />
-        {sufixo && <span className="text-slate-500 text-xs">{sufixo}</span>}
-      </div>
-    </div>
-  );
-}
-
-function BadgeDesconto({ desconto }: { desconto: number }) {
-  const cor = desconto <= 0 ? 'text-slate-300 bg-slate-500/10'
-    : desconto < 20 ? 'text-emerald-400 bg-emerald-500/10'
-    : desconto < 40 ? 'text-amber-400 bg-amber-500/10'
-    : 'text-red-400 bg-red-500/10';
-  return (
-    <div className={`flex items-center justify-between rounded-lg px-3 py-2.5 ${cor}`}>
-      <span className="text-sm font-medium">Desconto sobre a tabela</span>
-      <span className="text-lg font-bold tabular-nums">
-        {desconto.toLocaleString('pt-BR')}%
-      </span>
     </div>
   );
 }
@@ -251,19 +311,21 @@ function montarResumo(
   modelo: ModeloComercial,
   itens: ItemProposta[],
   v: {
-    compraFinal: number; mensalEfetivo: number; entradaEfetiva: number; totalContrato: number;
-    tabelaCompra: number; mensalTabela: number; desconto: number;
+    valorFinal: number; mensalFinal: number; entradaFinal: number; totalContrato: number;
+    refCompra: number; refMensal: number; refEntrada: number;
+    descontoCompra: number; descontoMensal: number; descontoEntrada: number;
   },
 ): string {
   const nome = (id: ProdutoId) => PRODUTOS.find((p) => p.id === id)?.nome ?? id;
   const lista = itens.map((i) => `${i.qtd}x ${nome(i.produto)}`).join(', ');
   if (modelo === 'compra') {
-    return `Proposta comercial (Compra): ${lista}. Valor ${formatarBRL(v.compraFinal)} ` +
-      `(tabela ${formatarBRL(v.tabelaCompra)}, desconto ${v.desconto.toLocaleString('pt-BR')}%).`;
+    return `Proposta comercial (Compra): ${lista}. Valor ${formatarBRL(v.valorFinal)} ` +
+      `(tabela ${formatarBRL(v.refCompra)}, desconto ${v.descontoCompra.toLocaleString('pt-BR')}%).`;
   }
-  return `Proposta comercial (Comodato): ${lista}. Mensalidade ${formatarBRL(v.mensalEfetivo)}/mês ` +
-    `(tabela ${formatarBRL(v.mensalTabela)}/mês, desconto ${v.desconto.toLocaleString('pt-BR')}%) + ` +
-    `entrada ${formatarBRL(v.entradaEfetiva)}, ${PRAZO_COMODATO_MESES} meses. Total ${formatarBRL(v.totalContrato)}.`;
+  return `Proposta comercial (Comodato): ${lista}. Mensalidade ${formatarBRL(v.mensalFinal)}/mês ` +
+    `(tabela ${formatarBRL(v.refMensal)}/mês, desconto ${v.descontoMensal.toLocaleString('pt-BR')}%) + ` +
+    `entrada ${formatarBRL(v.entradaFinal)} (desconto ${v.descontoEntrada.toLocaleString('pt-BR')}%), ` +
+    `${PRAZO_COMODATO_MESES} meses. Total ${formatarBRL(v.totalContrato)}.`;
 }
 
 // Registro da proposta: liga a um lead e grava como interação (nota) na timeline
