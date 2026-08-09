@@ -4,13 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   X, Star, ExternalLink, Mail, Phone,
   MessageSquare, Bot, User, ArrowRight, CheckCircle,
-  FileText, Bell, Loader2, Clock, Plus, Sparkles,
+  FileText, Bell, Loader2, Clock, Plus, Sparkles, Repeat, Copy, Maximize2, Check,
 } from 'lucide-react';
 import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatDate, formatDateTime } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
 import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
-import { getLeadById, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao, updateLead, gerarInsightLead } from '@/lib/api';
-import type { InsightComercialLead } from '@/lib/api';
+import { getLeadById, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao, updateLead, gerarInsightLead, gerarMensagemLead } from '@/lib/api';
+import type { InsightComercialLead, MensagemPreview } from '@/lib/api';
 import type { Lead, Interacao } from '@/lib/supabase';
 import { ESTAGIOS_MANUAIS } from '@/lib/pipeline-stages';
 
@@ -188,6 +188,13 @@ export default function LeadPanel({
   const [insight, setInsight] = useState<InsightComercialLead | null>(null);
   const [insightLoading, setInsightLoading] = useState(false);
   const [insightErro, setInsightErro] = useState<string | null>(null);
+  // Ficha lateral em abas (item 2 do doc de ajustes).
+  const [abaPainel, setAbaPainel] = useState<'visao' | 'conversa' | 'dados'>('visao');
+  // Preview da próxima mensagem da cadência (botão "Gerar mensagem").
+  const [mensagem, setMensagem] = useState<MensagemPreview | null>(null);
+  const [mensagemLoading, setMensagemLoading] = useState(false);
+  const [mensagemErro, setMensagemErro] = useState<string | null>(null);
+  const [mensagemCopiada, setMensagemCopiada] = useState(false);
 
   // Carrega (ou recarrega) as interações reais do lead selecionado
   const carregarInteracoes = useCallback(async () => {
@@ -220,6 +227,11 @@ export default function LeadPanel({
     setInsight(null);
     setInsightErro(null);
     setInsightLoading(false);
+    setAbaPainel('visao');
+    setMensagem(null);
+    setMensagemErro(null);
+    setMensagemLoading(false);
+    setMensagemCopiada(false);
     setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' });
     if (selectedId) {
       getLeadById(selectedId).then(setSelectedLead).catch(() => setSelectedLead(null));
@@ -366,8 +378,47 @@ export default function LeadPanel({
     }
   }
 
+  // Gera o preview da PRÓXIMA mensagem da cadência (real, via motor). Abre modal.
+  async function handleGerarMensagem() {
+    if (!selectedId) return;
+    setMensagemLoading(true);
+    setMensagemErro(null);
+    setMensagem(null);
+    setMensagemCopiada(false);
+    try {
+      setMensagem(await gerarMensagemLead(selectedId));
+    } catch (err) {
+      setMensagemErro(err instanceof Error ? err.message : 'Não foi possível gerar a mensagem.');
+    } finally {
+      setMensagemLoading(false);
+    }
+  }
+
+  async function copiarMensagem() {
+    if (!mensagem) return;
+    try {
+      await navigator.clipboard.writeText(`Assunto: ${mensagem.assunto}\n\n${mensagem.corpo}`);
+      setMensagemCopiada(true);
+      setTimeout(() => setMensagemCopiada(false), 3000);
+    } catch { /* clipboard indisponível */ }
+  }
+
   // Sem fonte de dados ou erro no fetch: mostra erro honesto (nunca timeline inventada).
   const historicoIndisponivel = !usingSupabase || interacoesError;
+
+  // Cadência (item 2): progresso real de contatos enviados. 1 abordagem + 8
+  // follow-ups (3/7/14/30/60/90/120/180) = 9 toques planejados. Conta pelas
+  // interações reais (abordagem/follow_up), não por número inventado.
+  const CADENCIA_TOTAL = 9;
+  const contatosEnviados = interacoes.filter(
+    (i) => i.tipo === 'abordagem' || i.tipo.startsWith('follow_up'),
+  ).length;
+  const cadenciaPct = Math.min(100, Math.round((contatosEnviados / CADENCIA_TOTAL) * 100));
+  const ESTAGIOS_CADENCIA = ['novos_leads', 'primeiro_contato', 'aguardando_resposta', 'follow_up', 'follow_up_1', 'follow_up_2'];
+  const cadenciaAtiva = !!selectedLead && selectedLead.owner === 'engine'
+    && !selectedLead.perdido && ESTAGIOS_CADENCIA.includes(selectedLead.estagio);
+  // Últimas 3 interações para a "Atividade recente" da aba Visão geral.
+  const atividadeRecente = interacoes.slice(0, 3);
 
   const panelTimeSince = selectedEmpresa
     ? (selectedEmpresa.ultimo_contato
@@ -458,6 +509,26 @@ export default function LeadPanel({
         </div>
 
         <div className="flex-1 overflow-y-auto">
+          {/* Abas da ficha (item 2): Visão geral · Conversa · Dados */}
+          <div className="px-5 pt-2 flex gap-1 border-b border-[#2a3147] sticky top-0 bg-[#1a1f2e] z-10">
+            {([
+              { id: 'visao', label: 'Visão geral' },
+              { id: 'conversa', label: 'Conversa' },
+              { id: 'dados', label: 'Dados' },
+            ] as const).map(t => (
+              <button
+                key={t.id}
+                onClick={() => setAbaPainel(t.id)}
+                className={`px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors ${
+                  abaPainel === t.id ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {abaPainel === 'visao' && (<>
           {/* Status */}
           <div className="px-5 py-3 border-b border-[#2a3147] flex items-center gap-3">
             <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusBadgeClasses(selectedEmpresa.status)}`}>
@@ -534,9 +605,6 @@ export default function LeadPanel({
                 {selectedEmpresa.observacoes ?? 'Executar próxima etapa da cadência'}
               </p>
             </button>
-            <button className="w-full text-xs font-medium text-slate-300 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors mb-2">
-              Registrar ação
-            </button>
             <div className="flex gap-2">
               {precisaLiberar ? (
                 /* Trava n8n→motor: liberar é um passo humano separado do
@@ -563,10 +631,18 @@ export default function LeadPanel({
                   {executando ? 'Executando...' : 'Executar ação'}
                 </button>
               )}
-              <button className="flex-1 text-xs font-medium text-slate-300 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors">
-                Gerar mensagem
+              <button
+                onClick={handleGerarMensagem}
+                disabled={mensagemLoading}
+                className="flex-1 text-xs font-medium text-slate-300 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-1"
+              >
+                {mensagemLoading ? <Loader2 size={12} className="animate-spin" /> : null}
+                {mensagemLoading ? 'Gerando...' : 'Gerar mensagem'}
               </button>
             </div>
+            {mensagemErro && (
+              <p className="text-xs text-red-400 mt-2">{mensagemErro}</p>
+            )}
             {confirmandoLiberar && !liberando && (
               <p className="text-[11px] text-amber-400 mt-2 leading-snug">
                 Isso entrega o lead ao motor REAL: a partir da liberação, os e-mails da
@@ -579,6 +655,30 @@ export default function LeadPanel({
                 {feedbackAcao}
               </p>
             )}
+          </div>
+
+          {/* Cadência (item 2): progresso real de contatos + status da automação */}
+          <div className="px-5 py-3 border-b border-[#2a3147]">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Repeat size={12} className="text-indigo-400" />
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cadência</span>
+              <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                cadenciaAtiva ? 'bg-green-500/20 text-green-400' : 'bg-slate-500/15 text-slate-400'
+              }`}>
+                {cadenciaAtiva ? 'Automação ativa' : 'Pausada'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs mb-1.5">
+              <span className="text-slate-400">{contatosEnviados} de {CADENCIA_TOTAL} contatos</span>
+              <span className="text-slate-500">{cadenciaPct}%</span>
+            </div>
+            <div className="w-full h-2 bg-[#0f1117] rounded-full overflow-hidden">
+              <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${cadenciaPct}%` }} />
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2">
+              <span>Último contato: {selectedLead?.ultimo_contato ? formatDate(selectedLead.ultimo_contato) : '—'}</span>
+              <span className="capitalize">{selectedContato?.canal_preferencial ?? '—'}</span>
+            </div>
           </div>
 
           {/* Resumo IA */}
@@ -652,19 +752,127 @@ export default function LeadPanel({
             )}
           </div>
 
-          {/* Registrar interação */}
+          {/* Atividade recente (item 2): timeline curta + link p/ o histórico */}
           <div className="px-5 py-3 border-b border-[#2a3147]">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-2">Registrar interação</span>
-            <div className="flex gap-2">
-              {(['Abordagem', 'Resposta', 'Follow-up'] as const).map(tipo => (
-                <button
-                  key={tipo}
-                  className="flex-1 text-xs font-medium text-slate-300 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors"
-                >
-                  {tipo}
-                </button>
-              ))}
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Atividade recente</span>
+              <button
+                type="button"
+                onClick={() => setAbaPainel('conversa')}
+                className="text-xs text-indigo-400 hover:underline flex items-center gap-0.5"
+              >
+                Ver histórico completo <ArrowRight size={10} />
+              </button>
             </div>
+            {historicoIndisponivel ? (
+              <p className="text-xs text-red-400">Não foi possível carregar o histórico.</p>
+            ) : loadingInteracoes ? (
+              <div className="flex items-center gap-2 text-slate-500 py-1"><Loader2 size={13} className="animate-spin" /><span className="text-xs">Carregando...</span></div>
+            ) : atividadeRecente.length === 0 ? (
+              <p className="text-xs text-slate-500">Nenhuma interação registrada ainda.</p>
+            ) : (
+              <div className="space-y-2">
+                {atividadeRecente.map(interacao => {
+                  const cfg = INTERACAO_TIPO[interacao.tipo] ?? INTERACAO_TIPO.nota;
+                  const isIA = interacao.origem_acao === 'ia';
+                  const Icon = isIA ? Bot : cfg.Icon;
+                  return (
+                    <div key={interacao.id} className="flex items-start gap-2.5">
+                      <div className="w-5 h-5 rounded-full bg-[#252b3b] flex items-center justify-center shrink-0 mt-0.5">
+                        <Icon size={10} className={isIA ? 'text-blue-500' : cfg.color} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-slate-300 truncate">{interacao.descricao || cfg.label}</div>
+                        <div className="text-[11px] text-slate-500">
+                          {new Date(interacao.created_at).toLocaleDateString('pt-BR')}
+                          <span className="ml-1.5">{isIA ? '· IA' : '· Manual'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Abrir ficha completa (Central do Lead) */}
+          <div className="px-5 py-3">
+            <button
+              type="button"
+              onClick={() => setShowAllInteracoes(true)}
+              className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-slate-300 py-2 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors"
+            >
+              <Maximize2 size={12} /> Abrir ficha completa
+            </button>
+          </div>
+          </>)}
+
+          {abaPainel === 'conversa' && (<>
+          {/* Registrar interação (formulário real) */}
+          <div className="px-5 py-3 border-b border-[#2a3147]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Registrar interação</span>
+              {!showRegistrar && (
+                <button
+                  type="button"
+                  onClick={() => setShowRegistrar(true)}
+                  className="text-xs text-indigo-400 hover:underline flex items-center gap-0.5"
+                >
+                  <Plus size={11} /> Nova
+                </button>
+              )}
+            </div>
+            {showRegistrar && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={novaInteracao.tipo}
+                    onChange={e => setNovaInteracao(s => ({ ...s, tipo: e.target.value }))}
+                    className="text-xs border border-[#2a3147] rounded-lg px-2 py-1.5 bg-[#0f1117] text-slate-300 focus:outline-none"
+                  >
+                    <option value="abordagem">Abordagem</option>
+                    <option value="follow_up">Follow-up</option>
+                    <option value="resposta">Resposta</option>
+                    <option value="nota">Nota</option>
+                    <option value="reuniao">Reunião</option>
+                  </select>
+                  <select
+                    value={novaInteracao.canal}
+                    onChange={e => setNovaInteracao(s => ({ ...s, canal: e.target.value }))}
+                    className="text-xs border border-[#2a3147] rounded-lg px-2 py-1.5 bg-[#0f1117] text-slate-300 focus:outline-none"
+                  >
+                    <option value="email">Email</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="linkedin">LinkedIn</option>
+                    <option value="telefone">Telefone</option>
+                  </select>
+                </div>
+                <textarea
+                  value={novaInteracao.descricao}
+                  onChange={e => setNovaInteracao(s => ({ ...s, descricao: e.target.value }))}
+                  rows={3}
+                  placeholder="Descreva a interação..."
+                  className="w-full text-xs border border-[#2a3147] rounded-lg px-2 py-1.5 bg-[#0f1117] text-slate-300 focus:outline-none resize-none"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => { setShowRegistrar(false); setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' }); }}
+                    className="text-xs font-medium text-slate-300 px-3 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#252b3b] transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleRegistrarInteracao}
+                    disabled={salvandoInteracao || !novaInteracao.descricao.trim()}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-white px-4 py-1.5 rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50"
+                    style={{ backgroundColor: '#6366f1' }}
+                  >
+                    {salvandoInteracao && <Loader2 size={12} className="animate-spin" />}
+                    Salvar
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Histórico */}
@@ -721,8 +929,10 @@ export default function LeadPanel({
             )}
           </div>
 
-          {/* Informações completas — esconde campos vazios */}
-          {(() => {
+          </>)}
+
+          {abaPainel === 'dados' && (
+            (() => {
             type Linha = { label: string; value?: string | null; href?: string; link?: boolean; cap?: boolean };
             const L = selectedLead;
             const cidadeEstado = [L?.cidade ?? selectedEmpresa.cidade, L?.estado ?? selectedEmpresa.estado]
@@ -780,7 +990,8 @@ export default function LeadPanel({
                 </div>
               </div>
             );
-          })()}
+            })()
+          )}
         </div>
 
         {/* Footer */}
@@ -1076,6 +1287,39 @@ export default function LeadPanel({
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal — preview da próxima mensagem da cadência (botão "Gerar mensagem") */}
+      {mensagem && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40" onClick={() => setMensagem(null)}>
+          <div className="bg-[#1a1f2e] rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[#2a3147] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Mail size={16} className="text-indigo-400" />
+                <h2 className="font-semibold text-slate-100">
+                  Próxima mensagem — {mensagem.tipo === 'abordagem' ? '1º contato' : `follow-up ${mensagem.numero ?? ''}`.trim()}
+                </h2>
+              </div>
+              <button onClick={() => setMensagem(null)} className="text-slate-500 hover:text-slate-300"><X size={18} /></button>
+            </div>
+            <div className="px-5 py-4 overflow-y-auto space-y-3">
+              <div>
+                <div className="text-xs text-slate-500 mb-1">Assunto</div>
+                <div className="text-sm font-medium text-slate-200">{mensagem.assunto}</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-500 mb-1">Corpo</div>
+                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap bg-[#0f1117] rounded-lg p-3 border border-[#2a3147]">{mensagem.corpo}</p>
+              </div>
+              <p className="text-[11px] text-slate-600">Preview do que o motor enviaria a seguir. Não envia nada — use “Executar ação” para disparar de verdade.</p>
+            </div>
+            <div className="px-5 py-3 border-t border-[#2a3147] flex justify-end gap-2">
+              <button onClick={copiarMensagem} className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-300 px-3 py-2 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors">
+                {mensagemCopiada ? <><Check size={12} /> Copiado</> : <><Copy size={12} /> Copiar</>}
+              </button>
             </div>
           </div>
         </div>

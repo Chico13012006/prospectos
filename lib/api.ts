@@ -325,6 +325,24 @@ export async function gerarInsightLead(leadId: string): Promise<InsightComercial
   return insight as InsightComercialLead
 }
 
+// PRÓXIMA MENSAGEM da cadência (ficha lateral — botão "Gerar mensagem"). Preview
+// real montado pelo motor (template + variáveis), sem enviar nada.
+export interface MensagemPreview {
+  assunto: string
+  corpo: string
+  tipo: 'abordagem' | 'follow_up'
+  numero: number | null
+}
+
+export async function gerarMensagemLead(leadId: string): Promise<MensagemPreview> {
+  const res = await fetch(`/api/leads/${leadId}/mensagem`, { method: 'POST' })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.erro ?? `Erro ${res.status}`)
+  }
+  return (await res.json()) as MensagemPreview
+}
+
 // COPILOTO PÓS-REUNIÃO (item 8): manda a transcrição colada + o lead e recebe a
 // análise estruturada da IA. Import de tipo (erasado no build — não puxa o
 // módulo server-only da IA pro bundle do browser).
