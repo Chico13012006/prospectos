@@ -84,7 +84,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="relative z-10 max-w-md">
+        <div className="relative z-10 max-w-md flex-1 flex flex-col justify-center py-8">
           <h2 className="text-3xl font-bold leading-tight mb-3">
             Sua prospecção no piloto automático, do primeiro contato à reunião.
           </h2>

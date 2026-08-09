@@ -441,7 +441,7 @@ export default function LeadPanel({
         className="fixed inset-0 bg-black/20 z-40"
         onClick={onClose}
       />
-      <div className="fixed top-0 right-0 h-full w-96 bg-[#1a1f2e] shadow-2xl z-50 flex flex-col">
+      <div className="fixed top-0 right-0 h-full w-full max-w-md lg:max-w-[32rem] xl:max-w-[38rem] 2xl:max-w-[44rem] bg-[#1a1f2e] shadow-2xl z-50 flex flex-col">
         {/* Panel header */}
         <div className="px-5 py-4 border-b border-[#2a3147]">
           <div className="flex items-start justify-between mb-2">
@@ -968,11 +968,11 @@ export default function LeadPanel({
                   <div key={l.label} className="flex justify-between gap-3">
                     <span className="text-slate-400 shrink-0">{l.label}</span>
                     {l.href ? (
-                      <a href={`${l.href}${v}`} className="text-indigo-400 hover:underline text-xs truncate max-w-44">{v}</a>
+                      <a href={`${l.href}${v}`} className="text-indigo-400 hover:underline text-xs truncate max-w-[18rem]">{v}</a>
                     ) : l.link ? (
-                      <a href={v} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline text-xs truncate max-w-44">{v}</a>
+                      <a href={v} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline text-xs truncate max-w-[18rem]">{v}</a>
                     ) : (
-                      <span className={`font-medium text-slate-300 text-right truncate max-w-44 ${l.cap ? 'capitalize' : ''}`}>{v}</span>
+                      <span className={`font-medium text-slate-300 text-right truncate max-w-[18rem] ${l.cap ? 'capitalize' : ''}`}>{v}</span>
                     )}
                   </div>
                 );
