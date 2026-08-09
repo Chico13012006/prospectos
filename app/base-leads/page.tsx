@@ -14,6 +14,19 @@ import { EstadoTabela, PaginacaoTabela } from '@/components/ui/tabela';
 
 const PAGE = 50;
 
+// Limites do filtro de data (item 4). Colunas são timestamptz (UTC) e o display
+// mostra a data-calendário UTC — então os limites são UTC pra bater com a tela.
+// Início do dia (inclusivo) e início do PRÓXIMO dia (exclusivo → usado com `.lt`,
+// cobre o dia inteiro sem depender de "23:59:59.999").
+function inicioDiaUTC(dia: string): string {
+  return `${dia}T00:00:00.000Z`;
+}
+function fimExclusivoUTC(dia: string): string {
+  const d = new Date(`${dia}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString();
+}
+
 // Etapa de follow-up (cache followups_enviados) → rótulo curto.
 function etapaFollowup(n?: number): string {
   if (!n) return '—';
@@ -66,10 +79,15 @@ export default function BaseLeadsPage() {
     followups: formDebounced.followup === '1' ? 1 : formDebounced.followup === '2' ? 2 : formDebounced.followup === '3' ? 3 : formDebounced.followup === '4+' ? { gte: 4 } : undefined,
     cidade: formDebounced.cidade || undefined,
     estado: formDebounced.estado || undefined,
-    cadastroDe: formDebounced.cadastroDe ? `${formDebounced.cadastroDe}T00:00:00` : null,
-    cadastroAte: formDebounced.cadastroAte ? `${formDebounced.cadastroAte}T23:59:59.999` : null,
-    interacaoDe: formDebounced.interacaoDe ? `${formDebounced.interacaoDe}T00:00:00` : null,
-    interacaoAte: formDebounced.interacaoAte ? `${formDebounced.interacaoAte}T23:59:59.999` : null,
+    // Datas de cadastro/interação: intervalo MEIO-ABERTO [início, fim+1dia). As
+    // colunas são timestamptz (UTC) e o display (formatDate) mostra a data-
+    // calendário UTC — então os limites também são UTC, pra display e filtro
+    // baterem. O fim é o PRÓXIMO dia (exclusivo, `.lt` na query): garante o dia
+    // inteiro sem perder registro por horário/borda (item 4). Ver getTodosLeads.
+    cadastroDe: formDebounced.cadastroDe ? inicioDiaUTC(formDebounced.cadastroDe) : null,
+    cadastroAte: formDebounced.cadastroAte ? fimExclusivoUTC(formDebounced.cadastroAte) : null,
+    interacaoDe: formDebounced.interacaoDe ? inicioDiaUTC(formDebounced.interacaoDe) : null,
+    interacaoAte: formDebounced.interacaoAte ? fimExclusivoUTC(formDebounced.interacaoAte) : null,
     atalho: formDebounced.atalho || undefined,
     ordenarPor: ordenarPor ?? undefined,
   }), [formDebounced, ordenarPor]);

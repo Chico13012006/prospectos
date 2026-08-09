@@ -205,10 +205,13 @@ export async function getTodosLeads(
   else if (f.followups) q = q.gte('followups_enviados', f.followups.gte)
   if (f.cidade && f.cidade.trim()) q = q.ilike('cidade', `%${f.cidade.trim()}%`)
   if (f.estado && f.estado.trim()) q = q.ilike('estado', f.estado.trim())
+  // Intervalo de data MEIO-ABERTO [início, próximo-dia): `.lt` no fim cobre o dia
+  // inteiro sem perder registro por horário/borda (item 4). O fim já vem como o
+  // início do dia seguinte (ver inicioDiaUTC/fimExclusivoUTC em base-leads).
   if (f.cadastroDe) q = q.gte('created_at', f.cadastroDe)
-  if (f.cadastroAte) q = q.lte('created_at', f.cadastroAte)
+  if (f.cadastroAte) q = q.lt('created_at', f.cadastroAte)
   if (f.interacaoDe) q = q.gte('ultimo_contato', f.interacaoDe)
-  if (f.interacaoAte) q = q.lte('ultimo_contato', f.interacaoAte)
+  if (f.interacaoAte) q = q.lt('ultimo_contato', f.interacaoAte)
 
   // Atalhos rápidos (chips) → restrições por estágio.
   if (f.atalho === 'responderam') q = q.in('estagio', ['interessado', 'respondeu', 'com_closer'])
