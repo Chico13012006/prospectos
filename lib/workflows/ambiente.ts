@@ -9,7 +9,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { criarMotorReal } from '@/lib/engine/scheduler'
-import { normalizarNicho, preencher } from '@/lib/engine/mensagem'
+import { normalizarNicho, preencher, indiceVariante } from '@/lib/engine/mensagem'
 import { log } from '@/lib/engine/logger'
 import type { Motor } from '@/lib/engine'
 import type { Lead } from '@/lib/engine/types'
@@ -159,10 +159,11 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     const lead = await this.motor.store.buscarLead(leadId)
     if (!lead) throw new Error(`lead ${leadId} não encontrado`)
     const nicho = normalizarNicho(lead.segmento)
-    const tpl =
-      (nicho ? await this.motor.store.buscarTemplateEmail(nicho, templateTipo) : null) ??
-      (await this.motor.store.buscarTemplateEmail(null, templateTipo))
-    if (!tpl) throw new Error(`Template ausente (tipo=${templateTipo}, nicho=${nicho ?? 'generico'}).`)
+    // Variantes ativas (A/B, item 6) c/ fallback genérico; escolhe uma por lead.
+    const varsNicho = nicho ? await this.motor.store.buscarTemplateEmail(nicho, templateTipo) : []
+    const variantes = varsNicho.length ? varsNicho : await this.motor.store.buscarTemplateEmail(null, templateTipo)
+    if (variantes.length === 0) throw new Error(`Template ausente (tipo=${templateTipo}, nicho=${nicho ?? 'generico'}).`)
+    const tpl = variantes[indiceVariante(lead.id, variantes.length)]
     const assunto = preencher(tpl.assunto ?? '{empresa}', lead)
     const corpo = preencher(tpl.corpo, lead)
 
@@ -178,6 +179,7 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       descricao: `**${assunto}**\n\n${corpo}`,
       origem_acao: 'ia',
       responsavel_id: lead.responsavel_id ?? null,
+      template_id: tpl.id, // A/B testing (item 6)
     })
     return { enviado: true, assunto }
   }

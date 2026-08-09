@@ -91,6 +91,7 @@ export class SupabaseStore implements Store {
       descricao: i.descricao,
       origem_acao: i.origem_acao,
       responsavel_id: i.responsavel_id ?? null,
+      template_id: i.template_id ?? null,
       organizacao_id: this.organizacaoId,
     })
     if (error) throw error
@@ -194,18 +195,20 @@ export class SupabaseStore implements Store {
     return (data as UsuarioBasico) ?? null
   }
 
-  async buscarTemplateEmail(nicho: string | null, tipo: string): Promise<TemplateEmail | null> {
+  async buscarTemplateEmail(nicho: string | null, tipo: string): Promise<TemplateEmail[]> {
+    // TODAS as variantes ativas (A/B, item 6). Ordena por created_at p/ a seleção
+    // por índice (mensagem.ts escolhe uma por lead) ser estável.
     let q = this.db
       .from('templates')
-      .select('assunto, corpo')
+      .select('id, assunto, corpo')
       .eq('organizacao_id', this.organizacaoId)
       .eq('canal', 'email')
       .eq('tipo', tipo)
       .eq('ativo', true)
-      .limit(1)
+      .order('created_at', { ascending: true })
     q = nicho === null ? q.is('nicho', null) : q.eq('nicho', nicho)
     const { data, error } = await q
     if (error) throw error
-    return (data?.[0] as TemplateEmail) ?? null
+    return (data ?? []) as TemplateEmail[]
   }
 }

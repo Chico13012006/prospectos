@@ -421,6 +421,24 @@ export async function getUsuarios(): Promise<Usuario[]> {
 
 // --- TEMPLATES ---
 
+// Cria um template / variante (A/B, item 6). A organizacao_id é resolvida no
+// servidor (auth), nunca enviada pelo cliente.
+export async function criarTemplate(dados: {
+  nome: string; tipo: string; canal: string; nicho: string | null; assunto: string | null; corpo: string
+}): Promise<Template> {
+  const res = await fetch('/api/templates', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dados),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.erro ?? `Erro ${res.status}`)
+  }
+  const { template } = await res.json()
+  return template as Template
+}
+
 export async function getTemplates(): Promise<Template[]> {
   const { data, error } = await supabase
     .from('templates')
@@ -467,23 +485,28 @@ export async function getInteligenciaComercialResumo(): Promise<{
 export async function getDadosInteligenciaComercial(): Promise<{
   leads: import('./inteligencia').LeadIC[]
   interacoes: import('./inteligencia').InteracaoIC[]
+  templates: import('./inteligencia').TemplateVarianteIC[]
 }> {
   const desde180 = new Date()
   desde180.setDate(desde180.getDate() - 180)
-  const [leadsRes, interacoesRes] = await Promise.all([
+  const [leadsRes, interacoesRes, templatesRes] = await Promise.all([
     supabase
       .from('leads')
       .select('id, empresa, estagio, score, canal_preferencial, segmento, estado, created_at, ultimo_contato, responsavel_nome, followups_enviados'),
     supabase
       .from('interacoes')
-      .select('tipo, canal, created_at, lead_id')
+      .select('tipo, canal, created_at, lead_id, template_id')
       .gte('created_at', desde180.toISOString()),
+    // Variantes de template (A/B, item 6) para rotular a taxa por variante.
+    supabase.from('templates').select('id, nome, tipo, nicho').eq('canal', 'email'),
   ])
   if (leadsRes.error) throw leadsRes.error
   if (interacoesRes.error) throw interacoesRes.error
+  if (templatesRes.error) throw templatesRes.error
   return {
     leads: (leadsRes.data ?? []) as import('./inteligencia').LeadIC[],
     interacoes: (interacoesRes.data ?? []) as import('./inteligencia').InteracaoIC[],
+    templates: (templatesRes.data ?? []) as import('./inteligencia').TemplateVarianteIC[],
   }
 }
 

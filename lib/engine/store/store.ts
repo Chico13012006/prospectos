@@ -4,7 +4,9 @@
 import type { Lead, NovaInteracao, TipoInteracaoEngine, UsuarioBasico } from '../types'
 
 // Template de e-mail selecionável pelo motor (subconjunto da tabela `templates`).
+// `id` identifica a VARIANTE (A/B testing, item 6) — gravado na interação do envio.
 export interface TemplateEmail {
+  id: string
   assunto: string | null
   corpo: string
 }
@@ -34,7 +36,7 @@ export interface Store {
   leadsEsgotadosSemResposta(): Promise<Lead[]>
   // Dados do responsável/closer do lead (para notificação do Fluxo 3).
   buscarUsuario(id: string): Promise<UsuarioBasico | null>
-  // Template de e-mail ATIVO por (nicho, tipo). nicho=null busca o GENÉRICO.
-  // Usado pela seleção com fallback em lib/engine/mensagem.ts.
-  buscarTemplateEmail(nicho: string | null, tipo: string): Promise<TemplateEmail | null>
+  // TODAS as variantes de e-mail ATIVAS por (nicho, tipo). nicho=null busca o
+  // GENÉRICO. A seleção da variante (A/B) e o fallback ficam em mensagem.ts.
+  buscarTemplateEmail(nicho: string | null, tipo: string): Promise<TemplateEmail[]>
 }

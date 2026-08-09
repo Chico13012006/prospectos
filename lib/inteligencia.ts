@@ -27,6 +27,15 @@ export interface InteracaoIC {
   canal: string | null
   created_at: string
   lead_id: string
+  template_id?: string | null
+}
+
+// Variante de template (A/B testing, item 6). Subconjunto de `templates`.
+export interface TemplateVarianteIC {
+  id: string
+  nome: string
+  tipo: string
+  nicho: string | null
 }
 
 export interface FiltrosIC {
@@ -239,6 +248,64 @@ export function topLeadsPorResposta(leads: LeadIC[], limite = 8): LinhaTopLead[]
       score: l.score ?? 0,
       respondeu: respondeu(l.estagio),
     }))
+}
+
+// A/B TESTING (item 6): taxa de resposta por VARIANTE de template. Para cada
+// template usado em envios (interacoes.template_id), conta os leads DISTINTOS que
+// o receberam e quantos responderam. Sem lógica estatística sofisticada — só o
+// número real por variante, pra comparar visualmente.
+export interface LinhaVariante {
+  id: string
+  nome: string
+  tipo: string
+  nicho: string | null
+  envios: number // leads distintos que receberam esta variante
+  responderam: number
+  taxa: number // %
+}
+
+export function taxaRespostaPorVariante(
+  leads: LeadIC[],
+  interacoes: InteracaoIC[],
+  templates: TemplateVarianteIC[],
+): LinhaVariante[] {
+  const respondeuPorLead = new Map<string, boolean>()
+  for (const l of leads) respondeuPorLead.set(l.id, respondeu(l.estagio))
+  const tplPorId = new Map(templates.map((t) => [t.id, t]))
+
+  // template_id → conjunto de leads distintos que receberam a variante.
+  const leadsPorVariante = new Map<string, Set<string>>()
+  for (const it of interacoes) {
+    if (!it.template_id) continue
+    if (it.tipo !== 'abordagem' && !it.tipo.startsWith('follow_up')) continue
+    const set = leadsPorVariante.get(it.template_id) ?? new Set<string>()
+    set.add(it.lead_id)
+    leadsPorVariante.set(it.template_id, set)
+  }
+
+  const linhas: LinhaVariante[] = []
+  for (const [id, leadsSet] of leadsPorVariante) {
+    const tpl = tplPorId.get(id)
+    let responderam = 0
+    for (const leadId of leadsSet) if (respondeuPorLead.get(leadId)) responderam++
+    const envios = leadsSet.size
+    linhas.push({
+      id,
+      nome: tpl?.nome ?? 'Variante removida',
+      tipo: tpl?.tipo ?? '—',
+      nicho: tpl?.nicho ?? null,
+      envios,
+      responderam,
+      taxa: envios > 0 ? Math.round((responderam / envios) * 1000) / 10 : 0,
+    })
+  }
+  // Agrupa visualmente pela chave (tipo+nicho) e ordena por taxa desc dentro dela.
+  return linhas.sort(
+    (a, b) =>
+      `${a.tipo}${a.nicho ?? ''}`.localeCompare(`${b.tipo}${b.nicho ?? ''}`) ||
+      b.taxa - a.taxa ||
+      b.envios - a.envios,
+  )
 }
 
 // Opções dos selects de filtro, derivadas do próprio dado (nunca fixas), para

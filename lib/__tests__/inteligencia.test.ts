@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   filtrarLeads, calcularKpis, evolucao, performancePorCanal,
-  respostasPorFollowup, topLeadsPorResposta, opcoesFiltro,
-  type LeadIC, type InteracaoIC, FILTROS_IC_PADRAO,
+  respostasPorFollowup, topLeadsPorResposta, opcoesFiltro, taxaRespostaPorVariante,
+  type LeadIC, type InteracaoIC, type TemplateVarianteIC, FILTROS_IC_PADRAO,
 } from '../inteligencia'
 
 function lead(over: Partial<LeadIC> = {}): LeadIC {
@@ -137,5 +137,39 @@ describe('inteligencia — evolução', () => {
     expect(ultimo.prospectados).toBe(1)
     expect(ultimo.respostas).toBe(1)
     expect(ultimo.reunioes).toBe(0)
+  })
+})
+
+describe('inteligencia — A/B taxa de resposta por variante (item 6)', () => {
+  const templates: TemplateVarianteIC[] = [
+    { id: 'tplA', nome: 'Variante A', tipo: 'primeiro_contato', nicho: null },
+    { id: 'tplB', nome: 'Variante B', tipo: 'primeiro_contato', nicho: null },
+  ]
+  function send(lead_id: string, template_id: string | null): InteracaoIC {
+    return { tipo: 'abordagem', canal: 'email', created_at: new Date().toISOString(), lead_id, template_id }
+  }
+  it('conta leads distintos por variante e a taxa de resposta', () => {
+    const leads = [
+      lead({ id: 'L1', estagio: 'interessado' }), // respondeu (A)
+      lead({ id: 'L2', estagio: 'primeiro_contato' }), // não respondeu (A)
+      lead({ id: 'L3', estagio: 'reuniao_agendada' }), // respondeu (B)
+    ]
+    const interacoes = [
+      send('L1', 'tplA'), send('L1', 'tplA'), // mesmo lead 2x → 1 envio distinto
+      send('L2', 'tplA'),
+      send('L3', 'tplB'),
+      send('L2', null), // sem variante → ignorado
+    ]
+    const r = taxaRespostaPorVariante(leads, interacoes, templates)
+    const a = r.find(x => x.id === 'tplA')!
+    const b = r.find(x => x.id === 'tplB')!
+    expect(a.envios).toBe(2) // L1, L2
+    expect(a.responderam).toBe(1) // L1
+    expect(a.taxa).toBe(50)
+    expect(b.envios).toBe(1)
+    expect(b.taxa).toBe(100)
+  })
+  it('vazio quando nenhum envio tem template_id', () => {
+    expect(taxaRespostaPorVariante([lead({ id: 'L1' })], [send('L1', null)], templates)).toEqual([])
   })
 })

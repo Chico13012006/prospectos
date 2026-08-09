@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import {
   BrainCircuit, FileText, Send, MessageSquare, CalendarCheck, TrendingUp, Repeat,
-  Radio, Layers, Trophy, Save, Download,
+  Radio, Layers, Trophy, Save, Download, FlaskConical,
 } from 'lucide-react';
 import EmptyState from '@/components/charts/EmptyState';
 import TemplatesPanel from '@/components/templates/TemplatesPanel';
@@ -19,10 +19,10 @@ import { SdrPill } from '@/components/ui/SdrAvatar';
 import { getEstagioPipelineLabel } from '@/lib/utils';
 import type { EstagioPipeline } from '@/lib/types';
 import { getDadosInteligenciaComercial } from '@/lib/api';
-import type { LeadIC, InteracaoIC, FiltrosIC } from '@/lib/inteligencia';
+import type { LeadIC, InteracaoIC, FiltrosIC, TemplateVarianteIC } from '@/lib/inteligencia';
 import {
   FILTROS_IC_PADRAO, filtrarLeads, calcularKpis, evolucao, performancePorCanal,
-  respostasPorFollowup, topLeadsPorResposta, opcoesFiltro,
+  respostasPorFollowup, topLeadsPorResposta, opcoesFiltro, taxaRespostaPorVariante,
 } from '@/lib/inteligencia';
 
 // useSearchParams() exige limite de Suspense (Next) — conteúdo real em Inner.
@@ -136,16 +136,24 @@ const CANAL_CORES: Record<string, string> = {
 function Analises() {
   const [leads, setLeads] = useState<LeadIC[]>([]);
   const [interacoes, setInteracoes] = useState<InteracaoIC[]>([]);
+  const [templates, setTemplates] = useState<TemplateVarianteIC[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(false);
   const [filtros, setFiltros] = useState<FiltrosIC>(FILTROS_IC_PADRAO);
 
   useEffect(() => {
     getDadosInteligenciaComercial()
-      .then(({ leads, interacoes }) => { setLeads(leads); setInteracoes(interacoes); })
+      .then(({ leads, interacoes, templates }) => { setLeads(leads); setInteracoes(interacoes); setTemplates(templates); })
       .catch((e) => { console.error('Erro ao carregar Inteligência Comercial:', e); setErro(true); })
       .finally(() => setLoading(false));
   }, []);
+
+  // A/B de templates (item 6): cumulativo (não filtra por período — a taxa por
+  // variante acumula ao longo do tempo). Usa todos os leads + interações.
+  const variantes = useMemo(
+    () => taxaRespostaPorVariante(leads, interacoes, templates),
+    [leads, interacoes, templates],
+  );
 
   // Opções de filtro derivam de TODOS os leads (não do recorte já filtrado).
   const opcoes = useMemo(() => opcoesFiltro(leads), [leads]);
@@ -361,6 +369,40 @@ function Analises() {
           </div>
         </ChartContainer>
       </div>
+
+      {/* A/B de templates — resposta por variante (item 6). Cumulativo. */}
+      <ChartContainer
+        title="A/B de templates — resposta por variante"
+        icon={FlaskConical}
+        iconColor="text-fuchsia-400"
+        loading={loading}
+        empty={variantes.length === 0}
+        emptyTitle="Nenhum envio com variante registrada ainda"
+        emptyDescription="Crie 2+ variantes de um template (aba Templates) e o motor passa a testá-las por lead automaticamente. A taxa de resposta de cada variante aparece aqui conforme os leads respondem."
+        skeletonVariant="table"
+        skeletonRows={4}
+      >
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-[#2a3147]">
+              {['Variante', 'Estágio · Segmento', 'Envios', 'Responderam', 'Taxa'].map((h) => (
+                <th key={h} className={`py-2 px-2 text-xs text-slate-400 font-medium ${h === 'Variante' ? 'text-left' : 'text-right'}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {variantes.map((v) => (
+              <tr key={v.id} className="border-b border-[#2a3147] last:border-0 hover:bg-[#0f1117] transition-colors">
+                <td className="py-2.5 px-2 text-slate-200">{v.nome}</td>
+                <td className="py-2.5 px-2 text-slate-400 text-xs">{v.tipo} · {v.nicho ?? 'Genérico'}</td>
+                <td className="py-2.5 px-2 text-right text-slate-300">{v.envios.toLocaleString('pt-BR')}</td>
+                <td className="py-2.5 px-2 text-right text-slate-300">{v.responderam.toLocaleString('pt-BR')}</td>
+                <td className="py-2.5 px-2 text-right font-semibold text-emerald-400">{v.taxa.toLocaleString('pt-BR')}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </ChartContainer>
     </div>
   );
 }

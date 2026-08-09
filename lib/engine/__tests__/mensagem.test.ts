@@ -3,7 +3,7 @@
 // que lê do mesmo SEED_TEMPLATES que popula a tabela `templates`.
 import { describe, it, expect } from 'vitest'
 import { MemoryStore } from '../store/memoryStore'
-import { montarEmail, normalizarNicho, preencher } from '../mensagem'
+import { montarEmail, normalizarNicho, preencher, indiceVariante } from '../mensagem'
 import { makeLead } from './helpers'
 
 const store = new MemoryStore()
@@ -84,5 +84,34 @@ describe('montarEmail — follow-ups e threading (item 3: mesmo template nas 8 e
     }
     expect(new Set(corpos).size).toBe(1) // idêntico em todas as etapas
     expect(corpos[0]).toContain('Passando por aqui novamente')
+  })
+})
+
+describe('A/B testing — indiceVariante (item 6)', () => {
+  it('é determinístico por seed (mesmo lead → mesma variante)', () => {
+    expect(indiceVariante('lead-123', 3)).toBe(indiceVariante('lead-123', 3))
+  })
+
+  it('cai sempre em [0, n) e é 0 quando há 0 ou 1 variante', () => {
+    expect(indiceVariante('x', 0)).toBe(0)
+    expect(indiceVariante('x', 1)).toBe(0)
+    for (const seed of ['a', 'lead-9', 'xyz', '00000000-1111']) {
+      const i = indiceVariante(seed, 4)
+      expect(i).toBeGreaterThanOrEqual(0)
+      expect(i).toBeLessThan(4)
+    }
+  })
+
+  it('distribui de forma equilibrada entre as variantes (A/B justo)', () => {
+    const contagem = [0, 0]
+    for (let k = 0; k < 1000; k++) contagem[indiceVariante(`lead-${k}`, 2)]++
+    for (const c of contagem) expect(Math.abs(c - 500)).toBeLessThan(150)
+  })
+
+  it('montarEmail devolve o templateId da variante escolhida', async () => {
+    const store = new MemoryStore()
+    const lead = makeLead({ segmento: 'oticas' })
+    const r = await montarEmail(store, lead, { tipo: 'abordagem' })
+    expect(r.templateId).toBeTruthy()
   })
 })

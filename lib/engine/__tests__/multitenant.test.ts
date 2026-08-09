@@ -27,6 +27,7 @@ class MockChain {
   ilike() { return this }
   is() { return this }
   gte() { return this }
+  order() { return this }
   limit() { return this }
   maybeSingle() { return this }
   then(resolve: (v: unknown) => void) {

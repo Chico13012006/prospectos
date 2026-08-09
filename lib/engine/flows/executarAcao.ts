@@ -85,6 +85,7 @@ export async function executarAcao(
     descricao: `**${msg.assunto}**\n\n${msg.corpo}`,
     origem_acao: 'ia',
     responsavel_id: lead.responsavel_id ?? null,
+    template_id: msg.templateId, // A/B testing (item 6)
   })
 
   const agora = new Date()

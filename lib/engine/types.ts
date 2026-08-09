@@ -35,6 +35,8 @@ export interface NovaInteracao {
   descricao: string
   origem_acao: 'ia' | 'humano'
   responsavel_id?: string | null
+  // Variante de template usada no envio (A/B testing, item 6). null = sem A/B.
+  template_id?: string | null
 }
 
 // Uma mensagem lida da caixa de entrada (Fluxo 2 — Detectar resposta).

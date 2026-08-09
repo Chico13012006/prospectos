@@ -113,10 +113,10 @@ export class MemoryStore implements Store {
   }
 
   // Lê do mesmo seed que popula a tabela `templates` (mantém os testes offline).
-  async buscarTemplateEmail(nicho: string | null, tipo: string): Promise<TemplateEmail | null> {
-    const t = SEED_TEMPLATES.find(
-      (x) => x.canal === 'email' && x.tipo === tipo && (x.nicho ?? null) === nicho,
-    )
-    return t ? { assunto: t.assunto, corpo: t.corpo } : null
+  // Retorna TODAS as variantes (o seed tem 1 por chave) com id sintético estável.
+  async buscarTemplateEmail(nicho: string | null, tipo: string): Promise<TemplateEmail[]> {
+    return SEED_TEMPLATES
+      .filter((x) => x.canal === 'email' && x.tipo === tipo && (x.nicho ?? null) === nicho)
+      .map((t) => ({ id: `${nicho ?? 'generico'}-${tipo}-email`, assunto: t.assunto, corpo: t.corpo }))
   }
 }

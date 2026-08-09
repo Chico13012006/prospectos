@@ -84,35 +84,48 @@ export function preencher(texto: string, lead: Lead): string {
     .replace(/ {2,}/g, ' ')
 }
 
-// Monta o e-mail final (assunto + corpo) pelo template selecionado, com fallback
-// para o genérico. Lança se nem o genérico do estágio existir (config incompleta).
+// A/B testing (item 6): escolhe UMA variante entre as ativas, de forma
+// determinística por lead. Assim toda a cadência do lead usa a MESMA variante
+// (consistência de thread + a resposta é atribuída a ela) e a distribuição entre
+// leads fica equilibrada. Hash simples e estável do id do lead.
+export function indiceVariante(seed: string, n: number): number {
+  if (n <= 1) return 0
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+  return h % n
+}
+
+// Monta o e-mail final (assunto + corpo) pela variante selecionada, com fallback
+// para o genérico. Devolve o `templateId` da variante usada (gravado na interação
+// p/ o A/B). Lança se nem o genérico do estágio existir (config incompleta).
 export async function montarEmail(
   store: Store,
   lead: Lead,
   envio: Envio,
-): Promise<{ assunto: string; corpo: string }> {
+): Promise<{ assunto: string; corpo: string; templateId: string }> {
   const nicho = normalizarNicho(lead.segmento)
   const tipo = tipoTemplate(envio)
 
-  // Corpo: tenta o nicho, cai no genérico do MESMO estágio.
-  const tpl =
-    (nicho ? await store.buscarTemplateEmail(nicho, tipo) : null) ??
-    (await store.buscarTemplateEmail(null, tipo))
-  if (!tpl) {
+  // Variantes do corpo: tenta o nicho, cai no genérico do MESMO estágio.
+  const variantesNicho = nicho ? await store.buscarTemplateEmail(nicho, tipo) : []
+  const variantes = variantesNicho.length ? variantesNicho : await store.buscarTemplateEmail(null, tipo)
+  if (variantes.length === 0) {
     throw new Error(`Template de e-mail ausente (tipo=${tipo}, nicho=${nicho ?? 'generico'}).`)
   }
+  const idx = indiceVariante(lead.id, variantes.length)
+  const tpl = variantes[idx]
 
-  // Assunto: 1º contato usa o próprio; follow-up deriva "Re:" do 1º contato do
-  // lead (mesmo nicho/genérico) para threadar.
+  // Assunto: 1º contato usa o próprio; follow-up deriva "Re:" do primeiro_contato
+  // do lead (mesmo nicho/genérico), na MESMA variante (mesmo idx, clampado).
   let assuntoRaw: string
   if (envio.tipo === 'abordagem') {
     assuntoRaw = tpl.assunto ?? '{empresa} + iNOVACODE'
   } else {
-    const base =
-      (nicho ? await store.buscarTemplateEmail(nicho, 'primeiro_contato') : null) ??
-      (await store.buscarTemplateEmail(null, 'primeiro_contato'))
+    const baseNicho = nicho ? await store.buscarTemplateEmail(nicho, 'primeiro_contato') : []
+    const bases = baseNicho.length ? baseNicho : await store.buscarTemplateEmail(null, 'primeiro_contato')
+    const base = bases.length ? bases[Math.min(idx, bases.length - 1)] : null
     assuntoRaw = `Re: ${base?.assunto ?? '{empresa}'}`
   }
 
-  return { assunto: preencher(assuntoRaw, lead), corpo: preencher(tpl.corpo, lead) }
+  return { assunto: preencher(assuntoRaw, lead), corpo: preencher(tpl.corpo, lead), templateId: tpl.id }
 }
