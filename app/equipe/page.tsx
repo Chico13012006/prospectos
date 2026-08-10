@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { UserPlus, Users, Shield, Briefcase, BarChart2, Search, CheckCircle, Clock, Pencil, MoreVertical } from 'lucide-react';
+import { UserPlus, Users, Shield, Briefcase, BarChart2, Search, CheckCircle, Clock, Pencil, MoreVertical, Trash2, X } from 'lucide-react';
 
 interface Membro {
   id: string;
@@ -90,6 +90,66 @@ export default function EquipePage() {
   const [carregando, setCarregando] = useState(false);
   const [feedback, setFeedback] = useState<{ tipo: 'sucesso' | 'erro'; msg: string } | null>(null);
 
+  // Ações por membro
+  const [menuAberto, setMenuAberto] = useState<string | null>(null);
+  const [editando, setEditando] = useState<Membro | null>(null);
+  const [editNome, setEditNome] = useState('');
+  const [editRole, setEditRole] = useState<'admin' | 'usuario'>('usuario');
+  const [editNicho, setEditNicho] = useState('');
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [erroEdicao, setErroEdicao] = useState<string | null>(null);
+  const [removendo, setRemovendo] = useState<Membro | null>(null);
+  const [removendoLoading, setRemovendoLoading] = useState(false);
+  const [erroRemocao, setErroRemocao] = useState<string | null>(null);
+
+  function abrirEdicao(m: Membro) {
+    setMenuAberto(null);
+    setEditando(m);
+    setEditNome(m.nome || '');
+    setEditRole(m.role);
+    setEditNicho(m.nicho || '');
+    setErroEdicao(null);
+  }
+
+  async function salvarEdicao(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editando) return;
+    setSalvandoEdicao(true);
+    setErroEdicao(null);
+    try {
+      const res = await fetch(`/api/equipe/${editando.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: editNome, role: editRole, nicho: editNicho }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErroEdicao(data.erro || 'Erro ao salvar'); return; }
+      setEditando(null);
+      await carregarMembros();
+    } catch {
+      setErroEdicao('Erro ao salvar');
+    } finally {
+      setSalvandoEdicao(false);
+    }
+  }
+
+  async function confirmarRemocao() {
+    if (!removendo) return;
+    setRemovendoLoading(true);
+    setErroRemocao(null);
+    try {
+      const res = await fetch(`/api/equipe/${removendo.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) { setErroRemocao(data.erro || 'Erro ao remover'); return; }
+      setRemovendo(null);
+      await carregarMembros();
+    } catch {
+      setErroRemocao('Erro ao remover');
+    } finally {
+      setRemovendoLoading(false);
+    }
+  }
+
   async function carregarMembros() {
     setBuscando(true);
     try {
@@ -102,6 +162,16 @@ export default function EquipePage() {
   }
 
   useEffect(() => { carregarMembros(); }, []);
+
+  // Fecha o menu de três pontos ao clicar fora ou apertar Esc.
+  useEffect(() => {
+    if (!menuAberto) return;
+    const fechar = () => setMenuAberto(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuAberto(null); };
+    window.addEventListener('click', fechar);
+    window.addEventListener('keydown', onKey);
+    return () => { window.removeEventListener('click', fechar); window.removeEventListener('keydown', onKey); };
+  }, [menuAberto]);
 
   async function handleConvidar(e: React.FormEvent) {
     e.preventDefault();
@@ -364,12 +434,43 @@ export default function EquipePage() {
                     {/* Ações */}
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2 justify-center">
-                        <button className="p-1.5 hover:bg-[#252b3b] rounded-lg transition-colors text-slate-500 hover:text-slate-300">
+                        <button
+                          onClick={() => abrirEdicao(m)}
+                          title="Editar membro"
+                          className="p-1.5 hover:bg-[#252b3b] rounded-lg transition-colors text-slate-500 hover:text-slate-300"
+                        >
                           <Pencil size={14} />
                         </button>
-                        <button className="p-1.5 hover:bg-[#252b3b] rounded-lg transition-colors text-slate-500 hover:text-slate-300">
-                          <MoreVertical size={14} />
-                        </button>
+                        <div className="relative">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setMenuAberto(menuAberto === m.id ? null : m.id); }}
+                            title="Mais ações"
+                            className="p-1.5 hover:bg-[#252b3b] rounded-lg transition-colors text-slate-500 hover:text-slate-300"
+                          >
+                            <MoreVertical size={14} />
+                          </button>
+                          {menuAberto === m.id && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute right-0 top-full mt-1 w-44 bg-[#1a1f2e] border border-[#2a3147] rounded-lg shadow-lg py-1 z-20"
+                            >
+                              <button
+                                onClick={() => abrirEdicao(m)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:bg-[#252b3b] transition-colors"
+                              >
+                                <Pencil size={14} />
+                                Editar
+                              </button>
+                              <button
+                                onClick={() => { setMenuAberto(null); setErroRemocao(null); setRemovendo(m); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                              >
+                                <Trash2 size={14} />
+                                Remover da equipe
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -384,9 +485,95 @@ export default function EquipePage() {
         )}
 
         <div className="px-5 py-3 border-t border-[#2a3147] bg-[#0f1117]">
-          <p className="text-xs text-slate-500">Clique em um membro para editar informações, alterar nicho ou permissões de acesso.</p>
+          <p className="text-xs text-slate-500">Use a caneta ou o menu de cada membro para editar informações, alterar nicho ou permissões de acesso.</p>
         </div>
       </div>
+
+      {/* Modal de edição */}
+      {editando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => !salvandoEdicao && setEditando(null)}>
+          <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a3147]">
+              <h3 className="text-base font-semibold text-slate-100 flex items-center gap-2">
+                <Pencil size={16} /> Editar membro
+              </h3>
+              <button onClick={() => setEditando(null)} className="p-1 text-slate-500 hover:text-slate-300 rounded-lg hover:bg-[#252b3b] transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={salvarEdicao} className="p-5 space-y-4">
+              <div className="flex items-center gap-3">
+                <img src={editando.avatar_url || avatarUrl(editando.nome, editando.email)} alt="" className="w-9 h-9 rounded-full object-cover" />
+                <p className="text-xs text-slate-400">{editando.email}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Nome</label>
+                <input value={editNome} onChange={e => setEditNome(e.target.value)} placeholder="Nome completo"
+                  className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#0f1117]" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Tipo de acesso</label>
+                <select value={editRole} onChange={e => setEditRole(e.target.value as 'admin' | 'usuario')}
+                  className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#0f1117]">
+                  <option value="usuario">Usuário — Acesso limitado ao nicho</option>
+                  <option value="admin">Administrador — Acesso total</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Nicho / Segmento</label>
+                <select value={editNicho} onChange={e => setEditNicho(e.target.value)}
+                  className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#0f1117]">
+                  <option value="">Não definido</option>
+                  {NICHOS.filter(n => n !== 'Todos os nichos').map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              {erroEdicao && <p className="text-sm text-red-500">✗ {erroEdicao}</p>}
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button type="button" onClick={() => setEditando(null)} disabled={salvandoEdicao}
+                  className="px-4 py-2 rounded-lg text-sm text-slate-300 hover:bg-[#252b3b] transition-colors disabled:opacity-50">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={salvandoEdicao}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
+                  {salvandoEdicao ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação de remoção */}
+      {removendo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => !removendoLoading && setRemovendo(null)}>
+          <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="p-5">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                  <Trash2 size={18} className="text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-slate-100">Remover da equipe</h3>
+                  <p className="text-sm text-slate-400 mt-1">
+                    Remover <strong className="text-slate-200">{removendo.nome || removendo.email}</strong> exclui o acesso de login e o cadastro da plataforma. Esta ação não pode ser desfeita.
+                  </p>
+                </div>
+              </div>
+              {erroRemocao && <p className="text-sm text-red-500 mt-3">✗ {erroRemocao}</p>}
+              <div className="flex items-center justify-end gap-2 mt-5">
+                <button onClick={() => setRemovendo(null)} disabled={removendoLoading}
+                  className="px-4 py-2 rounded-lg text-sm text-slate-300 hover:bg-[#252b3b] transition-colors disabled:opacity-50">
+                  Cancelar
+                </button>
+                <button onClick={confirmarRemocao} disabled={removendoLoading}
+                  className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
+                  {removendoLoading ? 'Removendo...' : 'Remover'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
