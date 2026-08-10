@@ -14,10 +14,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params
   const acc = await resolverAcesso()
   if ('erro' in acc) return acc.erro
-  const { org } = acc.acesso
+  const { admin, org } = acc.acesso
 
-  // Gate por tela + organização. Off => a tela renderiza nada novo (legado).
-  if (!leituraEntidadesLigada('lead-panel', org)) {
+  // Gate por organização (config tipada). Off => a tela renderiza nada novo (legado).
+  if (!(await leituraEntidadesLigada(admin, org))) {
     return NextResponse.json({ ativo: false })
   }
 

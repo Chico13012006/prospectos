@@ -1,59 +1,70 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import { leituraEntidadesLigada } from '../flag'
+import { describe, it, expect } from 'vitest'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { leituraEntidadesLigada, leituraEntidadesLigadaConfig } from '../flag'
+import { serializeWorkspaceConfig, parseWorkspaceConfig } from '@/lib/config/workspaceConfig'
 
-const ORG_LAUDOS = '03097614-9fd5-4491-a91c-589f84461683'
-const ORG_PADRAO = '00000000-0000-0000-0000-000000000001'
-
-const salvo = { reads: process.env.EMPRESA_CONTATO_READS, orgs: process.env.EMPRESA_CONTATO_READS_ORGS }
-function setEnv(reads?: string, orgs?: string) {
-  if (reads === undefined) delete process.env.EMPRESA_CONTATO_READS; else process.env.EMPRESA_CONTATO_READS = reads
-  if (orgs === undefined) delete process.env.EMPRESA_CONTATO_READS_ORGS; else process.env.EMPRESA_CONTATO_READS_ORGS = orgs
+// Client falso: devolve o blob `configuracoes` cadastrado por org (ou null se a
+// org não existe). Só implementa o caminho usado pela flag: from('organizacoes')
+// .select('configuracoes').eq('id', org).maybeSingle().
+function clientComConfigs(porOrg: Record<string, unknown>) {
+  return {
+    from() {
+      let orgId: string | null = null
+      const chain = {
+        select: () => chain,
+        eq: (col: string, val: string) => { if (col === 'id') orgId = val; return chain },
+        maybeSingle: () =>
+          Promise.resolve({
+            data: orgId && orgId in porOrg ? { configuracoes: porOrg[orgId] } : null,
+            error: null,
+          }),
+      }
+      return chain
+    },
+  } as unknown as SupabaseClient
 }
-afterEach(() => setEnv(salvo.reads, salvo.orgs))
 
-describe('leituraEntidadesLigada — flag por tela e por org', () => {
-  it('vazio => legado (off) em qualquer tela/org', () => {
-    setEnv(undefined, undefined)
-    expect(leituraEntidadesLigada('lead-panel', ORG_LAUDOS)).toBe(false)
+const ORG_ON = '03097614-9fd5-4491-a91c-589f84461683'  // Laudos (feature ligada)
+const ORG_OFF = '00000000-0000-0000-0000-000000000001' // Padrão (feature desligada)
+
+describe('leituraEntidadesLigadaConfig — regra pura sobre a config da org', () => {
+  it('feature ausente => off (default seguro / legado)', () => {
+    expect(leituraEntidadesLigadaConfig(parseWorkspaceConfig({}))).toBe(false)
+  })
+  it('empresaContatoReads=true => on', () => {
+    const cfg = serializeWorkspaceConfig({ features: { empresaContatoReads: true } })
+    expect(leituraEntidadesLigadaConfig(cfg)).toBe(true)
+  })
+  it('empresaContatoReads=false => off', () => {
+    const cfg = serializeWorkspaceConfig({ features: { empresaContatoReads: false } })
+    expect(leituraEntidadesLigadaConfig(cfg)).toBe(false)
+  })
+})
+
+describe('leituraEntidadesLigada — resolvida no servidor, POR TENANT', () => {
+  const configs = {
+    [ORG_ON]: serializeWorkspaceConfig({ features: { empresaContatoReads: true } }),
+    [ORG_OFF]: serializeWorkspaceConfig({ features: { empresaContatoReads: false } }),
+  }
+
+  it('tenant com a feature LIGADA vê (true)', async () => {
+    const on = await leituraEntidadesLigada(clientComConfigs(configs), ORG_ON)
+    expect(on).toBe(true)
   })
 
-  it('"all" liga em qualquer tela', () => {
-    setEnv('all', undefined)
-    expect(leituraEntidadesLigada('lead-panel')).toBe(true)
-    expect(leituraEntidadesLigada('base-leads')).toBe(true)
+  it('tenant com a feature DESLIGADA NÃO vê (false) — isolamento por org', async () => {
+    const off = await leituraEntidadesLigada(clientComConfigs(configs), ORG_OFF)
+    expect(off).toBe(false)
   })
 
-  it('CSV liga só nas telas nomeadas', () => {
-    setEnv('lead-panel', undefined)
-    expect(leituraEntidadesLigada('lead-panel')).toBe(true)
-    expect(leituraEntidadesLigada('base-leads')).toBe(false)
+  it('mesmo binário: a MESMA chamada dá true p/ um tenant e false p/ o outro', async () => {
+    const client = clientComConfigs(configs)
+    expect(await leituraEntidadesLigada(client, ORG_ON)).toBe(true)
+    expect(await leituraEntidadesLigada(client, ORG_OFF)).toBe(false)
   })
 
-  it('restrição por org: liga só na org de Laudos', () => {
-    setEnv('lead-panel', ORG_LAUDOS)
-    expect(leituraEntidadesLigada('lead-panel', ORG_LAUDOS)).toBe(true)
-    expect(leituraEntidadesLigada('lead-panel', ORG_PADRAO)).toBe(false)
-    expect(leituraEntidadesLigada('lead-panel')).toBe(false) // sem org informada + restrição => off
-  })
-
-  it('sem restrição de org => liga em todas', () => {
-    setEnv('lead-panel', '')
-    expect(leituraEntidadesLigada('lead-panel', ORG_PADRAO)).toBe(true)
-    expect(leituraEntidadesLigada('lead-panel', ORG_LAUDOS)).toBe(true)
-  })
-
-  // Reproduz o CAMINHO REAL de produção: env exatamente como cadastrada na Vercel.
-  // A sessão de Laudos vê os cartões; a sessão da Org Padrão (ex.: franrufs13)
-  // NÃO vê — que era exatamente o sintoma relatado.
-  it('caminho de produção: só a sessão de Laudos vê os cartões', () => {
-    setEnv('lead-panel', ORG_LAUDOS)
-    expect(leituraEntidadesLigada('lead-panel', ORG_LAUDOS)).toBe(true)
-    expect(leituraEntidadesLigada('lead-panel', ORG_PADRAO)).toBe(false)
-  })
-
-  it('robustez: valor colado com espaço/nova-linha e org em CAIXA diferente ainda casa', () => {
-    setEnv(' lead-panel \n', `\n  ${ORG_LAUDOS.toUpperCase()}  `)
-    expect(leituraEntidadesLigada('lead-panel', ORG_LAUDOS)).toBe(true)
-    expect(leituraEntidadesLigada('lead-panel', ORG_PADRAO)).toBe(false)
+  it('org sem blob / inexistente => off (nunca liga por omissão)', async () => {
+    const off = await leituraEntidadesLigada(clientComConfigs({}), ORG_ON)
+    expect(off).toBe(false)
   })
 })

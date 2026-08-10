@@ -23,6 +23,14 @@ export interface RenovacaoConfig {
   enviarPrimeiraMensagem?: boolean // se true, dispara a 1ª mensagem (gated por MODO_ENSAIO)
 }
 
+// Feature flags POR ORGANIZAÇÃO (toggle de módulo — preferência flexível, cabe no
+// blob). Resolvidas SEMPRE no servidor; nunca expostas ao cliente. Ausência de
+// uma chave = feature DESLIGADA (default seguro / legado). Migrou pra cá o que
+// antes era env var (a resolução por env quebrou em produção).
+export interface FeaturesConfig {
+  empresaContatoReads?: boolean   // lê Empresa/Contato via entidades no LeadPanel
+}
+
 export interface WorkspaceConfig {
   _schema_version: number
   // Chaves das preferências. Todas OPCIONAIS — ausência = padrão do produto.
@@ -30,8 +38,13 @@ export interface WorkspaceConfig {
   dashboardWidgets?: string[]
   nomenclaturas?: Record<string, string>
   modulos?: Record<string, boolean>
+  features?: FeaturesConfig
   renovacao?: RenovacaoConfig
 }
+
+// Chaves de feature conhecidas (tipadas). Só estas são aceitas na leitura do
+// blob — valor com tipo errado ou chave desconhecida é descartado.
+const FEATURES_BOOLEANAS: (keyof FeaturesConfig)[] = ['empresaContatoReads']
 
 // Padrões de renovação (usados quando o workspace não configurou). NÃO hardcoda
 // no motor: são defaults do produto, sobrescrevíveis por org via o jsonb.
@@ -79,6 +92,13 @@ export function parseWorkspaceConfig(bruto: unknown): WorkspaceConfig {
     out.modulos = Object.fromEntries(
       Object.entries(obj.modulos).filter(([, v]) => typeof v === 'boolean'),
     ) as Record<string, boolean>
+  }
+  if (ehObjeto(obj.features)) {
+    const f: FeaturesConfig = {}
+    for (const k of FEATURES_BOOLEANAS) {
+      if (typeof obj.features[k] === 'boolean') f[k] = obj.features[k] as boolean
+    }
+    if (Object.keys(f).length > 0) out.features = f
   }
   if (ehObjeto(obj.renovacao)) {
     const r = obj.renovacao as Record<string, unknown>

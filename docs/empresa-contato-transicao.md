@@ -53,10 +53,15 @@ ligada nas telas **depois** da Fase 2d.
   impacto: o view usa o lead como fonte; o write-sync (2d) converge no próximo edit.
 - Trigger `trg_sync_lead_entidades` presente/habilitado; overhead **desprezível**.
 
-**Flag de ativação** (`lib/empresas/flag.ts`): env `EMPRESA_CONTATO_READS`
-(vazio=legado; `all`; ou CSV de telas). Rollback = tirar a tela da lista e
-reiniciar. Primeira superfície ligada (menor risco): endpoint aditivo
-`GET /api/leads/[id]/entidades` — nenhuma tela existente depende dele.
+**Flag de ativação** (`lib/empresas/flag.ts`): config tipada POR ORG em
+`organizacoes.configuracoes` → `features.empresaContatoReads` (ausente/false =
+legado; true = liga). Resolvida SEMPRE no servidor; sem env, sem NEXT_PUBLIC, sem
+ID exposto. Ligar/desligar: `npx tsx scripts/set-workspace-feature.ts <orgId>
+empresaContatoReads <true|false>` — efeito imediato, sem deploy (rollback
+instantâneo). Migrou da env `EMPRESA_CONTATO_READS(_ORGS)`, que quebrou em
+produção (GET /api/flags retornava false até para a org habilitada). Primeira
+superfície ligada (menor risco): endpoint aditivo `GET /api/leads/[id]/entidades`
+— nenhuma tela existente depende dele.
 
 **Ordem de ativação recomendada (tela por tela, com QA visual e rollback):**
 1. Endpoint `entidades` (feito — aditivo, zero risco).

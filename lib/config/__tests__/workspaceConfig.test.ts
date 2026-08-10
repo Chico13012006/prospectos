@@ -48,6 +48,18 @@ describe('workspaceConfig', () => {
     expect(r._schema_version).toBe(WORKSPACE_CONFIG_SCHEMA_VERSION)
   })
 
+  it('features: aceita boolean conhecido, descarta tipo errado e chave desconhecida', () => {
+    const r = parseWorkspaceConfig({
+      features: { empresaContatoReads: true, empresaContatoReads2: true, lixo: 'x' },
+    })
+    expect(r.features).toEqual({ empresaContatoReads: true })
+    // ausência total de feature válida => sem a chave features
+    expect(parseWorkspaceConfig({ features: { desconhecida: true } }).features).toBeUndefined()
+    // round-trip pelo ponto único de escrita
+    expect(serializeWorkspaceConfig({ features: { empresaContatoReads: false } }).features)
+      .toEqual({ empresaContatoReads: false })
+  })
+
   it('renovacao: parse valida tipos e renovacaoEfetiva aplica defaults', () => {
     const semConfig = renovacaoEfetiva(parseWorkspaceConfig({}))
     expect(semConfig).toEqual(RENOVACAO_PADRAO)

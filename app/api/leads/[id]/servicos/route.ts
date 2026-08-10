@@ -20,7 +20,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { admin, org } = acc.acesso
 
   // Escopo: a UI de laudos segue o mesmo flag org-scoped do LeadPanel.
-  if (!leituraEntidadesLigada('lead-panel', org)) return NextResponse.json({ empresaId: null, servicos: [] })
+  if (!(await leituraEntidadesLigada(admin, org))) return NextResponse.json({ empresaId: null, servicos: [] })
 
   const empresaId = await empresaDoLead(admin, org, id)
   if (!empresaId) return NextResponse.json({ empresaId: null, servicos: [] })
@@ -40,7 +40,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if ('erro' in acc) return acc.erro
   const { admin, org } = acc.acesso
 
-  if (!leituraEntidadesLigada('lead-panel', org)) return NextResponse.json({ erro: 'Recurso não habilitado para esta organização' }, { status: 403 })
+  if (!(await leituraEntidadesLigada(admin, org))) return NextResponse.json({ erro: 'Recurso não habilitado para esta organização' }, { status: 403 })
 
   const empresaId = await empresaDoLead(admin, org, id)
   if (!empresaId) return NextResponse.json({ erro: 'Lead sem empresa vinculada' }, { status: 400 })

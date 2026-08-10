@@ -1,27 +1,29 @@
 import 'server-only'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { parseWorkspaceConfig, type WorkspaceConfig } from '@/lib/config/workspaceConfig'
 
-// Ativação GRADUAL da leitura via entidades (Empresa/Contato), tela por tela e
-// por ORGANIZAÇÃO, com ROLLBACK INSTANTÂNEO. Controlada por env:
-//   EMPRESA_CONTATO_READS:
-//     - vazio/ausente => tudo LEGADO (lê de leads) — padrão seguro
-//     - "all" | "on"  => liga em todas as telas
-//     - lista CSV     => liga só nas telas nomeadas, ex.: "lead-panel,base-leads"
-//   EMPRESA_CONTATO_READS_ORGS (opcional):
-//     - vazio  => todas as organizações
-//     - CSV de organizacao_id => liga SÓ nessas orgs (ex.: só a sua)
-// Rollback = tirar a tela da lista (ou esvaziar a env) e reiniciar. Como o
-// adapter é comprovadamente equivalente ao legado (validação 2e: 0 diferenças em
-// 520 leads), ligar/desligar não muda o dado exibido — só a FONTE.
-export function leituraEntidadesLigada(tela: string, org?: string): boolean {
-  const v = (process.env.EMPRESA_CONTATO_READS ?? '').trim().toLowerCase()
-  if (!v) return false
-  const telaOn = v === 'all' || v === 'on' || v.split(',').map((s) => s.trim()).includes(tela.toLowerCase())
-  if (!telaOn) return false
+// Ativação da leitura via entidades (Empresa/Contato) no LeadPanel, POR
+// ORGANIZAÇÃO, com rollback instantâneo. Fonte única da verdade: o blob TIPADO
+// `organizacoes.configuracoes` (features.empresaContatoReads) — NÃO mais env var.
+//
+// Por que saiu da env: a resolução por `EMPRESA_CONTATO_READS(_ORGS)` quebrou em
+// produção (GET /api/flags retornava false até para a org habilitada). Config
+// por org, resolvida SEMPRE no servidor, elimina essa superfície: nada de
+// NEXT_PUBLIC, nada de ID exposto, nada de habilitação global.
+//
+// Default seguro: ausência da flag => LEGADO (lê de leads). Como o adapter é
+// comprovadamente equivalente ao legado (validação 2e: 0 diferenças em 520
+// leads), ligar/desligar não muda o dado exibido — só a FONTE. Rollback = pôr
+// features.empresaContatoReads=false na org (efeito imediato, sem deploy).
 
-  const orgsEnv = (process.env.EMPRESA_CONTATO_READS_ORGS ?? '').trim()
-  if (!orgsEnv) return true // sem restrição de org
-  const alvo = org?.trim().toLowerCase()
-  if (!alvo) return false
-  // Robusto a variações de caixa/espaço/nova-linha no valor colado na Vercel.
-  return orgsEnv.toLowerCase().split(',').map((s) => s.trim()).filter(Boolean).includes(alvo)
+// Resolução PURA a partir da config já parseada (testável sem banco).
+export function leituraEntidadesLigadaConfig(cfg: WorkspaceConfig): boolean {
+  return cfg.features?.empresaContatoReads === true
+}
+
+// Resolução no SERVIDOR para UMA organização: lê o blob da org e aplica a regra.
+// Recebe o client admin (service_role) já resolvido pela rota — não abre sessão.
+export async function leituraEntidadesLigada(admin: SupabaseClient, org: string): Promise<boolean> {
+  const { data } = await admin.from('organizacoes').select('configuracoes').eq('id', org).maybeSingle()
+  return leituraEntidadesLigadaConfig(parseWorkspaceConfig(data?.configuracoes))
 }

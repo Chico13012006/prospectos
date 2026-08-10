@@ -2,9 +2,9 @@
 
 // Cartão ADITIVO e FAIL-SAFE do LeadPanel (Fase 2e): mostra a Empresa como
 // entidade (CNPJ, flag de revisão) e os DECISORES (N contatos da empresa) vindos
-// da nova camada de leitura. Só aparece quando o flag EMPRESA_CONTATO_READS está
-// ligado para 'lead-panel' na organização (decidido no servidor: /entidades
-// retorna { ativo:false } quando off). Em QUALQUER falha (fetch, flag off, vazio
+// da nova camada de leitura. Só aparece quando features.empresaContatoReads está
+// ligado na organização (decidido no servidor: /entidades retorna
+// { ativo:false } quando off). Em QUALQUER falha (fetch, flag off, vazio
 // ou erro de render) renderiza NADA — nunca afeta o resto do painel. Rollback é
 // instantâneo (desligar o flag).
 import { Component, useEffect, useState, type ReactNode } from 'react';
