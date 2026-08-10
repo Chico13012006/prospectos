@@ -1,31 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseAdminClient } from '@/lib/supabase-admin';
-import { createSupabaseServerClient } from '@/lib/supabase-server';
+import { exigirPermissao, ressincronizarPermissoes } from '@/lib/rbac/servidor';
 
 export async function POST(req: NextRequest) {
   try {
-    const supabaseServer = await createSupabaseServerClient();
-    const { data: { user } } = await supabaseServer.auth.getUser();
-    if (!user) return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 });
-
-    const supabaseAdmin = createSupabaseAdminClient();
-
-    // SEGURANÇA (Fase 1): só ADMIN convida, e sempre DENTRO da própria
-    // organização. Antes esta rota aceitava `role` de qualquer usuário logado —
-    // qualquer um se auto-promovia (ou promovia terceiros) a admin. Agora o
-    // perfil de quem chama é a fonte de verdade de role E de organizacao_id.
-    const { data: convidante } = await supabaseAdmin
-      .from('perfis')
-      .select('role, organizacao_id')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (!convidante || convidante.role !== 'admin') {
-      return NextResponse.json({ erro: 'Apenas administradores podem convidar' }, { status: 403 });
-    }
-    if (!convidante.organizacao_id) {
-      return NextResponse.json({ erro: 'Convidante sem organização' }, { status: 400 });
-    }
+    // SEGURANÇA (Fase 1 RBAC): enforcement no BACKEND por permissão real
+    // (`workspace.configure`), não pela checagem hardcoded de role. Admins têm
+    // essa permissão pelo backfill (migration 0015), então o comportamento é
+    // preservado. `acesso` traz o service_role client + a org de quem chama —
+    // a fronteira de confiança continua sendo o servidor, nunca o corpo.
+    const acc = await exigirPermissao('workspace.configure');
+    if ('erro' in acc) return acc.erro;
+    const { admin: supabaseAdmin, org } = acc.acesso;
 
     const { email, nome, role = 'usuario', nicho } = await req.json();
     if (!email) return NextResponse.json({ erro: 'Email obrigatório' }, { status: 400 });
@@ -46,8 +31,12 @@ export async function POST(req: NextRequest) {
       role,
       nicho: nicho || null,
       // Novo usuário SEMPRE na organização de quem convida (fronteira de confiança).
-      organizacao_id: convidante.organizacao_id,
+      organizacao_id: org,
     });
+
+    // RBAC (Fase 1): concede ao convidado o conjunto padrão de permissões do seu
+    // role, para o novo membro já nascer autorizado corretamente.
+    await ressincronizarPermissoes(supabaseAdmin, org, data.user.id, role);
 
     // Garante a linha correspondente em `usuarios` (ligada por e-mail EXATO) já
     // no convite. Antes o convite só criava acesso de login (perfis) e NÃO a
@@ -59,7 +48,7 @@ export async function POST(req: NextRequest) {
     const { data: jaExiste } = await supabaseAdmin
       .from('usuarios')
       .select('id')
-      .eq('organizacao_id', convidante.organizacao_id)
+      .eq('organizacao_id', org)
       .ilike('email', emailNorm);
     if (!jaExiste || jaExiste.length === 0) {
       const base: string[] = String(nome || emailNorm).split(/\s+/).filter(Boolean);
@@ -69,7 +58,7 @@ export async function POST(req: NextRequest) {
         email: emailNorm,
         ativo: true,
         avatar_iniciais: iniciais || null,
-        organizacao_id: convidante.organizacao_id,
+        organizacao_id: org,
       });
     }
 

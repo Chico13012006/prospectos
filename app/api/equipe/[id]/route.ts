@@ -1,39 +1,20 @@
-// Edição e remoção de um membro da equipe. Ambos restritos a ADMIN e sempre
-// DENTRO da própria organização de quem chama (mesma fronteira de confiança de
-// /api/equipe/convidar e /listar). service_role bypassa RLS, então filtramos
-// organizacao_id EXPLICITAMENTE.
+// Edição e remoção de um membro da equipe. Ambos exigem a permissão
+// `workspace.configure` (RBAC Fase 1) — enforcement no BACKEND, sempre DENTRO da
+// própria organização. service_role bypassa RLS, então filtramos organizacao_id
+// EXPLICITAMENTE. A trava do ÚLTIMO administrador vive em lib/rbac/guards.ts.
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { createSupabaseAdminClient } from '@/lib/supabase-admin';
+import { exigirPermissao, contarAdmins, ressincronizarPermissoes } from '@/lib/rbac/servidor';
+import { podeAlterarRole, podeRemoverMembro } from '@/lib/rbac/guards';
 
 export const runtime = 'nodejs';
-
-// Resolve quem chama e exige que seja admin. Retorna { user, org } ou uma
-// NextResponse de erro pronta pra devolver.
-async function exigirAdmin() {
-  const server = await createSupabaseServerClient();
-  const { data: { user } } = await server.auth.getUser();
-  if (!user) return { erro: NextResponse.json({ erro: 'Não autenticado' }, { status: 401 }) };
-
-  const admin = createSupabaseAdminClient();
-  const { data: perfil } = await admin
-    .from('perfis').select('role, organizacao_id').eq('id', user.id).maybeSingle();
-  if (!perfil || perfil.role !== 'admin') {
-    return { erro: NextResponse.json({ erro: 'Apenas administradores podem gerenciar a equipe' }, { status: 403 }) };
-  }
-  if (!perfil.organizacao_id) {
-    return { erro: NextResponse.json({ erro: 'Administrador sem organização' }, { status: 400 }) };
-  }
-  return { user, admin, org: perfil.organizacao_id as string };
-}
 
 // PATCH — editar nome, função (role) e nicho de um membro.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const ctx = await exigirAdmin();
-    if (ctx.erro) return ctx.erro;
-    const { user, admin, org } = ctx;
+    const acc = await exigirPermissao('workspace.configure');
+    if ('erro' in acc) return acc.erro;
+    const { admin, org } = acc.acesso;
 
     const body = await req.json();
     const nome: string | null = typeof body.nome === 'string' && body.nome.trim() ? body.nome.trim() : null;
@@ -48,16 +29,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from('perfis').select('id, role').eq('id', id).eq('organizacao_id', org).maybeSingle();
     if (!alvo) return NextResponse.json({ erro: 'Membro não encontrado' }, { status: 404 });
 
-    // Trava de auto-rebaixamento: um admin não pode tirar o próprio acesso de
-    // admin (evita a org ficar sem administrador por engano). Nome/nicho de si
-    // mesmo continua livre.
-    if (id === user.id && alvo.role === 'admin' && role !== 'admin') {
-      return NextResponse.json({ erro: 'Você não pode remover seu próprio acesso de administrador. Peça a outro admin.' }, { status: 400 });
-    }
+    // Trava do último administrador: não rebaixar o único admin da organização
+    // (cobre também o auto-rebaixamento). Regra pura, testável.
+    const totalAdmins = await contarAdmins(admin, org);
+    const regra = podeAlterarRole({ alvoRole: alvo.role, novoRole: role, totalAdmins });
+    if (!regra.ok) return NextResponse.json({ erro: regra.erro }, { status: regra.status });
 
     const { error } = await admin
       .from('perfis').update({ nome, role, nicho }).eq('id', id).eq('organizacao_id', org);
     if (error) return NextResponse.json({ erro: error.message }, { status: 400 });
+
+    // RBAC: se o role mudou, as permissões passam a ser as do novo role.
+    if (role !== alvo.role) {
+      await ressincronizarPermissoes(admin, org, id, role);
+    }
 
     // Mantém usuarios.nome (o SDR ligado por e-mail) em sincronia com o perfil,
     // pra não divergir o nome exibido aqui do usado na atribuição de leads.
@@ -74,23 +59,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
-// DELETE — remove o membro da plataforma: usuarios (SDR) -> perfis (login/role)
-// -> auth.users (acesso). Ordem evita esbarrar na FK do perfil.
+// DELETE — remove o membro da plataforma: perfis (login/role, que cascateia
+// perfil_permissoes) -> usuarios (SDR) -> auth.users (acesso).
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const ctx = await exigirAdmin();
-    if (ctx.erro) return ctx.erro;
-    const { user, admin, org } = ctx;
-
-    if (id === user.id) {
-      return NextResponse.json({ erro: 'Você não pode remover a si mesmo.' }, { status: 400 });
-    }
+    const acc = await exigirPermissao('workspace.configure');
+    if ('erro' in acc) return acc.erro;
+    const { user, admin, org } = acc.acesso;
 
     // O alvo precisa existir NA mesma organização.
     const { data: alvo } = await admin
-      .from('perfis').select('id').eq('id', id).eq('organizacao_id', org).maybeSingle();
+      .from('perfis').select('id, role').eq('id', id).eq('organizacao_id', org).maybeSingle();
     if (!alvo) return NextResponse.json({ erro: 'Membro não encontrado' }, { status: 404 });
+
+    // Travas: não remover a si mesmo nem o último administrador da organização.
+    const totalAdmins = await contarAdmins(admin, org);
+    const regra = podeRemoverMembro({ alvoId: id, alvoRole: alvo.role, chamadorId: user.id, totalAdmins });
+    if (!regra.ok) return NextResponse.json({ erro: regra.erro }, { status: regra.status });
 
     // e-mail do alvo pra localizar a linha em usuarios (ligada por e-mail).
     const { data: authUser } = await admin.auth.admin.getUserById(id);
@@ -99,6 +85,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       await admin.from('usuarios').delete().eq('organizacao_id', org).ilike('email', email);
     }
 
+    // perfis primeiro: o on delete cascade limpa perfil_permissoes junto.
     const { error: eP } = await admin.from('perfis').delete().eq('id', id).eq('organizacao_id', org);
     if (eP) return NextResponse.json({ erro: eP.message }, { status: 400 });
 
