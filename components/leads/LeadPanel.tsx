@@ -9,6 +9,7 @@ import {
 import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatDate, formatDateTime } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
 import EmpresaDecisoresCard from '@/components/leads/EmpresaDecisoresCard';
+import ServicosLaudosCard from '@/components/leads/ServicosLaudosCard';
 import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
 import { getLeadById, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao, updateLead, gerarInsightLead, gerarMensagemLead } from '@/lib/api';
 import type { InsightComercialLead, MensagemPreview } from '@/lib/api';
@@ -556,6 +557,7 @@ export default function LeadPanel({
             renderiza nada quando o flag está off/erro/vazio. Não altera os
             campos legados do painel. */}
         {selectedLead && <EmpresaDecisoresCard leadId={selectedLead.id} />}
+        {selectedLead && <ServicosLaudosCard leadId={selectedLead.id} />}
 
         <div className="flex-1 overflow-y-auto">
           {/* Abas da ficha (item 2): Visão geral · Conversa · Dados */}
