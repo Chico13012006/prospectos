@@ -191,17 +191,32 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     const lead = await this.motor.store.buscarLead(leadId)
     // Responsável explícito da ação; senão, o responsável do próprio lead.
     const responsavel = responsavelId ?? lead?.responsavel_id ?? null
+
+    // 1ª classe (Fase 4): a tarefa vira linha em `tarefas` (não mais só nota).
+    const { data: tarefa } = await this.db.from('tarefas').insert({
+      organizacao_id: this.organizacaoId,
+      lead_id: leadId,
+      tipo: 'workflow',
+      titulo,
+      responsavel_id: responsavel,
+      origem: 'workflow',
+      motivo: 'Ação de workflow: criar tarefa',
+    }).select('id').single()
+
+    // Histórico do lead (seção 9: tarefa aparece na conversa). Mantido além da
+    // tabela `tarefas` — é o registro cronológico que o LeadPanel exibe.
     await this.motor.store.registrarInteracao({
       lead_id: leadId,
       tipo: 'nota',
       canal: 'sistema',
-      descricao: `Tarefa (workflow): ${titulo}`,
+      descricao: `Tarefa: ${titulo}`,
       origem_acao: 'ia',
       responsavel_id: responsavel,
     })
-    // A tarefa (interação) já está gravada acima. A notificação por e-mail é
-    // best-effort: qualquer falha aqui é apenas logada, nunca propagada.
-    await this.notificarResponsavelTarefa(leadId, responsavel, titulo, lead)
+
+    // Notificação (in-app + e-mail, best-effort): registra em `notificacoes` e
+    // dispara o e-mail HTML. Falha aqui nunca propaga (a tarefa já está gravada).
+    await this.notificarResponsavelTarefa(tarefa?.id ?? null, leadId, responsavel, titulo, lead)
   }
 
   // Avisa por e-mail o responsável de uma tarefa recém-criada — mesma infra da
@@ -209,6 +224,7 @@ export class AmbienteSupabase implements AmbienteWorkflow {
   // do GmailProvider). Best-effort: sem responsável/e-mail, ou falha na busca/envio,
   // não quebra a criação da tarefa — só loga.
   private async notificarResponsavelTarefa(
+    tarefaId: string | null,
     leadId: string,
     responsavelId: string | null,
     titulo: string,
@@ -226,6 +242,19 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       }
       const empresa = lead?.empresa ?? '(lead)'
       const contato = lead?.contato_nome ?? lead?.contato_email ?? '-'
+      // Registro estruturado da notificação (Fase 4) — canal e-mail.
+      await this.db.from('notificacoes').insert({
+        organizacao_id: this.organizacaoId,
+        email: usuario.email,
+        canal: 'email',
+        titulo: `Nova tarefa: ${titulo}`,
+        mensagem: `Você é responsável pela tarefa "${titulo}" (${empresa}).`,
+        lead_id: leadId,
+        tarefa_id: tarefaId,
+        origem: 'workflow',
+        motivo: 'Tarefa criada por workflow',
+        link: `/leads/${leadId}`,
+      })
       // Texto puro = fallback (clientes sem HTML). Mantém o formato de antes.
       const corpo = [
         'Você foi definido como responsável por uma nova tarefa gerada por um workflow.',
