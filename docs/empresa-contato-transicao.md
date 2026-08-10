@@ -42,3 +42,29 @@ ligada nas telas **depois** da Fase 2d.
   velha".
 - **Fase 2e — validação** e só então **ligar** o read layer nas telas, virando a
   fonte da verdade dos campos de empresa/contato para as entidades.
+
+## Fase 2e — validação e ativação gradual
+
+**Validação executada** (`scripts/validar-consistencia-2e.ts`, todas as orgs):
+- **Equivalência: 520 leads, 0 diferenças** entre o adapter (view) e a leitura
+  legada nos campos exibidos → ligar o adapter **não muda nenhum dado de tela**.
+- Divergências nas tabelas subjacentes: só em `empresas.nome` (1 na org padrão,
+  6 na org 2), resíduo do backfill que mesclou grafias diferentes de irmãos. Sem
+  impacto: o view usa o lead como fonte; o write-sync (2d) converge no próximo edit.
+- Trigger `trg_sync_lead_entidades` presente/habilitado; overhead **desprezível**.
+
+**Flag de ativação** (`lib/empresas/flag.ts`): env `EMPRESA_CONTATO_READS`
+(vazio=legado; `all`; ou CSV de telas). Rollback = tirar a tela da lista e
+reiniciar. Primeira superfície ligada (menor risco): endpoint aditivo
+`GET /api/leads/[id]/entidades` — nenhuma tela existente depende dele.
+
+**Ordem de ativação recomendada (tela por tela, com QA visual e rollback):**
+1. Endpoint `entidades` (feito — aditivo, zero risco).
+2. Base de Leads (lista, read-only).
+3. LeadPanel (detalhe) — aba Empresa/Decisores.
+
+**Checklist de QA na interface real (antes de cada flip):** editar lead (nome/
+email do contato), empresa com múltiplos contatos (decisores), importação,
+pipeline (arrastar estágio), responsável, próxima ação, execução de workflow —
+confirmar que o dado exibido é idêntico ao legado. Requer login; é o passo
+humano final antes de declarar a Fase 2 concluída.
