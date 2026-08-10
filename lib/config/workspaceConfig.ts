@@ -17,6 +17,12 @@
 // Suba este número ao mudar o formato do blob, e adicione o passo em `migrar()`.
 export const WORKSPACE_CONFIG_SCHEMA_VERSION = 1
 
+export interface RenovacaoConfig {
+  antecedenciaDias?: number       // janela: cria a tarefa N dias antes do vencimento
+  templateTipo?: string           // tipo de template da 1ª mensagem de renovação
+  enviarPrimeiraMensagem?: boolean // se true, dispara a 1ª mensagem (gated por MODO_ENSAIO)
+}
+
 export interface WorkspaceConfig {
   _schema_version: number
   // Chaves das preferências. Todas OPCIONAIS — ausência = padrão do produto.
@@ -24,6 +30,15 @@ export interface WorkspaceConfig {
   dashboardWidgets?: string[]
   nomenclaturas?: Record<string, string>
   modulos?: Record<string, boolean>
+  renovacao?: RenovacaoConfig
+}
+
+// Padrões de renovação (usados quando o workspace não configurou). NÃO hardcoda
+// no motor: são defaults do produto, sobrescrevíveis por org via o jsonb.
+export const RENOVACAO_PADRAO: Required<RenovacaoConfig> = {
+  antecedenciaDias: 45,
+  templateTipo: 'renovacao_1',
+  enviarPrimeiraMensagem: true,
 }
 
 // Blob de um workspace recém-criado: só a versão atual, tudo no padrão.
@@ -65,7 +80,21 @@ export function parseWorkspaceConfig(bruto: unknown): WorkspaceConfig {
       Object.entries(obj.modulos).filter(([, v]) => typeof v === 'boolean'),
     ) as Record<string, boolean>
   }
+  if (ehObjeto(obj.renovacao)) {
+    const r = obj.renovacao as Record<string, unknown>
+    const ren: RenovacaoConfig = {}
+    if (typeof r.antecedenciaDias === 'number' && r.antecedenciaDias >= 0) ren.antecedenciaDias = r.antecedenciaDias
+    if (typeof r.templateTipo === 'string' && r.templateTipo) ren.templateTipo = r.templateTipo
+    if (typeof r.enviarPrimeiraMensagem === 'boolean') ren.enviarPrimeiraMensagem = r.enviarPrimeiraMensagem
+    if (Object.keys(ren).length > 0) out.renovacao = ren
+  }
   return out
+}
+
+// Config de renovação EFETIVA de um workspace: o que ele configurou sobrepõe os
+// padrões do produto. Fonte: organizacoes.configuracoes (jsonb) já parseado.
+export function renovacaoEfetiva(cfg: WorkspaceConfig | null | undefined): Required<RenovacaoConfig> {
+  return { ...RENOVACAO_PADRAO, ...(cfg?.renovacao ?? {}) }
 }
 
 // ÚNICO ponto de escrita: valida/normaliza e carimba a versão atual. Quem for

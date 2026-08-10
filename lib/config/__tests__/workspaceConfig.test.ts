@@ -4,6 +4,8 @@ import {
   configPadrao,
   parseWorkspaceConfig,
   serializeWorkspaceConfig,
+  renovacaoEfetiva,
+  RENOVACAO_PADRAO,
 } from '../workspaceConfig'
 
 describe('workspaceConfig', () => {
@@ -44,5 +46,17 @@ describe('workspaceConfig', () => {
   it('ignora _schema_version forjado no payload de escrita', () => {
     const r = serializeWorkspaceConfig({ _schema_version: 999 } as never)
     expect(r._schema_version).toBe(WORKSPACE_CONFIG_SCHEMA_VERSION)
+  })
+
+  it('renovacao: parse valida tipos e renovacaoEfetiva aplica defaults', () => {
+    const semConfig = renovacaoEfetiva(parseWorkspaceConfig({}))
+    expect(semConfig).toEqual(RENOVACAO_PADRAO)
+
+    const parsed = parseWorkspaceConfig({ renovacao: { antecedenciaDias: 30, enviarPrimeiraMensagem: false, templateTipo: 5 } })
+    expect(parsed.renovacao).toEqual({ antecedenciaDias: 30, enviarPrimeiraMensagem: false }) // templateTipo inválido descartado
+    const efetiva = renovacaoEfetiva(parsed)
+    expect(efetiva.antecedenciaDias).toBe(30)
+    expect(efetiva.enviarPrimeiraMensagem).toBe(false)
+    expect(efetiva.templateTipo).toBe(RENOVACAO_PADRAO.templateTipo) // cai no default
   })
 })
