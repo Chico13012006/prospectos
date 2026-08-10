@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server'
 import { resolverAcesso } from '@/lib/rbac/servidor'
 import { resolverEntidadesDoLead, listarContatosDaEmpresa } from '@/lib/empresas/repository'
+import { leituraEntidadesLigada } from '@/lib/empresas/flag'
 
 export const runtime = 'nodejs'
 
@@ -15,10 +16,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if ('erro' in acc) return acc.erro
   const { org } = acc.acesso
 
+  // Gate por tela + organização. Off => a tela renderiza nada novo (legado).
+  if (!leituraEntidadesLigada('lead-panel', org)) {
+    return NextResponse.json({ ativo: false })
+  }
+
   const ent = await resolverEntidadesDoLead(org, id)
   if (!ent) return NextResponse.json({ erro: 'Lead não encontrado' }, { status: 404 })
 
   // Decisores da empresa (relacionamento — só a entidade tem). Vazio no fallback legado.
   const decisores = ent.empresa.id ? await listarContatosDaEmpresa(org, ent.empresa.id) : []
-  return NextResponse.json({ empresa: ent.empresa, contato: ent.contato, decisores })
+  return NextResponse.json({ ativo: true, empresa: ent.empresa, contato: ent.contato, decisores })
 }

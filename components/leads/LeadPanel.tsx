@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatDate, formatDateTime } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
+import EmpresaDecisoresCard from '@/components/leads/EmpresaDecisoresCard';
 import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
 import { getLeadById, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao, updateLead, gerarInsightLead, gerarMensagemLead } from '@/lib/api';
 import type { InsightComercialLead, MensagemPreview } from '@/lib/api';
@@ -550,6 +551,11 @@ export default function LeadPanel({
             </div>
           )}
         </div>
+
+        {/* Cartão ADITIVO da nova camada de entidades (Fase 2e) — fail-safe:
+            renderiza nada quando o flag está off/erro/vazio. Não altera os
+            campos legados do painel. */}
+        {selectedLead && <EmpresaDecisoresCard leadId={selectedLead.id} />}
 
         <div className="flex-1 overflow-y-auto">
           {/* Abas da ficha (item 2): Visão geral · Conversa · Dados */}
