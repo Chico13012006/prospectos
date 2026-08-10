@@ -9,6 +9,10 @@
       "schedule": "30 12 * * *"
     },
     {
+      "path": "/api/renovacao/processar",
+      "schedule": "0 13 * * *"
+    },
+    {
       "path": "/api/engine/follow-up?modo=healthcheck",
       "schedule": "0 15 * * *"
     },
