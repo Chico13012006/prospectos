@@ -20,6 +20,8 @@ export function leituraEntidadesLigada(tela: string, org?: string): boolean {
 
   const orgsEnv = (process.env.EMPRESA_CONTATO_READS_ORGS ?? '').trim()
   if (!orgsEnv) return true // sem restrição de org
-  if (!org) return false
-  return orgsEnv.split(',').map((s) => s.trim()).includes(org)
+  const alvo = org?.trim().toLowerCase()
+  if (!alvo) return false
+  // Robusto a variações de caixa/espaço/nova-linha no valor colado na Vercel.
+  return orgsEnv.toLowerCase().split(',').map((s) => s.trim()).filter(Boolean).includes(alvo)
 }

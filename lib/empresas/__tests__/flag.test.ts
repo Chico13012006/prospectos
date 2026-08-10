@@ -41,4 +41,19 @@ describe('leituraEntidadesLigada — flag por tela e por org', () => {
     expect(leituraEntidadesLigada('lead-panel', ORG_PADRAO)).toBe(true)
     expect(leituraEntidadesLigada('lead-panel', ORG_LAUDOS)).toBe(true)
   })
+
+  // Reproduz o CAMINHO REAL de produção: env exatamente como cadastrada na Vercel.
+  // A sessão de Laudos vê os cartões; a sessão da Org Padrão (ex.: franrufs13)
+  // NÃO vê — que era exatamente o sintoma relatado.
+  it('caminho de produção: só a sessão de Laudos vê os cartões', () => {
+    setEnv('lead-panel', ORG_LAUDOS)
+    expect(leituraEntidadesLigada('lead-panel', ORG_LAUDOS)).toBe(true)
+    expect(leituraEntidadesLigada('lead-panel', ORG_PADRAO)).toBe(false)
+  })
+
+  it('robustez: valor colado com espaço/nova-linha e org em CAIXA diferente ainda casa', () => {
+    setEnv(' lead-panel \n', `\n  ${ORG_LAUDOS.toUpperCase()}  `)
+    expect(leituraEntidadesLigada('lead-panel', ORG_LAUDOS)).toBe(true)
+    expect(leituraEntidadesLigada('lead-panel', ORG_PADRAO)).toBe(false)
+  })
 })
