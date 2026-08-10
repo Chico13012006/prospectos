@@ -1,0 +1,156 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { ListTodo, CheckCircle2, Clock, Bell, Building2 } from 'lucide-react';
+
+interface Tarefa {
+  id: string;
+  titulo: string;
+  tipo: string | null;
+  status: string;
+  prioridade: string;
+  prazo_em: string | null;
+  origem: string | null;
+  motivo: string | null;
+  lead_id: string | null;
+  criado_em: string;
+  empresas?: { nome: string | null } | { nome: string | null }[] | null;
+}
+interface Notificacao {
+  id: string; titulo: string | null; mensagem: string | null; origem: string | null; link: string | null; lida: boolean; criado_em: string;
+}
+
+function nomeEmpresa(t: Tarefa): string | null {
+  const e = t.empresas;
+  if (!e) return null;
+  return Array.isArray(e) ? (e[0]?.nome ?? null) : (e.nome ?? null);
+}
+function fmt(d: string | null): string {
+  if (!d) return '—';
+  try { return new Date(d).toLocaleDateString('pt-BR'); } catch { return '—'; }
+}
+const COR_PRIORIDADE: Record<string, string> = {
+  alta: 'bg-red-500/15 text-red-400', media: 'bg-amber-500/15 text-amber-400', baixa: 'bg-slate-500/15 text-slate-400',
+};
+const FILTROS = [
+  { id: 'aberta', label: 'Abertas' },
+  { id: 'em_andamento', label: 'Em andamento' },
+  { id: 'concluida', label: 'Concluídas' },
+  { id: '', label: 'Todas' },
+] as const;
+
+export default function TarefasPage() {
+  const [tarefas, setTarefas] = useState<Tarefa[]>([]);
+  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
+  const [filtro, setFiltro] = useState<string>('aberta');
+  const [carregando, setCarregando] = useState(true);
+
+  const carregar = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const qs = filtro ? `?status=${filtro}` : '';
+      const [rt, rn] = await Promise.all([
+        fetch(`/api/tarefas${qs}`).then((r) => (r.ok ? r.json() : { tarefas: [] })),
+        fetch('/api/notificacoes').then((r) => (r.ok ? r.json() : { notificacoes: [] })),
+      ]);
+      setTarefas(rt.tarefas ?? []);
+      setNotificacoes(rn.notificacoes ?? []);
+    } catch {
+      setTarefas([]); setNotificacoes([]);
+    } finally {
+      setCarregando(false);
+    }
+  }, [filtro]);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  async function concluir(id: string) {
+    await fetch(`/api/tarefas/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'concluida' }),
+    });
+    carregar();
+  }
+
+  return (
+    <div className="p-6 md:p-8 space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 bg-indigo-500/10 rounded-lg flex items-center justify-center">
+          <ListTodo size={20} className="text-indigo-400" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Tarefas</h1>
+          <p className="text-sm text-slate-400 mt-0.5">Central de trabalho — tarefas geradas por workflows, renovações e ações manuais.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Tarefas */}
+        <div className="lg:col-span-2 bg-[#1a1f2e] border border-[#2a3147] rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-[#2a3147] flex items-center gap-1">
+            {FILTROS.map((f) => (
+              <button key={f.id || 'todas'} onClick={() => setFiltro(f.id)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${filtro === f.id ? 'bg-indigo-500/15 text-indigo-300' : 'text-slate-400 hover:text-slate-200'}`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {carregando ? (
+            <div className="p-10 text-center text-slate-500 text-sm">Carregando…</div>
+          ) : tarefas.length === 0 ? (
+            <div className="p-10 text-center text-slate-500 text-sm">Nenhuma tarefa.</div>
+          ) : (
+            <ul className="divide-y divide-[#2a3147]">
+              {tarefas.map((t) => {
+                const emp = nomeEmpresa(t);
+                const vencida = t.prazo_em && new Date(t.prazo_em) < new Date() && t.status !== 'concluida';
+                return (
+                  <li key={t.id} className="px-5 py-3 flex items-start gap-3 hover:bg-[#0f1117] transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-slate-100">{t.titulo}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${COR_PRIORIDADE[t.prioridade] ?? COR_PRIORIDADE.baixa}`}>{t.prioridade}</span>
+                        {t.origem && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#252b3b] text-slate-400">{t.origem}</span>}
+                        {t.status === 'concluida' && <span className="text-[10px] text-green-400 inline-flex items-center gap-1"><CheckCircle2 size={11} /> concluída</span>}
+                      </div>
+                      <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                        {emp && <span className="inline-flex items-center gap-1"><Building2 size={11} /> {emp}</span>}
+                        <span className={`inline-flex items-center gap-1 ${vencida ? 'text-red-400' : ''}`}><Clock size={11} /> prazo {fmt(t.prazo_em)}</span>
+                        {t.motivo && <span className="truncate">· {t.motivo}</span>}
+                      </div>
+                    </div>
+                    {t.status !== 'concluida' && t.status !== 'cancelada' && (
+                      <button onClick={() => concluir(t.id)}
+                        className="shrink-0 text-xs px-2.5 py-1.5 rounded-lg bg-green-600/20 text-green-300 hover:bg-green-600/30 transition-colors inline-flex items-center gap-1">
+                        <CheckCircle2 size={13} /> Concluir
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* Notificações */}
+        <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-[#2a3147] flex items-center gap-2 text-slate-200 font-semibold text-sm">
+            <Bell size={15} className="text-indigo-400" /> Notificações
+          </div>
+          {notificacoes.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 text-sm">Sem notificações.</div>
+          ) : (
+            <ul className="divide-y divide-[#2a3147] max-h-[70vh] overflow-auto">
+              {notificacoes.map((n) => (
+                <li key={n.id} className="px-5 py-3">
+                  <div className="text-sm text-slate-200">{n.titulo ?? 'Notificação'}</div>
+                  {n.mensagem && <div className="text-xs text-slate-400 mt-0.5">{n.mensagem}</div>}
+                  <div className="text-[10px] text-slate-600 mt-1">{n.origem ?? ''} · {fmt(n.criado_em)}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
