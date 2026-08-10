@@ -1173,6 +1173,10 @@ export default function LeadPanel({
               </div>
             </div>
 
+            {/* Cartões da nova camada de entidades também na ficha completa (Fase 4.5) */}
+            {selectedLead && <EmpresaDecisoresCard leadId={selectedLead.id} />}
+            {selectedLead && <ServicosLaudosCard leadId={selectedLead.id} />}
+
             {/* TABS */}
             <div className="px-6 border-b border-[#2a3147] flex gap-1">
               {([
