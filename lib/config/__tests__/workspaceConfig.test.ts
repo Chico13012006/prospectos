@@ -4,6 +4,7 @@ import {
   configPadrao,
   parseWorkspaceConfig,
   serializeWorkspaceConfig,
+  mesclarWorkspaceConfig,
   renovacaoEfetiva,
   RENOVACAO_PADRAO,
 } from '../workspaceConfig'
@@ -58,6 +59,22 @@ describe('workspaceConfig', () => {
     // round-trip pelo ponto único de escrita
     expect(serializeWorkspaceConfig({ features: { empresaContatoReads: false } }).features)
       .toEqual({ empresaContatoReads: false })
+  })
+
+  it('mesclarWorkspaceConfig preserva o resto do blob e passa pela validação', () => {
+    const atual = parseWorkspaceConfig({ features: { empresaContatoReads: true }, renovacao: { antecedenciaDias: 45 } })
+    const r = mesclarWorkspaceConfig(atual, { roiCustoMensal: 5000, renovacaoAntecedenciaDias: 30, nomenclaturas: { lead: 'Cliente' } })
+    expect(r.features).toEqual({ empresaContatoReads: true }) // preservado
+    expect(r.roi).toEqual({ custoMensal: 5000 })
+    expect(r.renovacao?.antecedenciaDias).toBe(30)
+    expect(r.nomenclaturas).toEqual({ lead: 'Cliente' })
+    expect(r._schema_version).toBe(WORKSPACE_CONFIG_SCHEMA_VERSION)
+  })
+
+  it('mesclarWorkspaceConfig ignora valores negativos', () => {
+    const r = mesclarWorkspaceConfig(parseWorkspaceConfig({}), { roiCustoMensal: -1, renovacaoAntecedenciaDias: -5 })
+    expect(r.roi).toBeUndefined()
+    expect(r.renovacao).toBeUndefined()
   })
 
   it('renovacao: parse valida tipos e renovacaoEfetiva aplica defaults', () => {

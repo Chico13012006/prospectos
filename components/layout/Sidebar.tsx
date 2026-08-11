@@ -19,6 +19,7 @@ import {
   Target,
   Megaphone,
   LineChart,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
@@ -32,6 +33,7 @@ const mainNav = [
   { href: '/oportunidades', icon: Target, label: 'Oportunidades' },
   { href: '/campanhas', icon: Megaphone, label: 'Campanhas' },
   { href: '/roi', icon: LineChart, label: 'ROI' },
+  { href: '/processo-comercial', icon: SlidersHorizontal, label: 'Processo comercial' },
   { href: '/equipe', icon: Users, label: 'Equipe' },
   { href: '/tarefas', icon: ListTodo, label: 'Tarefas' },
   { href: '/workflows', icon: Workflow, label: 'Workflows' },

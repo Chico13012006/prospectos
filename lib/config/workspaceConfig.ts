@@ -135,3 +135,26 @@ export function renovacaoEfetiva(cfg: WorkspaceConfig | null | undefined): Requi
 export function serializeWorkspaceConfig(cfg: Partial<WorkspaceConfig>): WorkspaceConfig {
   return parseWorkspaceConfig({ ...cfg, _schema_version: WORKSPACE_CONFIG_SCHEMA_VERSION })
 }
+
+// Campos editáveis pela tela Configurações > Processo comercial (Fase 9). Um
+// patch achatado e amigável à UI; a mescla preserva o resto do blob e passa pelo
+// ponto único de escrita (validação/versão).
+export interface WorkspaceConfigEditavel {
+  nomenclaturas?: Record<string, string>
+  modulos?: Record<string, boolean>
+  renovacaoAntecedenciaDias?: number
+  roiCustoMensal?: number
+}
+
+export function mesclarWorkspaceConfig(atual: WorkspaceConfig, patch: WorkspaceConfigEditavel): WorkspaceConfig {
+  const next: Partial<WorkspaceConfig> = { ...atual }
+  if (patch.nomenclaturas) next.nomenclaturas = patch.nomenclaturas
+  if (patch.modulos) next.modulos = patch.modulos
+  if (typeof patch.renovacaoAntecedenciaDias === 'number' && patch.renovacaoAntecedenciaDias >= 0) {
+    next.renovacao = { ...atual.renovacao, antecedenciaDias: patch.renovacaoAntecedenciaDias }
+  }
+  if (typeof patch.roiCustoMensal === 'number' && patch.roiCustoMensal >= 0) {
+    next.roi = { ...atual.roi, custoMensal: patch.roiCustoMensal }
+  }
+  return serializeWorkspaceConfig(next)
+}
