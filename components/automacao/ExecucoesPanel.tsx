@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { CheckCircle2, Clock, Bell, Building2, ListTodo } from 'lucide-react';
+import Link from 'next/link';
+import { CheckCircle2, Clock, Bell, Building2, ListTodo, Activity, Workflow } from 'lucide-react';
 
 // Painel de Execuções — dentro de Automação. As TAREFAS deixaram de ser item de
 // sidebar e passam a aparecer contextualmente aqui (geradas por workflows,
@@ -24,6 +25,19 @@ interface Tarefa {
 interface Notificacao {
   id: string; titulo: string | null; mensagem: string | null; origem: string | null; link: string | null; lida: boolean; criado_em: string;
 }
+interface Execucao {
+  id: string; status: string; passo_atual: number; proxima_verificacao_em: string | null;
+  iniciado_em: string; atualizado_em: string;
+  workflow_id: string; workflow_nome: string | null; lead_id: string | null; lead_empresa: string | null;
+}
+
+const COR_EXEC: Record<string, string> = {
+  em_andamento: 'bg-sky-500/15 text-sky-300',
+  aguardando: 'bg-amber-500/15 text-amber-400',
+  concluido: 'bg-green-500/15 text-green-400',
+  erro: 'bg-red-500/15 text-red-400',
+  cancelado: 'bg-slate-500/15 text-slate-400',
+};
 
 function nomeEmpresa(t: Tarefa): string | null {
   const e = t.empresas;
@@ -47,8 +61,10 @@ const FILTROS = [
 export default function ExecucoesPanel() {
   const [tarefas, setTarefas] = useState<Tarefa[]>([]);
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
+  const [execucoes, setExecucoes] = useState<Execucao[]>([]);
   const [filtro, setFiltro] = useState<string>('aberta');
   const [carregando, setCarregando] = useState(true);
+  const [carregandoExec, setCarregandoExec] = useState(true);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -69,6 +85,20 @@ export default function ExecucoesPanel() {
 
   useEffect(() => { carregar(); }, [carregar]);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch('/api/workflows/execucoes');
+        const data = r.ok ? await r.json() : { execucoes: [] };
+        setExecucoes(data.execucoes ?? []);
+      } catch {
+        setExecucoes([]);
+      } finally {
+        setCarregandoExec(false);
+      }
+    })();
+  }, []);
+
   async function concluir(id: string) {
     await fetch(`/api/tarefas/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'concluida' }),
@@ -77,7 +107,42 @@ export default function ExecucoesPanel() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="space-y-6">
+      {/* Execuções de workflow — dado real de workflow_execucoes */}
+      <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-[#2a3147] flex items-center gap-2 text-slate-200 font-semibold text-sm">
+          <Activity size={15} className="text-indigo-400" /> Execuções de workflow
+          {!carregandoExec && <span className="text-xs font-normal text-slate-500">· {execucoes.length}</span>}
+        </div>
+        {carregandoExec ? (
+          <div className="p-8 text-center text-slate-500 text-sm">Carregando…</div>
+        ) : execucoes.length === 0 ? (
+          <div className="p-8 text-center text-slate-500 text-sm">Nenhuma execução de workflow ainda.</div>
+        ) : (
+          <ul className="divide-y divide-[#2a3147] max-h-[40vh] overflow-auto">
+            {execucoes.map((e) => (
+              <li key={e.id} className="px-5 py-3 flex items-start gap-3 hover:bg-[#0f1117] transition-colors">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Link href={`/workflows/${e.workflow_id}`} className="font-medium text-slate-100 hover:text-indigo-300 inline-flex items-center gap-1">
+                      <Workflow size={12} className="text-indigo-400" /> {e.workflow_nome ?? 'Workflow'}
+                    </Link>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${COR_EXEC[e.status] ?? COR_EXEC.em_andamento}`}>{e.status}</span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                    {e.lead_empresa && <span className="inline-flex items-center gap-1"><Building2 size={11} /> {e.lead_empresa}</span>}
+                    <span>passo {e.passo_atual}</span>
+                    {e.proxima_verificacao_em && <span className="inline-flex items-center gap-1"><Clock size={11} /> próx. {fmt(e.proxima_verificacao_em)}</span>}
+                    <span>· atualizado {fmt(e.atualizado_em)}</span>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Tarefas geradas por execuções */}
       <div className="lg:col-span-2 bg-[#1a1f2e] border border-[#2a3147] rounded-xl overflow-hidden">
         <div className="px-5 py-3 border-b border-[#2a3147] flex items-center gap-2">
@@ -147,6 +212,7 @@ export default function ExecucoesPanel() {
             ))}
           </ul>
         )}
+      </div>
       </div>
     </div>
   );

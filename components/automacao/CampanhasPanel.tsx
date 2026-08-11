@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Play, Pause, CheckCircle2, Target } from 'lucide-react';
+import { Plus, Play, Pause, CheckCircle2, Target, PencilLine } from 'lucide-react';
+import CampanhaWizard, { type CampanhaEdit } from './CampanhaWizard';
 
 // Painel de Campanhas — reusado dentro de Automação (aba Campanhas). Dado real
-// de /api/campanhas; criação nasce como rascunho; transições respeitam o ciclo
-// de vida validado no repository (lib/campanhas/repository.ts).
+// de /api/campanhas; criação/edição pelo wizard de 5 etapas (persiste em
+// `campanhas`); transições respeitam o ciclo de vida validado no repository.
 
 interface Campanha {
   id: string;
@@ -14,6 +15,8 @@ interface Campanha {
   tipo: string | null;
   status: string;
   meta_leads: number | null;
+  workflow_id: string | null;
+  publico: CampanhaEdit['publico'];
   iniciada_em: string | null;
   criado_em: string;
 }
@@ -45,8 +48,7 @@ export default function CampanhasPanel() {
   const [filtro, setFiltro] = useState<string>('ativa');
   const [carregando, setCarregando] = useState(true);
   const [negado, setNegado] = useState(false);
-  const [novoNome, setNovoNome] = useState('');
-  const [salvando, setSalvando] = useState(false);
+  const [wizard, setWizard] = useState<{ aberto: boolean; editar: CampanhaEdit | null }>({ aberto: false, editar: null });
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -65,20 +67,6 @@ export default function CampanhasPanel() {
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  async function criar() {
-    if (!novoNome.trim() || salvando) return;
-    setSalvando(true);
-    try {
-      await fetch('/api/campanhas', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: novoNome.trim() }),
-      });
-      setNovoNome('');
-      carregar();
-    } finally {
-      setSalvando(false);
-    }
-  }
-
   async function transicionar(id: string, status: string) {
     await fetch(`/api/campanhas/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
@@ -96,19 +84,21 @@ export default function CampanhasPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl px-5 py-4">
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input value={novoNome} onChange={(e) => setNovoNome(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') criar(); }}
-            placeholder="Nova campanha (nome)…"
-            className="flex-1 bg-[#0f1117] border border-[#2a3147] rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500" />
-          <button onClick={criar} disabled={!novoNome.trim() || salvando}
-            className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-500 disabled:opacity-40 inline-flex items-center justify-center gap-1">
-            <Plus size={15} /> Criar
-          </button>
-        </div>
-        <p className="text-xs text-slate-600 mt-2">Nasce como rascunho. Vincule um workflow e um público para operar.</p>
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-400">Ativações sobre um público, executadas pelo motor de Workflows.</p>
+        <button onClick={() => setWizard({ aberto: true, editar: null })}
+          className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-500 inline-flex items-center gap-1">
+          <Plus size={15} /> Nova campanha
+        </button>
       </div>
+
+      {wizard.aberto && (
+        <CampanhaWizard
+          campanha={wizard.editar}
+          onClose={() => setWizard({ aberto: false, editar: null })}
+          onSaved={() => { setWizard({ aberto: false, editar: null }); carregar(); }}
+        />
+      )}
 
       <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl overflow-hidden">
         <div className="px-5 py-3 border-b border-[#2a3147] flex items-center gap-1">
@@ -137,6 +127,12 @@ export default function CampanhasPanel() {
                   {c.meta_leads != null && <div className="text-xs text-slate-600 mt-0.5 inline-flex items-center gap-1"><Target size={11} /> meta {c.meta_leads} leads</div>}
                 </div>
                 <div className="shrink-0 flex items-center gap-1.5">
+                  {c.status === 'rascunho' && (
+                    <button onClick={() => setWizard({ aberto: true, editar: { id: c.id, nome: c.nome, descricao: c.descricao, tipo: c.tipo, meta_leads: c.meta_leads, workflow_id: c.workflow_id, publico: c.publico } })}
+                      className="text-xs px-2.5 py-1.5 rounded-lg bg-[#252b3b] text-slate-200 hover:bg-[#2f3750] transition-colors inline-flex items-center gap-1">
+                      <PencilLine size={13} /> Editar
+                    </button>
+                  )}
                   {(ACOES[c.status] ?? []).map(({ para, label, icon: Icon }) => (
                     <button key={para} onClick={() => transicionar(c.id, para)}
                       className="text-xs px-2.5 py-1.5 rounded-lg bg-[#252b3b] text-slate-200 hover:bg-[#2f3750] transition-colors inline-flex items-center gap-1">
