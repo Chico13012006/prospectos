@@ -19,11 +19,11 @@ function brl(v: number): string {
 
 const DEF: Record<string, { label: string; icon: typeof Users; href: string; cor: string; fmt: (r: Resumo) => string }> = {
   leads: { label: 'Leads', icon: Users, href: '/base-leads', cor: 'text-indigo-400', fmt: (r) => String(r.leads) },
-  tarefas: { label: 'Tarefas abertas', icon: ListTodo, href: '/tarefas', cor: 'text-amber-400', fmt: (r) => String(r.tarefasAbertas) },
-  oportunidades: { label: 'Oportunidades abertas', icon: Target, href: '/oportunidades', cor: 'text-green-400', fmt: (r) => String(r.oportAbertas) },
-  pipeline: { label: 'Pipeline em aberto', icon: TrendingUp, href: '/oportunidades', cor: 'text-green-400', fmt: (r) => brl(r.pipeline) },
-  campanhas: { label: 'Campanhas ativas', icon: Megaphone, href: '/campanhas', cor: 'text-indigo-400', fmt: (r) => String(r.campanhasAtivas) },
-  renovacoes: { label: 'Renovações na janela', icon: RefreshCw, href: '/tarefas', cor: 'text-cyan-400', fmt: (r) => String(r.renovacoesJanela) },
+  tarefas: { label: 'Tarefas abertas', icon: ListTodo, href: '/automacao?tab=execucoes', cor: 'text-amber-400', fmt: (r) => String(r.tarefasAbertas) },
+  oportunidades: { label: 'Oportunidades abertas', icon: Target, href: '/comercial?tab=oportunidades', cor: 'text-green-400', fmt: (r) => String(r.oportAbertas) },
+  pipeline: { label: 'Pipeline em aberto', icon: TrendingUp, href: '/comercial?tab=oportunidades', cor: 'text-green-400', fmt: (r) => brl(r.pipeline) },
+  campanhas: { label: 'Campanhas ativas', icon: Megaphone, href: '/automacao?tab=campanhas', cor: 'text-indigo-400', fmt: (r) => String(r.campanhasAtivas) },
+  renovacoes: { label: 'Renovações na janela', icon: RefreshCw, href: '/automacao?tab=execucoes', cor: 'text-cyan-400', fmt: (r) => String(r.renovacoesJanela) },
 };
 
 export default function DashboardWidgets() {

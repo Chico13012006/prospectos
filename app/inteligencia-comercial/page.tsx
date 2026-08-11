@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import EmptyState from '@/components/charts/EmptyState';
 import TemplatesPanel from '@/components/templates/TemplatesPanel';
+import RoiPanel from '@/components/roi/RoiPanel';
 import AnimatedKpiCard from '@/components/charts/AnimatedKpiCard';
 import ChartContainer from '@/components/charts/ChartContainer';
 import ChartTooltip from '@/components/charts/ChartTooltip';
@@ -34,15 +35,17 @@ export default function InteligenciaComercialPage() {
   );
 }
 
-type Aba = 'analises' | 'templates';
+type Aba = 'analises' | 'templates' | 'roi';
 
 function Inner() {
   const searchParams = useSearchParams();
   const [aba, setAba] = useState<Aba>('analises');
 
-  // Deep-link: ?tab=templates abre a aba de Templates (ex.: redirect de /templates).
+  // Deep-link: ?tab=templates (redirect de /templates) ou ?tab=roi (redirect de
+  // /roi — ROI não é mais módulo isolado, virou visão de analytics aqui).
   useEffect(() => {
-    if (searchParams.get('tab') === 'templates') setAba('templates');
+    const tab = searchParams.get('tab');
+    if (tab === 'templates' || tab === 'roi') setAba(tab);
   }, [searchParams]);
 
   return (
@@ -54,11 +57,12 @@ function Inner() {
         </p>
       </div>
 
-      {/* Abas: Análises · Templates */}
+      {/* Abas: Análises · Templates · ROI */}
       <div className="flex items-center rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-0.5 w-fit animate-in stagger-2">
         {([
           { id: 'analises', label: 'Análises', Icon: BrainCircuit },
           { id: 'templates', label: 'Templates', Icon: FileText },
+          { id: 'roi', label: 'ROI', Icon: TrendingUp },
         ] as const).map(t => (
           <button
             key={t.id}
@@ -73,7 +77,9 @@ function Inner() {
       </div>
 
       <div className="animate-in stagger-3">
-        {aba === 'analises' ? <Analises /> : <TemplatesPanel />}
+        {aba === 'analises' && <Analises />}
+        {aba === 'templates' && <TemplatesPanel />}
+        {aba === 'roi' && <RoiPanel />}
       </div>
     </div>
   );

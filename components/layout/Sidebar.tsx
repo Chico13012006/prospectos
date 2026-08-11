@@ -10,19 +10,18 @@ import {
   BrainCircuit,
   Calendar,
   Users,
-  Workflow,
   Briefcase,
   Settings,
   Zap,
   LogOut,
-  ListTodo,
-  Target,
-  Megaphone,
-  LineChart,
-  SlidersHorizontal,
+  Bot,
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
+// Navegação consolidada (auditoria 11/08): Oportunidades, Campanhas, ROI,
+// Processo comercial, Tarefas e Workflows deixaram de ser itens de 1º nível —
+// viraram abas/visões dentro de módulos maiores (Automação, Comercial,
+// Inteligência Comercial, Configurações). As rotas antigas redirecionam.
 const mainNav = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/pipeline', icon: Kanban, label: 'Pipeline de Contato' },
@@ -30,13 +29,8 @@ const mainNav = [
   { href: '/reunioes', icon: Calendar, label: 'Reuniões' },
   { href: '/inteligencia-comercial', icon: BrainCircuit, label: 'Inteligência Comercial' },
   { href: '/comercial', icon: Briefcase, label: 'Comercial' },
-  { href: '/oportunidades', icon: Target, label: 'Oportunidades' },
-  { href: '/campanhas', icon: Megaphone, label: 'Campanhas' },
-  { href: '/roi', icon: LineChart, label: 'ROI' },
-  { href: '/processo-comercial', icon: SlidersHorizontal, label: 'Processo comercial' },
   { href: '/equipe', icon: Users, label: 'Equipe' },
-  { href: '/tarefas', icon: ListTodo, label: 'Tarefas' },
-  { href: '/workflows', icon: Workflow, label: 'Workflows' },
+  { href: '/automacao', icon: Bot, label: 'Automação' },
 ];
 
 interface PerfilSidebar {
