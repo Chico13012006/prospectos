@@ -41,6 +41,10 @@ export interface AmbienteWorkflow {
   // de sistema no lead, com responsável. Sem responsavelId → cai no responsável
   // do próprio lead (lead.responsavel_id).
   criarTarefa(leadId: string, titulo: string, responsavelId?: string | null): Promise<void>
+  // Ação 'criar_oportunidade' (Fase 6): abre um deal em `oportunidades` a partir
+  // do lead (empresa/responsável herdados). No-op em simulação. Liga o motor de
+  // workflows às Oportunidades (Fase 5) sem tocar no fluxo de cadência do motor.
+  criarOportunidade(leadId: string, dados: { titulo?: string; valor?: number | null }): Promise<void>
   // Ações 'atualizar_status'/'mover_pipeline'/'atribuir_responsavel' (Fase 4.5):
   // grava UM campo do lead (whitelist de ESCRITA). No-op em simulação.
   atualizarCampoLead(leadId: string, campo: string, valor: unknown): Promise<void>
@@ -217,6 +221,42 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     // Notificação (in-app + e-mail, best-effort): registra em `notificacoes` e
     // dispara o e-mail HTML. Falha aqui nunca propaga (a tarefa já está gravada).
     await this.notificarResponsavelTarefa(tarefa?.id ?? null, leadId, responsavel, titulo, lead)
+  }
+
+  // Ação 'criar_oportunidade' (Fase 6): abre um deal em `oportunidades` a partir
+  // do lead. Tudo via this.db, org-scoped (organizacao_id = this.organizacaoId),
+  // mesmo padrão de criarTarefa — não passa pelo fluxo de cadência do motor.
+  async criarOportunidade(leadId: string, dados: { titulo?: string; valor?: number | null }): Promise<void> {
+    if (this.simular) return
+    const { data: lead } = await this.db
+      .from('leads')
+      .select('empresa_id, responsavel_id, empresa')
+      .eq('id', leadId)
+      .eq('organizacao_id', this.organizacaoId)
+      .maybeSingle()
+    const l = (lead ?? null) as { empresa_id?: string | null; responsavel_id?: string | null; empresa?: string | null } | null
+    const titulo = dados.titulo?.trim() || `Oportunidade — ${l?.empresa ?? '(lead)'}`
+    const valor = typeof dados.valor === 'number' && Number.isFinite(dados.valor) ? dados.valor : null
+    await this.db.from('oportunidades').insert({
+      organizacao_id: this.organizacaoId,
+      lead_id: leadId,
+      empresa_id: l?.empresa_id ?? null,
+      responsavel_id: l?.responsavel_id ?? null,
+      titulo,
+      valor,
+      origem: 'workflow',
+      status: 'aberta',
+    })
+    // Histórico do lead (aparece na conversa do LeadPanel), org-scoped.
+    await this.db.from('interacoes').insert({
+      organizacao_id: this.organizacaoId,
+      lead_id: leadId,
+      tipo: 'nota',
+      canal: 'sistema',
+      descricao: `Oportunidade criada: ${titulo}`,
+      origem_acao: 'ia',
+      motivo: 'workflow',
+    })
   }
 
   // Avisa por e-mail o responsável de uma tarefa recém-criada — mesma infra da

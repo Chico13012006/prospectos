@@ -212,6 +212,15 @@ export const ACOES: BlocoDef[] = [
     ],
   },
   {
+    tipo: 'criar_oportunidade',
+    label: 'Criar oportunidade',
+    descricao: 'Abre um negócio (deal) a partir do lead — passa a aparecer em Oportunidades.',
+    campos: [
+      { nome: 'titulo', label: 'Título', tipo: 'texto', padrao: '', dica: 'Vazio = "Oportunidade — {empresa do lead}".' },
+      { nome: 'valor', label: 'Valor (R$)', tipo: 'numero', padrao: 0, dica: 'Opcional; alimenta o ROI.' },
+    ],
+  },
+  {
     tipo: 'enviar_whatsapp',
     label: 'Enviar WhatsApp (stub)',
     descricao: 'Ainda sem integração: registra a intenção como pendente (não envia).',

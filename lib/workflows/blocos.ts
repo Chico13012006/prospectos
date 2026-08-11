@@ -152,6 +152,23 @@ export const acaoCriarTarefaLigacao: Acao = {
   },
 }
 
+// --- AÇÃO: criar_oportunidade — abre um deal a partir do lead (Fase 6) --------
+// Liga Workflows → Oportunidades (Fase 5): qualquer workflow pode abrir um
+// negócio (ex.: lead virou 'interessado', renovação de laudo entrou na janela).
+// Tipo NOVO (imutabilidade de versão) e delega ao ambiente — não toca o motor.
+export const acaoCriarOportunidade: Acao = {
+  tipo: 'criar_oportunidade',
+  async executar(ctx): Promise<ResultadoAcao> {
+    if (!ctx.leadId) throw new Error("ação 'criar_oportunidade' exige um lead")
+    const titulo = String(ctx.config.titulo ?? '') || undefined
+    const valorRaw = ctx.config.valor
+    const valor = typeof valorRaw === 'number' && Number.isFinite(valorRaw) ? valorRaw : null
+    await ctx.ambiente.criarOportunidade(ctx.leadId, { titulo, valor })
+    await ctx.log('oportunidade_criada', { titulo: titulo ?? null, valor })
+    return { tipo: 'continuar' }
+  },
+}
+
 // --- AÇÃO: atualizar_status — muda o estágio/status do lead ------------------
 // No schema real de `leads` o "status" é a coluna `estagio` (não há status
 // separado); mover_pipeline usa a MESMA coluna. Ambas existem por pedido do spec.
@@ -273,6 +290,7 @@ export function registrarBlocosPadrao(registro = new RegistroWorkflows()): Regis
     .registrarAcao(acaoEsperar)
     .registrarAcao(acaoEnviarEmail)
     .registrarAcao(acaoCriarTarefa)
+    .registrarAcao(acaoCriarOportunidade)
     .registrarAcao(acaoEnviarWhatsapp)
     .registrarAcao(acaoCriarTarefaLigacao)
     .registrarAcao(acaoAtualizarStatus)
