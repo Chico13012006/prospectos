@@ -4,7 +4,7 @@
 // = E2E à parte; service_role não passa por RLS.)
 import { describe, it, expect } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { listarCampanhas, criarCampanha, atualizarCampanha, transicaoPermitida } from '../repository'
+import { listarCampanhas, criarCampanha, atualizarCampanha, buscarCampanha, transicaoPermitida } from '../repository'
 
 const ORG = 'org-aaaa'
 const OUTRA = 'org-bbbb'
@@ -50,6 +50,13 @@ describe('multi-tenant — campanhas escopa organizacao_id', () => {
     const { client, chains } = mockClient()
     await criarCampanha(client, ORG, { nome: 'Campanha X' })
     expect(chains[0].insertPayload?.organizacao_id).toBe(ORG)
+  })
+  it('buscar (detalhe/edição) filtra id + organizacao_id — deep-link não vaza cross-tenant', async () => {
+    const { client, chains } = mockClient()
+    await buscarCampanha(client, ORG, 'C1')
+    expect(chains[0].temEq('organizacao_id', ORG)).toBe(true)
+    expect(chains[0].temEq('id', 'C1')).toBe(true)
+    expect(chains[0].temEq('organizacao_id', OUTRA)).toBe(false)
   })
   it('atualizar (transição válida) filtra id + organizacao_id na leitura e no update', async () => {
     const { client, chains } = mockClient('rascunho')

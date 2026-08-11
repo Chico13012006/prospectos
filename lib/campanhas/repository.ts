@@ -46,6 +46,19 @@ export async function listarCampanhas(admin: SupabaseClient, org: string, filtro
   return data ?? []
 }
 
+// Uma campanha por id, escopada por org (para detalhe e reabertura no wizard).
+// Devolve null se não existir na org (deep-link inválido / cross-tenant).
+export async function buscarCampanha(admin: SupabaseClient, org: string, id: string) {
+  const { data, error } = await admin
+    .from('campanhas')
+    .select(COLS)
+    .eq('organizacao_id', org)
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ?? null
+}
+
 export async function criarCampanha(admin: SupabaseClient, org: string, dados: NovaCampanha) {
   const { data, error } = await admin
     .from('campanhas')
