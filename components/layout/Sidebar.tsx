@@ -17,6 +17,7 @@ import {
   LogOut,
   ListTodo,
   Target,
+  Megaphone,
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
@@ -28,6 +29,7 @@ const mainNav = [
   { href: '/inteligencia-comercial', icon: BrainCircuit, label: 'Inteligência Comercial' },
   { href: '/comercial', icon: Briefcase, label: 'Comercial' },
   { href: '/oportunidades', icon: Target, label: 'Oportunidades' },
+  { href: '/campanhas', icon: Megaphone, label: 'Campanhas' },
   { href: '/equipe', icon: Users, label: 'Equipe' },
   { href: '/tarefas', icon: ListTodo, label: 'Tarefas' },
   { href: '/workflows', icon: Workflow, label: 'Workflows' },
