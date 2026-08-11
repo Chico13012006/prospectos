@@ -31,6 +31,12 @@ export interface FeaturesConfig {
   empresaContatoReads?: boolean   // lê Empresa/Contato via entidades no LeadPanel
 }
 
+// ROI (Fase 8): custo operacional de referência p/ comparar com a receita das
+// oportunidades ganhas. Preferência flexível (um número), cabe no blob.
+export interface RoiConfig {
+  custoMensal?: number
+}
+
 export interface WorkspaceConfig {
   _schema_version: number
   // Chaves das preferências. Todas OPCIONAIS — ausência = padrão do produto.
@@ -40,6 +46,7 @@ export interface WorkspaceConfig {
   modulos?: Record<string, boolean>
   features?: FeaturesConfig
   renovacao?: RenovacaoConfig
+  roi?: RoiConfig
 }
 
 // Chaves de feature conhecidas (tipadas). Só estas são aceitas na leitura do
@@ -99,6 +106,12 @@ export function parseWorkspaceConfig(bruto: unknown): WorkspaceConfig {
       if (typeof obj.features[k] === 'boolean') f[k] = obj.features[k] as boolean
     }
     if (Object.keys(f).length > 0) out.features = f
+  }
+  if (ehObjeto(obj.roi)) {
+    const r = obj.roi as Record<string, unknown>
+    const roi: RoiConfig = {}
+    if (typeof r.custoMensal === 'number' && r.custoMensal >= 0) roi.custoMensal = r.custoMensal
+    if (Object.keys(roi).length > 0) out.roi = roi
   }
   if (ehObjeto(obj.renovacao)) {
     const r = obj.renovacao as Record<string, unknown>
