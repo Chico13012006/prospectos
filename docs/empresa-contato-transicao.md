@@ -73,3 +73,27 @@ email do contato), empresa com múltiplos contatos (decisores), importação,
 pipeline (arrastar estágio), responsável, próxima ação, execução de workflow —
 confirmar que o dado exibido é idêntico ao legado. Requer login; é o passo
 humano final antes de declarar a Fase 2 concluída.
+
+## Acabamento da Fase 2 — reconciliação da projeção
+
+A env `EMPRESA_CONTATO_READS(_ORGS)` foi **aposentada**: a flag vive só em
+`organizacoes.configuracoes → features.empresaContatoReads` (config por org,
+resolvida no servidor). Superfícies ligadas hoje: endpoint `entidades` e o
+LeadPanel (aba Empresa/Decisores), ambos gated por org. A **Base de Leads
+(lista) NÃO foi religada de propósito**: a view é leads-autoritativa em todos os
+campos core, então a lista mostraria dado idêntico ao legado — sem ganho e com
+superfície de QA extra. Fica para quando a lista passar a exibir campos
+só-entidade (cnpj/decisores).
+
+**Reconciliação da projeção** (`scripts/reconciliar-projecao-entidades.ts`): o
+backfill 2b só copiou `nome/cnpj/dominio` para `empresas`; `cidade/estado` (e o
+`dominio` derivado depois) ficaram velhos/nulos na projeção até um edit disparar
+o trigger 2d. O script força AGORA a convergência que o trigger faria, de forma
+CONSERVADORA — mexe SÓ na projeção (nunca em `leads`) e só quando os leads irmãos
+de uma empresa CONCORDAM; empresas cujos irmãos discordam de grafia ficam
+intocadas (decisão humana). Executado (`apply`): 393 empresas convergidas (283
+cidade/estado da org Laudos + domínios + 4 nomes), 3 empresas ambíguas
+preservadas, 0 contatos (contatos já vinham completos do backfill). Idempotente
+(2ª execução = no-op). A equivalência de leitura seguiu **0 diferenças**
+(`validar-consistencia-2e.ts`): a reconciliação não muda nada exibido, só torna a
+projeção auto-consistente para leituras diretas da entidade (decisores/relatórios).
