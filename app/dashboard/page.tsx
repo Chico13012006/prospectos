@@ -16,6 +16,7 @@ import { getLeadsStats, getLeadsRecentes, getLeadsPorResponsavel } from '@/lib/a
 import AnimatedKpiCard from '@/components/charts/AnimatedKpiCard';
 import ChartContainer from '@/components/charts/ChartContainer';
 import ChartTooltip from '@/components/charts/ChartTooltip';
+import DashboardWidgets from '@/components/dashboard/DashboardWidgets';
 
 const followUpBars = [
   { etapa: '1º contato', respostas: 28 },
@@ -218,6 +219,9 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {/* Widgets de dados reais (Fase 10) — agregação por org, configurável */}
+      <DashboardWidgets />
 
       {/* Filtros */}
       <div className="flex items-center gap-2 flex-wrap animate-in stagger-2">
