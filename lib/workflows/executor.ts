@@ -161,21 +161,29 @@ export async function processarEnrollment(
 // "Inscrever agora"), sem esperar o poll. Mesma lógica de processarEnrollment
 // (criarExecucao + evento execucao_iniciada), idempotente por lead. O stepping
 // segue sendo do poll. Exige workflow publicado (fixa a versão vigente).
+// campanhaId: quando o enrollment vem de uma campanha, grava o vínculo na execução
+// (usado pelo ambiente para verificar campanhas.dry_run antes de enviar e-mail).
 export async function inscreverLeadManual(
   store: WorkflowStore,
   workflowId: string,
   leadId: string,
+  campanhaId?: string | null,
 ): Promise<{ jaInscrito: boolean; execucaoId?: string }> {
   const wf = await store.buscarWorkflow(workflowId)
   if (!wf) throw new Error(`workflow ${workflowId} não encontrado`)
   if (wf.status !== 'publicado' || !wf.versao_atual_id)
     throw new Error('workflow precisa estar publicado para inscrever um lead manualmente.')
   if (await store.existeExecucaoParaLead(workflowId, leadId)) return { jaInscrito: true }
-  const ex = await store.criarExecucao({ workflow_id: workflowId, versao_id: wf.versao_atual_id, lead_id: leadId })
+  const ex = await store.criarExecucao({
+    workflow_id: workflowId,
+    versao_id: wf.versao_atual_id,
+    lead_id: leadId,
+    campanha_id: campanhaId ?? null,
+  })
   await store.registrarEvento({
     execucao_id: ex.id,
     tipo: 'execucao_iniciada',
-    detalhe: { versao_id: ex.versao_id, lead_id: leadId, via: 'manual' },
+    detalhe: { versao_id: ex.versao_id, lead_id: leadId, via: campanhaId ? 'campanha' : 'manual' },
   })
   return { jaInscrito: false, execucaoId: ex.id }
 }

@@ -104,7 +104,8 @@ export const acaoEnviarEmail: Acao = {
   async executar(ctx): Promise<ResultadoAcao> {
     if (!ctx.leadId) throw new Error("ação 'enviar_email' exige um lead")
     const template = String(ctx.config.template ?? ctx.config.tipo ?? 'follow_up_1')
-    const r = await ctx.ambiente.enviarEmailTemplate(ctx.leadId, template)
+    // Passa campanha_id para o ambiente verificar campanhas.dry_run antes de enviar.
+    const r = await ctx.ambiente.enviarEmailTemplate(ctx.leadId, template, ctx.execucao?.campanha_id)
     await ctx.log('email_enviado', { template, assunto: r.assunto, enviado: r.enviado })
     return { tipo: 'continuar' }
   },

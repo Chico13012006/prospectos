@@ -35,8 +35,10 @@ export interface AmbienteWorkflow {
   // colunas reais da tabela `leads`). Devolve null se o lead/campo não existir.
   lerCampoLead(leadId: string, campo: string): Promise<unknown>
   // Ação 'enviar_email': monta pelo template e envia (gated por MODO_ENSAIO /
-  // simular). Devolve o assunto para o log da execução.
-  enviarEmailTemplate(leadId: string, templateTipo: string): Promise<{ enviado: boolean; assunto: string }>
+  // simular / campanhas.dry_run). Devolve o assunto para o log da execução.
+  // campanhaId: se fornecido, verifica campanhas.dry_run antes do envio real
+  // (gate independente do MODO_ENSAIO global — segurança por campanha).
+  enviarEmailTemplate(leadId: string, templateTipo: string, campanhaId?: string | null): Promise<{ enviado: boolean; assunto: string }>
   // Ação 'criar_tarefa'/'criar_tarefa_ligacao': registra a tarefa como interação
   // de sistema no lead, com responsável. Sem responsavelId → cai no responsável
   // do próprio lead (lead.responsavel_id).
@@ -159,7 +161,7 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     return data ? (data as unknown as Record<string, unknown>)[campo] ?? null : null
   }
 
-  async enviarEmailTemplate(leadId: string, templateTipo: string): Promise<{ enviado: boolean; assunto: string }> {
+  async enviarEmailTemplate(leadId: string, templateTipo: string, campanhaId?: string | null): Promise<{ enviado: boolean; assunto: string }> {
     const lead = await this.motor.store.buscarLead(leadId)
     if (!lead) throw new Error(`lead ${leadId} não encontrado`)
     const nicho = normalizarNicho(lead.segmento)
@@ -173,6 +175,19 @@ export class AmbienteSupabase implements AmbienteWorkflow {
 
     // Simulação (Fase 5): não envia nem grava — quem loga é o executor.
     if (this.simular) return { enviado: false, assunto }
+
+    // Gate por campanha: independente do MODO_ENSAIO global.
+    // dry_run=true (padrão) bloqueia o envio mesmo com MODO_ENSAIO=false em prod.
+    if (campanhaId) {
+      const { data: camp } = await this.db
+        .from('campanhas')
+        .select('dry_run')
+        .eq('id', campanhaId)
+        .eq('organizacao_id', this.organizacaoId)
+        .maybeSingle()
+      if ((camp as { dry_run?: boolean } | null)?.dry_run === true)
+        return { enviado: false, assunto }
+    }
 
     // Envio real (o GmailProvider ainda respeita MODO_ENSAIO por dentro).
     await this.motor.email.enviar(lead.contato_email, assunto, corpo)

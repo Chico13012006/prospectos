@@ -100,6 +100,7 @@ export class MemoryWorkflowStore implements WorkflowStore {
     workflow_id: string
     versao_id: string
     lead_id?: string | null
+    campanha_id?: string | null
     status?: StatusExecucao
     proxima_verificacao_em?: string | null
   }): Promise<WorkflowExecucao> {
@@ -109,6 +110,7 @@ export class MemoryWorkflowStore implements WorkflowStore {
       workflow_id: input.workflow_id,
       versao_id: input.versao_id,
       lead_id: input.lead_id ?? null,
+      campanha_id: input.campanha_id ?? null,
       passo_atual: 0,
       status: input.status ?? 'em_andamento',
       proxima_verificacao_em: input.proxima_verificacao_em ?? null,

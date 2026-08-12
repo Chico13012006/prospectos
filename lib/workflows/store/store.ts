@@ -48,6 +48,7 @@ export interface WorkflowStore {
     workflow_id: string
     versao_id: string
     lead_id?: string | null
+    campanha_id?: string | null
     status?: StatusExecucao
     proxima_verificacao_em?: string | null
   }): Promise<WorkflowExecucao>

@@ -22,7 +22,7 @@ export function transicaoPermitida(de: StatusCampanha, para: StatusCampanha): bo
   return TRANSICOES[de]?.includes(para) ?? false
 }
 
-const COLS = 'id, nome, descricao, tipo, status, workflow_id, publico, meta_leads, iniciada_em, concluida_em, criado_em, atualizado_em'
+const COLS = 'id, nome, descricao, tipo, status, workflow_id, publico, meta_leads, dry_run, iniciada_em, concluida_em, criado_em, atualizado_em'
 
 export interface NovaCampanha {
   nome: string
@@ -31,6 +31,7 @@ export interface NovaCampanha {
   workflow_id?: string | null
   publico?: Record<string, unknown> | null
   meta_leads?: number | null
+  dry_run?: boolean
 }
 
 export async function listarCampanhas(admin: SupabaseClient, org: string, filtros: { status?: string } = {}) {
@@ -71,6 +72,7 @@ export async function criarCampanha(admin: SupabaseClient, org: string, dados: N
       workflow_id: dados.workflow_id ?? null,
       publico: dados.publico ?? {},
       meta_leads: dados.meta_leads ?? null,
+      dry_run: dados.dry_run ?? true,
     })
     .select('id')
     .single()
@@ -87,6 +89,7 @@ export async function atualizarCampanha(admin: SupabaseClient, org: string, id: 
   if ('workflow_id' in b) patch.workflow_id = b.workflow_id || null
   if ('meta_leads' in b) patch.meta_leads = Number.isFinite(Number(b.meta_leads)) ? Number(b.meta_leads) : null
   if (b.publico && typeof b.publico === 'object') patch.publico = b.publico
+  if (typeof b.dry_run === 'boolean') patch.dry_run = b.dry_run
 
   if (statusValido(b.status)) {
     const { data: atual, error: e0 } = await admin

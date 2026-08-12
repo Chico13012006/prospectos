@@ -64,6 +64,8 @@ export interface WorkflowExecucao {
   // FIXADO na criação — nunca muda, mesmo que o workflow seja republicado.
   versao_id: string
   lead_id: string | null
+  // Campanha que originou o enrollment (null = execução orgânica/manual).
+  campanha_id?: string | null
   passo_atual: number
   status: StatusExecucao
   proxima_verificacao_em: string | null
