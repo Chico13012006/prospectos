@@ -76,6 +76,9 @@ export function preencher(texto: string, lead: Lead): string {
     segmento: lead.segmento?.trim() || 'seu setor',
     cidade: lead.cidade?.trim() || '',
     responsavel_comercial: lead.usuarios?.nome || lead.responsavel_nome || 'Francisco',
+    data_validade: lead.data_validade
+      ? new Date(lead.data_validade).toLocaleDateString('pt-BR')
+      : '',
   }
   return texto
     .replace(/\{(\w+)\}/g, (m, chave: string) => (chave in valores ? valores[chave] : m))

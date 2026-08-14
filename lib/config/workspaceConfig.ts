@@ -15,7 +15,37 @@
 // junto com as fases). Se a superfície crescer muito, aí sim avaliamos um zod.
 
 // Suba este número ao mudar o formato do blob, e adicione o passo em `migrar()`.
-export const WORKSPACE_CONFIG_SCHEMA_VERSION = 1
+export const WORKSPACE_CONFIG_SCHEMA_VERSION = 2
+
+// Configuração de visibilidade de um campo por workspace (Personalização > Campos).
+export interface CampoUI {
+  chave: string       // coluna no banco (ex: 'empresa', 'data_validade')
+  label: string       // nome exibido na UI
+  obrigatorio: boolean
+  visivel: boolean    // aparece nas listagens (Base de Leads, Pipeline)
+  filtro: boolean     // aparece como filtro disponível
+}
+
+// Campos padrão (mockup Personalização > Campos). Ausência = padrão ativo.
+export const CAMPOS_UI_PADRAO: CampoUI[] = [
+  { chave: 'contato_nome',    label: 'Nome do contato',    obrigatorio: true,  visivel: true,  filtro: false },
+  { chave: 'empresa',         label: 'Empresa',             obrigatorio: true,  visivel: true,  filtro: false },
+  { chave: 'contato_email',   label: 'E-mail',              obrigatorio: false, visivel: true,  filtro: false },
+  { chave: 'contato_telefone',label: 'Telefone',            obrigatorio: false, visivel: false, filtro: false },
+  { chave: 'origem',          label: 'Origem',              obrigatorio: false, visivel: false, filtro: false },
+  { chave: 'responsavel_id',  label: 'Responsável',         obrigatorio: false, visivel: true,  filtro: true  },
+  { chave: 'estagio',         label: 'Status do contato',   obrigatorio: false, visivel: true,  filtro: true  },
+  { chave: 'data_validade',   label: 'Validade do laudo',   obrigatorio: false, visivel: true,  filtro: false },
+  { chave: 'proxima_acao_data', label: 'Próximo follow-up', obrigatorio: false, visivel: false, filtro: false },
+  { chave: 'score',           label: 'Score',               obrigatorio: false, visivel: true,  filtro: false },
+]
+
+// Resolve config efetiva: mescla padrão com overrides gravados.
+export function camposUIEfetivos(gravados?: CampoUI[]): CampoUI[] {
+  if (!gravados?.length) return CAMPOS_UI_PADRAO
+  const mapa = new Map(gravados.map((c) => [c.chave, c]))
+  return CAMPOS_UI_PADRAO.map((p) => mapa.get(p.chave) ?? p)
+}
 
 export interface RenovacaoConfig {
   antecedenciaDias?: number       // janela: cria a tarefa N dias antes do vencimento
@@ -47,6 +77,8 @@ export interface WorkspaceConfig {
   features?: FeaturesConfig
   renovacao?: RenovacaoConfig
   roi?: RoiConfig
+  // Configuração de campos por workspace (Personalização > Campos). Ausência = todos no padrão.
+  camposUI?: CampoUI[]
 }
 
 // Chaves de feature conhecidas (tipadas). Só estas são aceitas na leitura do
@@ -73,7 +105,8 @@ function migrar(bruto: Record<string, unknown>): Record<string, unknown> {
   let cfg: Record<string, unknown> = { ...bruto }
   // v0 -> v1: primeira versão formal; nada a transformar, só carimba a versão.
   if (v < 1) cfg = { ...cfg, _schema_version: 1 }
-  // Futuras: if (v < 2) { ...transforma...; cfg._schema_version = 2 }
+  // v1 -> v2: adiciona camposUI (Personalização). Nada a migrar, ausência = padrão.
+  if (v < 2) cfg = { ...cfg, _schema_version: 2 }
   return cfg
 }
 
@@ -113,6 +146,15 @@ export function parseWorkspaceConfig(bruto: unknown): WorkspaceConfig {
     if (typeof r.custoMensal === 'number' && r.custoMensal >= 0) roi.custoMensal = r.custoMensal
     if (Object.keys(roi).length > 0) out.roi = roi
   }
+  if (Array.isArray(obj.camposUI)) {
+    out.camposUI = (obj.camposUI as unknown[]).filter(ehObjeto).map((c) => ({
+      chave: String(c.chave ?? ''),
+      label: String(c.label ?? ''),
+      obrigatorio: c.obrigatorio === true,
+      visivel: c.visivel !== false,
+      filtro: c.filtro === true,
+    })).filter((c) => c.chave)
+  }
   if (ehObjeto(obj.renovacao)) {
     const r = obj.renovacao as Record<string, unknown>
     const ren: RenovacaoConfig = {}
@@ -136,14 +178,15 @@ export function serializeWorkspaceConfig(cfg: Partial<WorkspaceConfig>): Workspa
   return parseWorkspaceConfig({ ...cfg, _schema_version: WORKSPACE_CONFIG_SCHEMA_VERSION })
 }
 
-// Campos editáveis pela tela Configurações > Processo comercial (Fase 9). Um
-// patch achatado e amigável à UI; a mescla preserva o resto do blob e passa pelo
-// ponto único de escrita (validação/versão).
+// Campos editáveis pela tela Configurações (Processo comercial + Personalização).
+// Um patch achatado e amigável à UI; a mescla preserva o resto do blob e passa
+// pelo ponto único de escrita (validação/versão).
 export interface WorkspaceConfigEditavel {
   nomenclaturas?: Record<string, string>
   modulos?: Record<string, boolean>
   renovacaoAntecedenciaDias?: number
   roiCustoMensal?: number
+  camposUI?: CampoUI[]
 }
 
 export function mesclarWorkspaceConfig(atual: WorkspaceConfig, patch: WorkspaceConfigEditavel): WorkspaceConfig {
@@ -156,5 +199,6 @@ export function mesclarWorkspaceConfig(atual: WorkspaceConfig, patch: WorkspaceC
   if (typeof patch.roiCustoMensal === 'number' && patch.roiCustoMensal >= 0) {
     next.roi = { ...atual.roi, custoMensal: patch.roiCustoMensal }
   }
+  if (Array.isArray(patch.camposUI)) next.camposUI = patch.camposUI
   return serializeWorkspaceConfig(next)
 }

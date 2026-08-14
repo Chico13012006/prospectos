@@ -19,6 +19,14 @@ export interface PublicoDecisores {
   exigirEmail?: boolean;
   exigirTelefone?: boolean;
 }
+export interface PublicoAgenda {
+  diasSemana?: string[];   // ['seg','ter','qua','qui','sex']
+  horarioInicio?: string;  // 'HH:MM'
+  horarioFim?: string;     // 'HH:MM'
+  limiteDiario?: number;
+  pararAoResponder?: boolean;
+}
+
 export interface Publico {
   objetivo?: string;
   responsavel?: string;
@@ -26,6 +34,7 @@ export interface Publico {
   prazo?: string;
   empresas?: PublicoEmpresas;
   decisores?: PublicoDecisores;
+  agenda?: PublicoAgenda;
 }
 
 export interface Campanha {

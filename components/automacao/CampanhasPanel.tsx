@@ -19,11 +19,10 @@ import { type Campanha, STATUS_BADGE, STATUS_LABEL, resumoPublico } from './tipo
 // em página própria.
 
 const FILTROS = [
+  { id: '', label: 'Todas' },
   { id: 'ativa', label: 'Ativas' },
-  { id: 'rascunho', label: 'Rascunho' },
   { id: 'pausada', label: 'Pausadas' },
   { id: 'concluida', label: 'Concluídas' },
-  { id: '', label: 'Todas' },
 ] as const;
 
 const ACOES: Record<string, { para: string; label: string; Icon: typeof Play }[]> = {
@@ -39,7 +38,8 @@ export default function CampanhasPanel() {
   const router = useRouter();
   const [itens, setItens] = useState<Campanha[]>([]);
   const [ativasTotal, setAtivasTotal] = useState(0);
-  const [filtro, setFiltro] = useState<string>('ativa');
+  const [emCadencia, setEmCadencia] = useState<number | null>(null);
+  const [filtro, setFiltro] = useState<string>('');
   const [busca, setBusca] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [negado, setNegado] = useState(false);
@@ -49,15 +49,18 @@ export default function CampanhasPanel() {
     setCarregando(true);
     try {
       const qs = filtro ? `?status=${filtro}` : '';
-      const [res, resAtivas] = await Promise.all([
+      const [res, resAtivas, resMet] = await Promise.all([
         fetch(`/api/campanhas${qs}`),
         fetch('/api/campanhas?status=ativa'),
+        fetch('/api/campanhas/metricas'),
       ]);
       if (res.status === 403) { setNegado(true); setItens([]); return; }
       const r = res.ok ? await res.json() : { campanhas: [] };
       setItens(r.campanhas ?? []);
       const ra = resAtivas.ok ? await resAtivas.json() : { campanhas: [] };
       setAtivasTotal((ra.campanhas ?? []).length);
+      const met = resMet.ok ? await resMet.json() : null;
+      setEmCadencia(met?.emCadencia ?? null);
     } catch {
       setItens([]);
     } finally {
@@ -120,9 +123,9 @@ export default function CampanhasPanel() {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi Icon={Megaphone} cor="text-indigo-400" label="Campanhas ativas" valor={String(ativasTotal)} />
-        <Kpi Icon={Users} cor="text-sky-400" label="Contatos abordados" naoCalc />
-        <Kpi Icon={MessageSquare} cor="text-green-400" label="Respostas positivas" naoCalc />
-        <Kpi Icon={Coins} cor="text-amber-400" label="Receita atribuída" naoCalc />
+        <Kpi Icon={Users} cor="text-sky-400" label="Contatos em cadência" valor={emCadencia != null ? String(emCadencia) : undefined} naoCalc={emCadencia == null} />
+        <Kpi Icon={MessageSquare} cor="text-green-400" label="Respostas" naoCalc />
+        <Kpi Icon={Coins} cor="text-amber-400" label="Conversões" naoCalc />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">

@@ -39,6 +39,11 @@ class AmbienteFake implements AmbienteWorkflow {
   oportunidades: { leadId: string; titulo?: string; valor?: number | null }[] = []
   async criarOportunidade(leadId: string, dados: { titulo?: string; valor?: number | null }) { this.oportunidades.push({ leadId, ...dados }) }
   async atualizarCampoLead(leadId: string, campo: string, valor: unknown) { this.escritas.push({ leadId, campo, valor }) }
+  async inscreverEmCampanha(_leadId: string, _campanhaId: string) { /* stub */ }
+  async selecionarLeadsQueResponderamRecente(_dias: number) { return this.alvos }
+  async selecionarLeadsSemRespostaInbound(_dias: number) { return this.alvos }
+  async selecionarLeadsPorEstagio(_estagio: string) { return this.alvos }
+  async selecionarLeadsComValidadeVencida(_diasApos: number) { return this.alvos }
 }
 
 const registro = registrarBlocosPadrao()

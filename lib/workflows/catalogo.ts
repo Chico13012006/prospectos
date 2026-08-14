@@ -71,6 +71,7 @@ const CAMPOS_DATA_OPCOES = [
   { valor: 'ultimo_contato', label: 'Último contato' },
   { valor: 'created_at', label: 'Data de entrada' },
   { valor: 'proxima_acao_data', label: 'Próxima ação' },
+  { valor: 'data_validade', label: 'Validade do laudo' },
 ]
 
 // Operadores como opções de select (reaproveita a fonte única de operadores.ts).
@@ -79,17 +80,65 @@ const OPERADORES_OPCOES = OPERADORES.map((o) => ({ valor: o.valor, label: o.labe
 export const GATILHOS: BlocoDef[] = [
   {
     tipo: 'campo_data_vence',
-    label: 'Data do lead vence',
-    descricao: 'Inscreve o lead quando um campo de data dele vence em até N dias.',
+    label: 'Campo de data vence em X dias',
+    descricao: 'Inscreve o lead quando um campo de data dele vence em até N dias. Use "Validade do laudo" para renovação.',
     campos: [
       { nome: 'campo', label: 'Campo de data', tipo: 'select', padrao: 'proxima_acao_data', opcoes: CAMPOS_DATA_OPCOES },
       { nome: 'dias', label: 'Dias de antecedência', tipo: 'numero', padrao: 0 },
     ],
   },
   {
+    tipo: 'validade_laudo_venceu',
+    label: 'Validade do laudo venceu',
+    descricao: 'Dispara quando leads.data_validade é passada (laudo vencido). Atalho para campo_data_vence com dias=0 no campo data_validade.',
+    campos: [
+      { nome: 'dias_apos', label: 'Dias após vencimento', tipo: 'numero', padrao: 0, dica: '0 = no dia do vencimento; 7 = uma semana após.' },
+    ],
+  },
+  {
+    tipo: 'lead_respondeu_gatilho',
+    label: 'Lead respondeu',
+    descricao: 'Inscreve leads que responderam recentemente (último contato inbound). Complementa o fluxo de cadência de resposta.',
+    campos: [
+      { nome: 'dentro_de_dias', label: 'Nos últimos N dias', tipo: 'numero', padrao: 3, dica: '0 = qualquer momento.' },
+    ],
+  },
+  {
+    tipo: 'nao_respondeu_em_dias',
+    label: 'Lead não respondeu em X dias',
+    descricao: 'Leads que não tiveram resposta inbound há N dias. Ideal para reengajamento.',
+    campos: [
+      { nome: 'dias', label: 'Dias sem resposta', tipo: 'numero', padrao: 5 },
+    ],
+  },
+  {
+    tipo: 'status_mudou',
+    label: 'Status ou etapa mudou',
+    descricao: 'Dispara quando o campo leads.estagio muda para o valor configurado.',
+    campos: [
+      {
+        nome: 'estagio',
+        label: 'Novo status/etapa',
+        tipo: 'select',
+        padrao: 'interessado',
+        opcoes: [
+          { valor: 'novos_leads', label: 'Novos leads' },
+          { valor: 'primeiro_contato', label: '1º contato' },
+          { valor: 'aguardando_resposta', label: 'Aguardando resposta' },
+          { valor: 'follow_up', label: 'Follow-up' },
+          { valor: 'interessado', label: 'Respondeu (interessado)' },
+          { valor: 'reuniao_agendada', label: 'Reunião agendada' },
+          { valor: 'ganho', label: 'Ganho' },
+          { valor: 'perdido', label: 'Perdido' },
+          { valor: 'sem_resposta', label: 'Sem resposta' },
+        ],
+      },
+    ],
+  },
+  {
     tipo: 'campo_igual',
     label: 'Campo do lead (status/etapa)',
-    descricao: 'Dispara quando um campo do lead bate com um valor.',
+    descricao: 'Dispara quando um campo do lead bate com um valor configurado.',
     campos: [
       {
         nome: 'campo',
@@ -105,7 +154,7 @@ export const GATILHOS: BlocoDef[] = [
   },
   {
     tipo: 'sem_resposta_ha_dias',
-    label: 'Sem resposta há N dias',
+    label: 'Sem resposta há N dias (avançado)',
     descricao: 'Leads que nunca responderam e cujo campo de data é mais antigo que N dias.',
     campos: [
       { nome: 'campo', label: 'Campo de data', tipo: 'select', padrao: 'ultimo_contato', opcoes: CAMPOS_DATA_OPCOES },
@@ -296,6 +345,30 @@ export const ACOES: BlocoDef[] = [
     label: 'Encerrar fluxo',
     descricao: 'Conclui a execução aqui — sela um braço da ramificação.',
     campos: [],
+  },
+  {
+    tipo: 'parar_cadencia',
+    label: 'Parar cadência',
+    descricao: 'Interrompe imediatamente a cadência do lead e cancela as próximas ações pendentes.',
+    campos: [
+      { nome: 'motivo', label: 'Motivo (opcional)', tipo: 'texto', padrao: '', dica: 'Gravado no evento de auditoria da execução.' },
+    ],
+  },
+  {
+    tipo: 'adicionar_campanha',
+    label: 'Adicionar a campanha',
+    descricao: 'Inscreve o lead em outra campanha ativa — útil para pipelines encadeados (ex.: laudo venceu → inscreve em Renovação).',
+    campos: [
+      { nome: 'campanha_id', label: 'ID da campanha', tipo: 'texto', padrao: '', dica: 'Cole o ID da campanha (UUID) da tela de Campanhas.' },
+    ],
+  },
+  {
+    tipo: 'programar_reativacao',
+    label: 'Programar reativação',
+    descricao: 'Agenda um follow-up de reativação após N dias (grava proxima_acao_data + estagio=sem_resposta).',
+    campos: [
+      { nome: 'dias', label: 'Dias para reativar', tipo: 'numero', padrao: 30 },
+    ],
   },
 ]
 

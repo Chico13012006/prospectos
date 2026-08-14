@@ -279,6 +279,85 @@ export const acaoEncerrar: Acao = {
   },
 }
 
+// === NOVOS BLOCOS — Fase 2 Personalização/Campanhas ===========================
+
+// --- GATILHO: laudo venceu há N dias -----------------------------------------
+export const gatilhoValidadeLaudoVenceu: Gatilho = {
+  tipo: 'validade_laudo_venceu',
+  async selecionarAlvos(ctx) {
+    const dias = num(ctx.config.dias, 0)
+    return ctx.ambiente.selecionarLeadsComValidadeVencida(dias)
+  },
+}
+
+// --- GATILHO: lead respondeu dentro de N dias --------------------------------
+export const gatilhoLeadRespondeuGatilho: Gatilho = {
+  tipo: 'lead_respondeu_gatilho',
+  async selecionarAlvos(ctx) {
+    const dias = num(ctx.config.dias, 7)
+    return ctx.ambiente.selecionarLeadsQueResponderamRecente(dias)
+  },
+}
+
+// --- GATILHO: lead sem resposta inbound há N dias ----------------------------
+export const gatilhoNaoRespondeuEmDias: Gatilho = {
+  tipo: 'nao_respondeu_em_dias',
+  async selecionarAlvos(ctx) {
+    const dias = num(ctx.config.dias, 30)
+    return ctx.ambiente.selecionarLeadsSemRespostaInbound(dias)
+  },
+}
+
+// --- GATILHO: lead entrou num status/etapa específica ------------------------
+// Polled idempotente: cada lead entra uma vez por workflow (existeExecucaoParaLead).
+export const gatilhoStatusMudou: Gatilho = {
+  tipo: 'status_mudou',
+  async selecionarAlvos(ctx) {
+    const estagio = String(ctx.config.estagio ?? '')
+    if (!estagio) return []
+    return ctx.ambiente.selecionarLeadsPorEstagio(estagio)
+  },
+}
+
+// --- AÇÃO: parar_cadencia — encerra a execução atual (usado em ramificação) --
+export const acaoParaCadencia: Acao = {
+  tipo: 'parar_cadencia',
+  async executar(ctx): Promise<ResultadoAcao> {
+    await ctx.log('cadencia_parada', {})
+    return { tipo: 'encerrar' }
+  },
+}
+
+// --- AÇÃO: adicionar_campanha — inscreve o lead em outra campanha -----------
+// config: { campanha_id }. A campanha deve estar ativa e ter workflow vinculado.
+export const acaoAdicionarCampanha: Acao = {
+  tipo: 'adicionar_campanha',
+  async executar(ctx): Promise<ResultadoAcao> {
+    if (!ctx.leadId) throw new Error("ação 'adicionar_campanha' exige um lead")
+    const campanhaId = String(ctx.config.campanha_id ?? '')
+    if (!campanhaId) throw new Error("ação 'adicionar_campanha' exige config.campanha_id")
+    await ctx.ambiente.inscreverEmCampanha(ctx.leadId, campanhaId)
+    await ctx.log('adicionado_campanha', { campanha_id: campanhaId })
+    return { tipo: 'continuar' }
+  },
+}
+
+// --- AÇÃO: programar_reativacao — agenda próxima ação N dias à frente --------
+// config: { dias, titulo }. Atualiza proxima_acao_data + cria tarefa de lembrete.
+export const acaoProgramarReativacao: Acao = {
+  tipo: 'programar_reativacao',
+  async executar(ctx): Promise<ResultadoAcao> {
+    if (!ctx.leadId) throw new Error("ação 'programar_reativacao' exige um lead")
+    const dias = num(ctx.config.dias, 30)
+    const titulo = String(ctx.config.titulo ?? 'Reativar lead')
+    const dataAlvo = new Date(Date.now() + dias * 86_400_000).toISOString()
+    await ctx.ambiente.atualizarCampoLead(ctx.leadId, 'proxima_acao_data', dataAlvo)
+    await ctx.ambiente.criarTarefa(ctx.leadId, titulo)
+    await ctx.log('reativacao_programada', { dias, data: dataAlvo, titulo })
+    return { tipo: 'continuar' }
+  },
+}
+
 // Registra o conjunto padrão num RegistroWorkflows (novo ou fornecido).
 export function registrarBlocosPadrao(registro = new RegistroWorkflows()): RegistroWorkflows {
   return registro
@@ -286,6 +365,10 @@ export function registrarBlocosPadrao(registro = new RegistroWorkflows()): Regis
     .registrarGatilho(gatilhoCampoIgual)
     .registrarGatilho(gatilhoSemResposta)
     .registrarGatilho(gatilhoManual)
+    .registrarGatilho(gatilhoValidadeLaudoVenceu)
+    .registrarGatilho(gatilhoLeadRespondeuGatilho)
+    .registrarGatilho(gatilhoNaoRespondeuEmDias)
+    .registrarGatilho(gatilhoStatusMudou)
     .registrarCondicao(condicaoLeadRespondeu)
     .registrarCondicao(condicaoCampo)
     .registrarAcao(acaoEsperar)
@@ -301,4 +384,7 @@ export function registrarBlocosPadrao(registro = new RegistroWorkflows()): Regis
     .registrarAcao(acaoRamificar)
     .registrarAcao(acaoSaltarSe)
     .registrarAcao(acaoEncerrar)
+    .registrarAcao(acaoParaCadencia)
+    .registrarAcao(acaoAdicionarCampanha)
+    .registrarAcao(acaoProgramarReativacao)
 }

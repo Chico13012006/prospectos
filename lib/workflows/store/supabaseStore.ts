@@ -174,12 +174,15 @@ export class SupabaseWorkflowStore implements WorkflowStore {
   }
 
   async existeExecucaoParaLead(workflowId: string, leadId: string): Promise<boolean> {
+    // Exclui canceladas: execução cancelada não bloqueia re-enrollment (o lead
+    // pode ser reinscrito em nova versão do workflow após cancelamento explícito).
     const { count, error } = await this.db
       .from('workflow_execucoes')
       .select('id', { count: 'exact', head: true })
       .eq('organizacao_id', this.organizacaoId)
       .eq('workflow_id', workflowId)
       .eq('lead_id', leadId)
+      .neq('status', 'cancelado')
     if (error) throw error
     return (count ?? 0) > 0
   }

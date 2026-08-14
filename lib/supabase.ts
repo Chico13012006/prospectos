@@ -41,6 +41,7 @@ export type Lead = {
   owner?: 'n8n' | 'engine'
   perdido: boolean
   perdido_motivo?: string
+  data_validade?: string | null
   created_at: string
   updated_at: string
 }

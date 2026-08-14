@@ -6,6 +6,7 @@ import { formatDate, dash } from '@/lib/utils';
 import { labelEstagio, corEstagio } from '@/lib/pipeline-stages';
 import { getTodosLeads, getPipelineFiltrosOpcoes, type BaseLeadsFiltros } from '@/lib/api';
 import type { Lead } from '@/lib/supabase';
+import { camposUIEfetivos, type CampoUI } from '@/lib/config/workspaceConfig';
 import LeadPanel from '@/components/leads/LeadPanel';
 import NovoLeadModal from '@/components/leads/NovoLeadModal';
 import ImportarLeadsModal from '@/components/leads/ImportarLeadsModal';
@@ -44,6 +45,7 @@ function corScore(score?: number): string {
 export default function BaseLeadsPage() {
   const [form, setForm] = useState<BaseFiltroForm>(FILTRO_VAZIO);
   const [filtroOpcoes, setFiltroOpcoes] = useState<{ responsaveis: string[]; segmentos: string[]; canais: string[] }>({ responsaveis: [], segmentos: [], canais: [] });
+  const [camposUI, setCamposUI] = useState<CampoUI[]>(camposUIEfetivos([]));
   const [data, setData] = useState<Lead[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -55,11 +57,15 @@ export default function BaseLeadsPage() {
   // Ordenação da tabela (item 2.8): clique no cabeçalho "Score" ordena por score.
   const [ordenarPor, setOrdenarPor] = useState<{ campo: 'score'; asc: boolean } | null>(null);
 
-  // Opções dos selects + sonda de conexão.
+  // Opções dos selects + sonda de conexão + config de campos.
   useEffect(() => {
     getPipelineFiltrosOpcoes()
       .then(setFiltroOpcoes)
       .catch(err => { console.error('Erro ao carregar Base de Leads:', err); setUseFallback(true); });
+    fetch('/api/configuracoes/workspace')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setCamposUI(camposUIEfetivos(d.config?.camposUI)); })
+      .catch(() => {});
   }, []);
 
   // Debounce só do FORM (campos digitados: busca, cidade, estado…); cliques de
@@ -176,18 +182,31 @@ export default function BaseLeadsPage() {
           <table className="w-full text-sm border-separate border-spacing-0">
             <thead className="sticky top-0 z-10">
               <tr className="text-left text-xs uppercase tracking-wide text-slate-500 bg-[var(--bg-base)]">
-                {['Empresa', 'Contato', 'Responsável', 'Status', 'Follow-up'].map(h => (
-                  <th key={h} className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">{h}</th>
-                ))}
-                <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">
-                  <button
-                    onClick={toggleOrdenarScore}
-                    className="inline-flex items-center gap-1 uppercase tracking-wide hover:text-slate-300 transition-colors focus-ring rounded"
-                    title="Ordenar por score"
-                  >
-                    Score {ordenarPor ? (ordenarPor.asc ? '↑' : '↓') : '↕'}
-                  </button>
-                </th>
+                {camposUI.find(c => c.chave === 'empresa')?.visivel !== false && (
+                  <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Empresa</th>
+                )}
+                {camposUI.find(c => c.chave === 'contato_nome')?.visivel !== false && (
+                  <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Contato</th>
+                )}
+                {camposUI.find(c => c.chave === 'responsavel_id')?.visivel !== false && (
+                  <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Responsável</th>
+                )}
+                {camposUI.find(c => c.chave === 'estagio')?.visivel !== false && (
+                  <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Status</th>
+                )}
+                <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Follow-up</th>
+                {camposUI.find(c => c.chave === 'score')?.visivel !== false && (
+                  <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">
+                    <button onClick={toggleOrdenarScore}
+                      className="inline-flex items-center gap-1 uppercase tracking-wide hover:text-slate-300 transition-colors focus-ring rounded"
+                      title="Ordenar por score">
+                      Score {ordenarPor ? (ordenarPor.asc ? '↑' : '↓') : '↕'}
+                    </button>
+                  </th>
+                )}
+                {camposUI.find(c => c.chave === 'data_validade')?.visivel === true && (
+                  <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Val. laudo</th>
+                )}
                 {['Cidade/UF', 'Última interação', 'Cadastrado em'].map(h => (
                   <th key={h} className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">{h}</th>
                 ))}
@@ -211,25 +230,42 @@ export default function BaseLeadsPage() {
                       aria-label={`Abrir ${lead.empresa ?? 'lead'}`}
                       className={`cursor-pointer transition-colors focus-ring ${selecionado ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--bg-card)]'}`}
                     >
-                      <td className={`px-3 py-2.5 border-b border-[var(--border-subtle)] font-medium text-slate-100 max-w-56 truncate ${selecionado ? 'border-l-2 border-l-[var(--accent)]' : 'border-l-2 border-l-transparent'}`}>{dash(lead.empresa)}</td>
-                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] max-w-56">
-                        <div className="text-slate-300 truncate">{dash(lead.contato_nome)}</div>
-                        {lead.contato_email && <div className="text-xs text-slate-500 truncate">{lead.contato_email}</div>}
-                      </td>
-                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{dash(responsavel)}</td>
-                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1.5 text-xs text-slate-300">
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: corEstagio(lead.estagio) }} />
-                          {labelEstagio(lead.estagio)}
-                        </span>
-                      </td>
+                      {camposUI.find(c => c.chave === 'empresa')?.visivel !== false && (
+                        <td className={`px-3 py-2.5 border-b border-[var(--border-subtle)] font-medium text-slate-100 max-w-56 truncate ${selecionado ? 'border-l-2 border-l-[var(--accent)]' : 'border-l-2 border-l-transparent'}`}>{dash(lead.empresa)}</td>
+                      )}
+                      {camposUI.find(c => c.chave === 'contato_nome')?.visivel !== false && (
+                        <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] max-w-56">
+                          <div className="text-slate-300 truncate">{dash(lead.contato_nome)}</div>
+                          {lead.contato_email && camposUI.find(c => c.chave === 'contato_email')?.visivel !== false && (
+                            <div className="text-xs text-slate-500 truncate">{lead.contato_email}</div>
+                          )}
+                        </td>
+                      )}
+                      {camposUI.find(c => c.chave === 'responsavel_id')?.visivel !== false && (
+                        <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{dash(responsavel)}</td>
+                      )}
+                      {camposUI.find(c => c.chave === 'estagio')?.visivel !== false && (
+                        <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1.5 text-xs text-slate-300">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: corEstagio(lead.estagio) }} />
+                            {labelEstagio(lead.estagio)}
+                          </span>
+                        </td>
+                      )}
                       <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{etapaFollowup(lead.followups_enviados)}</td>
-                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1.5 text-slate-300 tabular-nums">
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: corScore(lead.score) }} />
-                          {lead.score ?? '—'}
-                        </span>
-                      </td>
+                      {camposUI.find(c => c.chave === 'score')?.visivel !== false && (
+                        <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1.5 text-slate-300 tabular-nums">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: corScore(lead.score) }} />
+                            {lead.score ?? '—'}
+                          </span>
+                        </td>
+                      )}
+                      {camposUI.find(c => c.chave === 'data_validade')?.visivel === true && (
+                        <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">
+                          {lead.data_validade ? formatDate(lead.data_validade) : '—'}
+                        </td>
+                      )}
                       <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{dash(cidadeUf)}</td>
                       <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-400 whitespace-nowrap">{lead.ultimo_contato ? formatDate(lead.ultimo_contato) : '—'}</td>
                       <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-400 whitespace-nowrap">{lead.created_at ? formatDate(lead.created_at) : '—'}</td>

@@ -10,6 +10,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { criarMotorReal } from '@/lib/engine/scheduler'
 import { normalizarNicho, preencher, indiceVariante } from '@/lib/engine/mensagem'
+import { GmailProvider, lerCredenciaisGmail } from '@/lib/engine/email/gmailProvider'
 import { log } from '@/lib/engine/logger'
 import type { Motor } from '@/lib/engine'
 import type { Lead } from '@/lib/engine/types'
@@ -50,11 +51,21 @@ export interface AmbienteWorkflow {
   // Ações 'atualizar_status'/'mover_pipeline'/'atribuir_responsavel' (Fase 4.5):
   // grava UM campo do lead (whitelist de ESCRITA). No-op em simulação.
   atualizarCampoLead(leadId: string, campo: string, valor: unknown): Promise<void>
+  // Ação 'adicionar_campanha': inscreve o lead no workflow da campanha-alvo
+  // (se a campanha existir, tiver workflow e o lead não estiver já inscrito).
+  inscreverEmCampanha(leadId: string, campanhaId: string): Promise<void>
+  // Gatilho 'lead_respondeu_gatilho': leads com interação tipo='resposta' nos últimos N dias.
+  selecionarLeadsQueResponderamRecente(dentroDeNDias: number): Promise<string[]>
+  // Gatilho 'nao_respondeu_em_dias': leads sem resposta inbound há N dias.
+  selecionarLeadsSemRespostaInbound(diasSemResposta: number): Promise<string[]>
+  // Gatilho 'status_mudou' / 'validade_laudo_venceu'.
+  selecionarLeadsPorEstagio(estagio: string): Promise<string[]>
+  selecionarLeadsComValidadeVencida(diasApos: number): Promise<string[]>
 }
 
 // Colunas de data que um gatilho pode observar. Whitelist: o `campo` vem da
 // definição do workflow (input do usuário) e NÃO pode virar nome de coluna livre.
-const CAMPOS_DATA_PERMITIDOS = new Set(['proxima_acao_data', 'ultimo_contato', 'created_at'])
+const CAMPOS_DATA_PERMITIDOS = new Set(['proxima_acao_data', 'ultimo_contato', 'created_at', 'data_validade'])
 
 // Colunas REAIS de `leads` (lib/supabase.ts, tipo Lead) que a condição genérica
 // pode ler. Whitelist porque `campo` vem da definição do workflow (input do
@@ -64,6 +75,7 @@ const CAMPOS_LEAD_PERMITIDOS = new Set([
   'estagio', 'segmento', 'score', 'responsavel_nome', 'responsavel_id',
   'cidade', 'estado', 'origem', 'faixa_funcionarios', 'canal_preferencial',
   'followups_enviados', 'perdido', 'ultimo_contato', 'proxima_acao_data', 'created_at',
+  'data_validade',
 ])
 
 // Colunas de `leads` que as AÇÕES podem gravar. Subconjunto do que faz sentido
@@ -170,8 +182,24 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     const variantes = varsNicho.length ? varsNicho : await this.motor.store.buscarTemplateEmail(null, templateTipo)
     if (variantes.length === 0) throw new Error(`Template ausente (tipo=${templateTipo}, nicho=${nicho ?? 'generico'}).`)
     const tpl = variantes[indiceVariante(lead.id, variantes.length)]
-    const assunto = preencher(tpl.assunto ?? '{empresa}', lead)
-    const corpo = preencher(tpl.corpo, lead)
+    // Variáveis e credenciais de nível-org: lidas de uma única consulta.
+    //   {nome_servico}  → nomenclaturas.nome_servico || organizacoes.nome
+    //   email_conta_key → seleciona GMAIL_USER_<KEY> / GMAIL_APP_PASSWORD_<KEY>
+    const { data: orgRow } = await this.db
+      .from('organizacoes')
+      .select('nome, configuracoes')
+      .eq('id', this.organizacaoId)
+      .maybeSingle()
+    const orgData = orgRow as { nome?: string; configuracoes?: Record<string, unknown> } | null
+    const orgNomenclaturas = orgData?.configuracoes?.['nomenclaturas'] as Record<string, string> | undefined
+    const nomeServico = orgNomenclaturas?.['nome_servico'] ?? orgData?.nome ?? ''
+    const extras: Record<string, string> = nomeServico ? { nome_servico: nomeServico } : {}
+    const assunto = preencher(tpl.assunto ?? '{empresa}', lead, extras)
+    const corpo = preencher(tpl.corpo, lead, extras)
+    // Provider de e-mail: conta específica da org (email_conta_key) ou a padrão.
+    const emailContaKey = orgNomenclaturas?.['email_conta_key']
+    const emailCred = emailContaKey ? lerCredenciaisGmail(emailContaKey) : null
+    const emailProvider = emailCred ? new GmailProvider(emailCred) : this.motor.email
 
     // Simulação (Fase 5): não envia nem grava — quem loga é o executor.
     if (this.simular) return { enviado: false, assunto }
@@ -189,8 +217,8 @@ export class AmbienteSupabase implements AmbienteWorkflow {
         return { enviado: false, assunto }
     }
 
-    // Envio real (o GmailProvider ainda respeita MODO_ENSAIO por dentro).
-    await this.motor.email.enviar(lead.contato_email, assunto, corpo)
+    // Envio real: usa a conta da org (emailProvider) se configurada; senão a padrão.
+    await emailProvider.enviar(lead.contato_email, assunto, corpo)
     await this.motor.store.registrarInteracao({
       lead_id: leadId,
       tipo: 'nota',
@@ -211,12 +239,17 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     // Responsável explícito da ação; senão, o responsável do próprio lead.
     const responsavel = responsavelId ?? lead?.responsavel_id ?? null
 
+    // Substitui variáveis de template no título ({empresa}, {nome}, etc.) se o
+    // lead foi buscado com sucesso — torna tarefas como "[WA] contato com {empresa}"
+    // legíveis no painel do responsável.
+    const tituloFinal = lead ? preencher(titulo, lead) : titulo
+
     // 1ª classe (Fase 4): a tarefa vira linha em `tarefas` (não mais só nota).
     const { data: tarefa } = await this.db.from('tarefas').insert({
       organizacao_id: this.organizacaoId,
       lead_id: leadId,
       tipo: 'workflow',
-      titulo,
+      titulo: tituloFinal,
       responsavel_id: responsavel,
       origem: 'workflow',
       motivo: 'Ação de workflow: criar tarefa',
@@ -228,14 +261,14 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       lead_id: leadId,
       tipo: 'nota',
       canal: 'sistema',
-      descricao: `Tarefa: ${titulo}`,
+      descricao: `Tarefa: ${tituloFinal}`,
       origem_acao: 'ia',
       responsavel_id: responsavel,
     })
 
     // Notificação (in-app + e-mail, best-effort): registra em `notificacoes` e
     // dispara o e-mail HTML. Falha aqui nunca propaga (a tarefa já está gravada).
-    await this.notificarResponsavelTarefa(tarefa?.id ?? null, leadId, responsavel, titulo, lead)
+    await this.notificarResponsavelTarefa(tarefa?.id ?? null, leadId, responsavel, tituloFinal, lead)
   }
 
   // Ação 'criar_oportunidade' (Fase 6): abre um deal em `oportunidades` a partir
@@ -332,13 +365,84 @@ export class AmbienteSupabase implements AmbienteWorkflow {
   async atualizarCampoLead(leadId: string, campo: string, valor: unknown): Promise<void> {
     if (!CAMPOS_LEAD_ESCRITA_PERMITIDOS.has(campo))
       throw new Error(`Campo de lead não permitido para escrita: '${campo}'`)
-    if (this.simular) return // em simulação não muta o lead
+    if (this.simular) return
     const { error } = await this.db
       .from('leads')
       .update({ [campo]: valor })
       .eq('organizacao_id', this.organizacaoId)
       .eq('id', leadId)
     if (error) throw error
+  }
+
+  async inscreverEmCampanha(leadId: string, campanhaId: string): Promise<void> {
+    if (this.simular) return
+    const { data: camp } = await this.db
+      .from('campanhas')
+      .select('workflow_id')
+      .eq('id', campanhaId)
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('status', 'ativa')
+      .maybeSingle()
+    if (!camp?.workflow_id) return // campanha não encontrada ou sem workflow
+    const { inscreverLeadManual } = await import('./index')
+    const { SupabaseWorkflowStore } = await import('./store/supabaseStore')
+    const store = new SupabaseWorkflowStore(this.organizacaoId, this.db)
+    await inscreverLeadManual(store, camp.workflow_id, leadId, campanhaId)
+  }
+
+  async selecionarLeadsQueResponderamRecente(dentroDeNDias: number): Promise<string[]> {
+    const desde = dentroDeNDias > 0
+      ? new Date(Date.now() - dentroDeNDias * 86_400_000).toISOString()
+      : new Date(0).toISOString()
+    const { data } = await this.db
+      .from('interacoes')
+      .select('lead_id')
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('tipo', 'resposta')
+      .gte('created_at', desde)
+    const ids = [...new Set((data ?? []).map((r) => (r as { lead_id: string }).lead_id).filter(Boolean))]
+    return ids
+  }
+
+  async selecionarLeadsSemRespostaInbound(diasSemResposta: number): Promise<string[]> {
+    const limite = new Date(Date.now() - diasSemResposta * 86_400_000).toISOString()
+    const { data: responderam } = await this.db
+      .from('interacoes')
+      .select('lead_id')
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('tipo', 'resposta')
+    const idsResponderam = new Set((responderam ?? []).map((r) => (r as { lead_id: string }).lead_id))
+    const { data: leads } = await this.db
+      .from('leads')
+      .select('id')
+      .eq('organizacao_id', this.organizacaoId)
+      .lt('ultimo_contato', limite)
+      .or('perdido.is.null,perdido.eq.false')
+    return (leads ?? [])
+      .map((l) => (l as { id: string }).id)
+      .filter((id) => !idsResponderam.has(id))
+  }
+
+  async selecionarLeadsPorEstagio(estagio: string): Promise<string[]> {
+    const { data } = await this.db
+      .from('leads')
+      .select('id')
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('estagio', estagio)
+      .or('perdido.is.null,perdido.eq.false')
+    return (data ?? []).map((l) => (l as { id: string }).id)
+  }
+
+  async selecionarLeadsComValidadeVencida(diasApos: number): Promise<string[]> {
+    const alvo = new Date(Date.now() - diasApos * 86_400_000).toISOString().slice(0, 10)
+    const { data } = await this.db
+      .from('leads')
+      .select('id')
+      .eq('organizacao_id', this.organizacaoId)
+      .not('data_validade', 'is', null)
+      .lte('data_validade', alvo)
+      .or('perdido.is.null,perdido.eq.false')
+    return (data ?? []).map((l) => (l as { id: string }).id)
   }
 }
 

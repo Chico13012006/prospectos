@@ -2,13 +2,13 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Settings, Sliders, SlidersHorizontal } from 'lucide-react';
+import { Settings, Sliders, SlidersHorizontal, Palette } from 'lucide-react';
 import ParametrosMotorPanel from '@/components/configuracoes/ParametrosMotorPanel';
 import ProcessoComercialPanel from '@/components/configuracoes/ProcessoComercialPanel';
+import PersonalizacaoPanel from '@/components/configuracoes/PersonalizacaoPanel';
 
-// Configurações (consolidação 11/08): além dos parâmetros do motor, absorve o
-// "Processo comercial" (que saiu da sidebar) como aba. Deep-link ?tab=processo
-// (destino do redirect de /processo-comercial). useSearchParams exige Suspense.
+// Configurações: Motor de cadência, Processo comercial e Personalização do CRM.
+// Deep-link ?tab=processo / ?tab=personalizacao. useSearchParams exige Suspense.
 export default function ConfiguracoesPage() {
   return (
     <Suspense fallback={null}>
@@ -17,8 +17,8 @@ export default function ConfiguracoesPage() {
   );
 }
 
-type Aba = 'motor' | 'processo';
-const ABAS: Aba[] = ['motor', 'processo'];
+type Aba = 'motor' | 'processo' | 'personalizacao';
+const ABAS: Aba[] = ['motor', 'processo', 'personalizacao'];
 
 function Inner() {
   const searchParams = useSearchParams();
@@ -32,6 +32,7 @@ function Inner() {
   const TABS: { id: Aba; label: string; Icon: typeof Sliders }[] = [
     { id: 'motor', label: 'Motor de cadência', Icon: Sliders },
     { id: 'processo', label: 'Processo comercial', Icon: SlidersHorizontal },
+    { id: 'personalizacao', label: 'Personalização', Icon: Palette },
   ];
 
   return (
@@ -42,7 +43,7 @@ function Inner() {
           Configurações
         </h1>
         <p className="text-sm text-slate-400 mt-0.5">
-          Parâmetros do motor e do processo comercial (nomenclaturas, pipelines, permissões).
+          Motor, processo comercial e personalização de campos, pipelines e terminologia.
         </p>
       </div>
 
@@ -60,7 +61,9 @@ function Inner() {
         ))}
       </div>
 
-      {aba === 'motor' ? <ParametrosMotorPanel /> : <ProcessoComercialPanel />}
+      {aba === 'motor' && <ParametrosMotorPanel />}
+      {aba === 'processo' && <ProcessoComercialPanel />}
+      {aba === 'personalizacao' && <PersonalizacaoPanel />}
     </div>
   );
 }

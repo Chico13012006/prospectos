@@ -66,7 +66,7 @@ export default function FiltrosBase({
           {responsaveis.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
         <select value={value.segmento} onChange={(e) => set({ segmento: e.target.value })} className={selectCls}>
-          <option value="">Todos os nichos</option>
+          <option value="">Todos os segmentos</option>
           {segmentos.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <select value={value.estagio} onChange={(e) => set({ estagio: e.target.value })} className={selectCls}>

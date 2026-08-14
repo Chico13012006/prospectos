@@ -27,6 +27,7 @@ export async function PUT(req: Request) {
     modulos: b.modulos && typeof b.modulos === 'object' ? b.modulos : undefined,
     renovacaoAntecedenciaDias: typeof b.renovacaoAntecedenciaDias === 'number' ? b.renovacaoAntecedenciaDias : undefined,
     roiCustoMensal: typeof b.roiCustoMensal === 'number' ? b.roiCustoMensal : undefined,
+    camposUI: Array.isArray(b.camposUI) ? b.camposUI : undefined,
   })
   const { error } = await admin.from('organizacoes').update({ configuracoes: novo }).eq('id', org)
   if (error) return NextResponse.json({ erro: error.message }, { status: 400 })
