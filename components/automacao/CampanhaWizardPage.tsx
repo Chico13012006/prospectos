@@ -85,8 +85,9 @@ export default function CampanhaWizardPage({ campanha }: { campanha?: Campanha |
   const [tipo, setTipo] = useState(campanha?.tipo ?? 'prospeccao');
   const [objetivo, setObjetivo] = useState(campanha?.descricao ?? '');
   const [meta, setMeta] = useState(campanha?.meta_leads != null ? String(campanha.meta_leads) : '');
-  const [responsavel, setResponsavel] = useState(p0.responsavel ?? '');
+  const [responsavelId, setResponsavelId] = useState(p0.responsavel_id ?? '');
   const [prazo, setPrazo] = useState(p0.prazo ?? '');
+  const [membros, setMembros] = useState<{ id: string; nome: string; email: string }[]>([]);
 
   // --- Etapa 1: Público e filtros ---
   const [segmento, setSegmento] = useState(p0.empresas?.segmento ?? '');
@@ -122,6 +123,9 @@ export default function CampanhaWizardPage({ campanha }: { campanha?: Campanha |
     fetch('/api/dashboard/resumo').then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d && typeof d.leads === 'number') setBaseLeads(d.leads); })
       .catch(() => {});
+    fetch('/api/equipe/listar').then((r) => (r.ok ? r.json() : { membros: [] }))
+      .then((d) => setMembros((d.membros ?? []).filter((m: { nome: string; email: string }) => m.nome || m.email)))
+      .catch(() => {});
   }, []);
 
   // Ao selecionar workflow, busca os passos para preview
@@ -149,7 +153,7 @@ export default function CampanhaWizardPage({ campanha }: { campanha?: Campanha |
   function montarBody() {
     const publico: Publico = {
       objetivo: objetivo.trim() || undefined,
-      responsavel: responsavel.trim() || undefined,
+      responsavel_id: responsavelId || undefined,
       idioma: idioma || undefined,
       prazo: prazo || undefined,
       empresas: {
@@ -302,7 +306,12 @@ export default function CampanhaWizardPage({ campanha }: { campanha?: Campanha |
                 </div>
                 <div>
                   <label className={lbl}>Responsável</label>
-                  <input className={input} value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="Nome ou e-mail" />
+                  <select className={input} value={responsavelId} onChange={(e) => setResponsavelId(e.target.value)}>
+                    <option value="">— selecione —</option>
+                    {membros.map((m) => (
+                      <option key={m.id} value={m.id}>{m.nome || m.email}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className={lbl}>Meta de contatos</label>

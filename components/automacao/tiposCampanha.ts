@@ -29,7 +29,8 @@ export interface PublicoAgenda {
 
 export interface Publico {
   objetivo?: string;
-  responsavel?: string;
+  responsavel?: string;    // legado — preferir responsavel_id
+  responsavel_id?: string;
   idioma?: string;
   prazo?: string;
   empresas?: PublicoEmpresas;

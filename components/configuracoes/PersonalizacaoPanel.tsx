@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Columns3, SlidersHorizontal, Kanban, Type,
   Save, Check, ToggleLeft, ToggleRight, Lock,
-  Info, Plus,
+  Info, Plus, Trash2, ChevronUp, ChevronDown,
 } from 'lucide-react';
 import { CAMPOS_UI_PADRAO, camposUIEfetivos, type CampoUI } from '@/lib/config/workspaceConfig';
 
@@ -15,7 +15,7 @@ import { CAMPOS_UI_PADRAO, camposUIEfetivos, type CampoUI } from '@/lib/config/w
 
 type Aba = 'campos' | 'filtros' | 'pipeline' | 'terminologia';
 
-interface PipelineEstagio { id: string; chave: string; nome: string; papel: string; cor: string | null }
+interface PipelineEstagio { id: string; chave: string; nome: string; papel: string; cor: string | null; ordem: number }
 interface Pipeline { id: string; nome: string; tipo: string; ativo: boolean; estagios: PipelineEstagio[] }
 
 const TIPO_CAMPO: Record<string, string> = {
@@ -30,6 +30,202 @@ const TIPO_CAMPO: Record<string, string> = {
   proxima_acao_data: 'Data',
   score: 'Número',
 }
+
+// ---- Editor de Pipeline ---------------------------------------------------
+
+const PAPEIS: { val: string; label: string }[] = [
+  { val: 'inicial', label: 'Inicial' },
+  { val: 'normal',  label: 'Normal' },
+  { val: 'ganho',   label: 'Ganho' },
+  { val: 'perdido', label: 'Perdido' },
+]
+
+interface EstagioEdit extends PipelineEstagio { _novo?: boolean }
+
+function PipelineEditor({ pipelines, podeEditar, onSalvo }: {
+  pipelines: Pipeline[]; podeEditar: boolean; onSalvo: () => void
+}) {
+  const [estagios, setEstagios] = useState<Record<string, EstagioEdit[]>>({})
+  const [salvando, setSalvando] = useState<string | null>(null)
+  const [salvo, setSalvo]       = useState<string | null>(null)
+  const [erro, setErro]         = useState<string | null>(null)
+
+  // Inicializa estado local quando pipelines chegam do pai
+  useEffect(() => {
+    const m: Record<string, EstagioEdit[]> = {}
+    for (const p of pipelines) m[p.id] = p.estagios.map((e) => ({ ...e }))
+    setEstagios(m)
+  }, [pipelines])
+
+  function set(pid: string, idx: number, patch: Partial<EstagioEdit>) {
+    setEstagios((prev) => ({
+      ...prev,
+      [pid]: prev[pid].map((e, i) => (i === idx ? { ...e, ...patch } : e)),
+    }))
+  }
+
+  function mover(pid: string, idx: number, dir: -1 | 1) {
+    setEstagios((prev) => {
+      const arr = [...prev[pid]]
+      const outro = idx + dir
+      if (outro < 0 || outro >= arr.length) return prev
+      ;[arr[idx], arr[outro]] = [arr[outro], arr[idx]]
+      return { ...prev, [pid]: arr.map((e, i) => ({ ...e, ordem: i })) }
+    })
+  }
+
+  function remover(pid: string, idx: number) {
+    setEstagios((prev) => ({
+      ...prev,
+      [pid]: prev[pid].filter((_, i) => i !== idx).map((e, i) => ({ ...e, ordem: i })),
+    }))
+  }
+
+  function adicionar(pid: string) {
+    setEstagios((prev) => {
+      const arr = prev[pid] ?? []
+      const novo: EstagioEdit = {
+        id: '', chave: `estagio_${Date.now()}`, nome: 'Novo estágio',
+        papel: 'normal', cor: '#6366f1', ordem: arr.length, _novo: true,
+      }
+      return { ...prev, [pid]: [...arr, novo] }
+    })
+  }
+
+  async function salvar(pid: string) {
+    setSalvando(pid); setErro(null); setSalvo(null)
+    try {
+      const r = await fetch(`/api/pipelines/${pid}/estagios`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estagios: estagios[pid] }),
+      })
+      if (!r.ok) throw new Error((await r.json())?.erro || 'Falha ao salvar')
+      setSalvo(pid)
+      setTimeout(() => setSalvo(null), 2500)
+      onSalvo()
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro')
+    } finally {
+      setSalvando(null)
+    }
+  }
+
+  const inp = 'bg-[#0f1117] border border-[#2a3147] rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-indigo-500'
+
+  if (pipelines.length === 0) {
+    return <p className="text-sm text-slate-500">Nenhum pipeline encontrado.</p>
+  }
+
+  return (
+    <div className="space-y-6">
+      {pipelines.map((p) => {
+        const es = estagios[p.id] ?? []
+        const emSalvamento = salvando === p.id
+        const foiSalvo = salvo === p.id
+        return (
+          <div key={p.id} className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-[#2a3147] flex items-center justify-between">
+              <div>
+                <span className="font-semibold text-slate-100">{p.nome}</span>
+                <span className="ml-2 text-xs text-slate-500">({p.tipo})</span>
+              </div>
+              {podeEditar && (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => adicionar(p.id)}
+                    className="text-xs px-2.5 py-1.5 rounded-lg border border-[#2a3147] text-slate-300 hover:bg-[#252b3b] inline-flex items-center gap-1">
+                    <Plus size={12} /> Estágio
+                  </button>
+                  <button onClick={() => salvar(p.id)} disabled={emSalvamento}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-500 disabled:opacity-40 inline-flex items-center gap-1">
+                    {foiSalvo ? <><Check size={12} /> Salvo</> : <><Save size={12} /> Salvar</>}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {erro && <p className="px-5 py-2 text-xs text-red-400">{erro}</p>}
+
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#2a3147] text-[11px] uppercase tracking-wide text-slate-500">
+                  <th className="text-left font-medium px-5 py-2.5 w-8"></th>
+                  <th className="text-left font-medium px-3 py-2.5">Nome</th>
+                  <th className="text-left font-medium px-3 py-2.5">Chave</th>
+                  <th className="text-left font-medium px-3 py-2.5">Papel</th>
+                  <th className="text-center font-medium px-3 py-2.5">Cor</th>
+                  {podeEditar && <th className="px-3 py-2.5 w-16"></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {es.map((e, idx) => (
+                  <tr key={e.id || e.chave} className="border-b border-[#2a3147]/60 last:border-0 hover:bg-[#0f1117]/50 transition-colors">
+                    <td className="px-5 py-2">
+                      {podeEditar && (
+                        <div className="flex flex-col gap-0.5">
+                          <button onClick={() => mover(p.id, idx, -1)} disabled={idx === 0}
+                            className="text-slate-600 hover:text-slate-300 disabled:opacity-20"><ChevronUp size={13} /></button>
+                          <button onClick={() => mover(p.id, idx, 1)} disabled={idx === es.length - 1}
+                            className="text-slate-600 hover:text-slate-300 disabled:opacity-20"><ChevronDown size={13} /></button>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {podeEditar
+                        ? <input className={inp} value={e.nome} onChange={(ev) => set(p.id, idx, { nome: ev.target.value })} />
+                        : <span className="text-slate-200">{e.nome}</span>}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-slate-500 font-mono">{e.chave}</td>
+                    <td className="px-3 py-2">
+                      {podeEditar
+                        ? (
+                          <select className={inp} value={e.papel} onChange={(ev) => set(p.id, idx, { papel: ev.target.value })}>
+                            {PAPEIS.map((pp) => <option key={pp.val} value={pp.val}>{pp.label}</option>)}
+                          </select>
+                        ) : (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            e.papel === 'ganho' ? 'bg-green-500/15 text-green-400' :
+                            e.papel === 'perdido' ? 'bg-red-500/15 text-red-400' :
+                            e.papel === 'inicial' ? 'bg-indigo-500/15 text-indigo-400' :
+                            'bg-slate-500/15 text-slate-400'
+                          }`}>{e.papel}</span>
+                        )}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {podeEditar
+                        ? <input type="color" value={e.cor ?? '#6366f1'}
+                            onChange={(ev) => set(p.id, idx, { cor: ev.target.value })}
+                            className="w-7 h-7 rounded cursor-pointer border border-[#2a3147] bg-transparent" />
+                        : <span className="inline-block w-4 h-4 rounded-full border border-[#2a3147]"
+                            style={{ background: e.cor ?? '#475569' }} />
+                      }
+                    </td>
+                    {podeEditar && (
+                      <td className="px-3 py-2 text-right">
+                        {e.papel !== 'inicial' && (
+                          <button onClick={() => remover(p.id, idx)} title="Remover estágio"
+                            className="text-slate-600 hover:text-red-400 transition-colors">
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      })}
+      <p className="text-xs text-slate-600">
+        Estágios com papel <strong className="text-slate-400">ganho</strong> ou <strong className="text-slate-400">perdido</strong> encerram a execução do lead.
+        O estágio <strong className="text-slate-400">inicial</strong> não pode ser removido.
+      </p>
+    </div>
+  )
+}
+
+// ---- Toggle ---------------------------------------------------------------
 
 function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
@@ -217,27 +413,7 @@ export default function PersonalizacaoPanel() {
 
       {/* --- Aba Pipeline --- */}
       {aba === 'pipeline' && (
-        <div className="space-y-4">
-          <p className="text-sm text-slate-400">Etapas do pipeline de contato — mudança aqui reflete na tela de Pipeline de Contato.</p>
-          {pipelines.length === 0 ? (
-            <div className="text-sm text-slate-500">Nenhum pipeline encontrado.</div>
-          ) : pipelines.map((p) => (
-            <div key={p.id} className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-5">
-              <div className="font-semibold text-slate-100 mb-1">
-                {p.nome} <span className="text-xs text-slate-500">({p.tipo})</span>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-3">
-                {p.estagios.map((e) => (
-                  <span key={e.id} className="text-xs px-2.5 py-1 rounded-full border"
-                    style={{ borderColor: (e.cor ?? '#2a3147') + '66', color: e.cor ?? '#cbd5e1' }}>
-                    {e.nome} <span className="opacity-60">· {e.papel}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
-          <p className="text-xs text-slate-600">Edição de etapas entrará em iteração seguinte — tabelas reais da migration 0014.</p>
-        </div>
+        <PipelineEditor pipelines={pipelines} podeEditar={podeEditar} onSalvo={carregar} />
       )}
 
       {/* --- Aba Terminologia --- */}
