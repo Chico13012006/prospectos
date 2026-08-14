@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Target, Users, Workflow, Calendar, CheckCircle2, ArrowLeft, ArrowRight,
-  Loader2, Save, Info, Lock, ChevronRight, Check,
+  Loader2, Save, Info, Lock, ChevronRight, Check, AlertTriangle,
   Mail, MessageSquare, Phone, Clock, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 import type { Campanha, Publico } from './tiposCampanha';
@@ -221,9 +221,10 @@ export default function CampanhaWizardPage({ campanha }: { campanha?: Campanha |
     }
   }
 
-  const podeAvancar = nome.trim().length > 0;
-  const cadenciaNome = workflows.find((w) => w.id === workflowId)?.nome;
   const wfSelecionado = workflows.find((w) => w.id === workflowId);
+  const cadenciaNome = wfSelecionado?.nome;
+  const wfNaoPublicado = wfSelecionado != null && wfSelecionado.status !== 'publicado';
+  const podeAvancar = nome.trim().length > 0 && !(etapa === 2 && wfNaoPublicado);
 
   function toggleDia(dia: string) {
     setDiasSemana((prev) => prev.includes(dia) ? prev.filter((d) => d !== dia) : [...prev, dia]);
@@ -442,6 +443,17 @@ export default function CampanhaWizardPage({ campanha }: { campanha?: Campanha |
                         ))}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {wfNaoPublicado && (
+                  <div className="mt-3 flex items-start gap-2 p-3 rounded-lg bg-amber-400/10 border border-amber-400/20 text-xs text-amber-300">
+                    <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                    <span>
+                      Este workflow está em <strong>{wfSelecionado?.status}</strong> — publique-o antes de avançar.
+                      {' '}A campanha só inscreve leads em workflows publicados.{' '}
+                      <Link href="/automacao?tab=workflows" className="underline hover:text-amber-200">Abrir Workflows</Link>
+                    </span>
                   </div>
                 )}
               </div>
