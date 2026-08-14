@@ -69,7 +69,9 @@ function primeiroNome(nomeCompleto?: string | null): string {
 
 // Substitui as variáveis do template pelos dados do lead e limpa resíduos de
 // campos vazios (ex.: "Olá , tudo bem?" → "Olá, tudo bem?").
-export function preencher(texto: string, lead: Lead): string {
+// `extras` injeta variáveis de nível-org (ex.: {nome_servico}) sem alterar a
+// assinatura dos chamadores que só têm acesso ao lead.
+export function preencher(texto: string, lead: Lead, extras?: Record<string, string>): string {
   const valores: Record<string, string> = {
     nome: primeiroNome(lead.contato_nome),
     empresa: lead.empresa?.trim() || 'sua empresa',
@@ -79,6 +81,7 @@ export function preencher(texto: string, lead: Lead): string {
     data_validade: lead.data_validade
       ? new Date(lead.data_validade).toLocaleDateString('pt-BR')
       : '',
+    ...extras,
   }
   return texto
     .replace(/\{(\w+)\}/g, (m, chave: string) => (chave in valores ? valores[chave] : m))

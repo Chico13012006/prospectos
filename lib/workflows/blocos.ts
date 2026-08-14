@@ -86,6 +86,20 @@ export const condicaoCampo: Condicao = {
   },
 }
 
+// --- CONDIÇÃO: responsável do lead é o usuário X --------------------------------
+// Lê responsavel_id direto da whitelist — campo já permitido por CAMPOS_LEAD_PERMITIDOS.
+// Vazio = não filtra (passa sempre), alinhado com o comportamento de "criar tarefa" vazio.
+export const condicaoResponsavelLeadIgual: Condicao = {
+  tipo: 'responsavel_lead_igual',
+  async avaliar(ctx) {
+    if (!ctx.leadId) return false
+    const uid = String(ctx.config.responsavel_id ?? '')
+    if (!uid) return true
+    const atual = await ctx.ambiente.lerCampoLead(ctx.leadId, 'responsavel_id')
+    return String(atual ?? '') === uid
+  },
+}
+
 // --- AÇÃO: esperar N dias/horas (espera PERSISTIDA — suspende a execução) ----
 export const acaoEsperar: Acao = {
   tipo: 'esperar',
@@ -371,6 +385,7 @@ export function registrarBlocosPadrao(registro = new RegistroWorkflows()): Regis
     .registrarGatilho(gatilhoStatusMudou)
     .registrarCondicao(condicaoLeadRespondeu)
     .registrarCondicao(condicaoCampo)
+    .registrarCondicao(condicaoResponsavelLeadIgual)
     .registrarAcao(acaoEsperar)
     .registrarAcao(acaoEnviarEmail)
     .registrarAcao(acaoCriarTarefa)

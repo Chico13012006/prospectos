@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, Zap, Filter, PlayCircle,
   CheckCircle2, PauseCircle, Rocket, Save, AlertTriangle, UserPlus, Search,
-  FlaskConical, Users, X,
+  FlaskConical, Users, X, Info,
 } from 'lucide-react';
 import type { BlocoConfig, DefinicaoWorkflow, Workflow, WorkflowVersao, StatusWorkflow } from '@/lib/workflows/types';
 import {
@@ -49,13 +49,26 @@ const EXEC_LABEL: Record<string, string> = {
 };
 
 // --- Editor dos campos de config de um bloco (a partir do catálogo) ----------
-function CamposEditor({ def, config, onChange }: {
+function CamposEditor({ def, config, onChange, blocoTipo, condicoes }: {
   def: BlocoDef;
   config: Record<string, unknown>;
   onChange: (nome: string, valor: unknown) => void;
+  blocoTipo?: string;
+  condicoes?: BlocoConfig[];
 }) {
   const usuarios = useContext(UsuariosCtx);
   if (def.campos.length === 0) return null;
+
+  const campoRespId = def.campos.find(c => c.tipo === 'usuario' && c.nome === 'responsavel_id');
+  const uidSel = campoRespId ? String(config[campoRespId.nome] ?? '') : '';
+  const nomeUsuario = uidSel ? (usuarios.find(u => u.id === uidSel)?.nome ?? uidSel) : '';
+  const temCondicaoResp = condicoes?.some(c => c.tipo === 'responsavel_lead_igual') ?? false;
+  const prefixo = blocoTipo === 'criar_tarefa' ? 'Esta tarefa'
+    : blocoTipo === 'criar_tarefa_ligacao' ? 'Esta tarefa de ligação'
+    : blocoTipo === 'notificar' ? 'Esta notificação'
+    : blocoTipo === 'atribuir_responsavel' ? 'O lead'
+    : 'O resultado';
+
   return (
     <div className="flex flex-wrap gap-3 mt-2">
       {def.campos.map((campo: CampoDef) => {
@@ -100,12 +113,29 @@ function CamposEditor({ def, config, onChange }: {
           </label>
         );
       })}
+
+      {campoRespId && (
+        <div className="w-full mt-0.5 space-y-1">
+          <p className="flex items-start gap-1.5 text-[11px] text-slate-400 leading-snug">
+            <Info size={12} className="shrink-0 mt-0.5 text-slate-500" />
+            {!uidSel
+              ? `${prefixo} vai para o responsável do próprio lead que ativou o fluxo.`
+              : `${prefixo} vai sempre para ${nomeUsuario}, para qualquer lead que passar pelas condições acima — não filtra por dono do lead.`
+            }
+          </p>
+          {uidSel && !temCondicaoResp && (
+            <p className="ml-[18px] text-[11px] text-sky-400/80 leading-snug">
+              Quer que isso valha só para leads de <span className="text-sky-300">{nomeUsuario}</span>? Adicione a condição &quot;Responsável do lead&quot; na seção Condições acima.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 // --- Linha de bloco: seletor de tipo + campos + controles --------------------
-function LinhaBloco({ opcoes, bloco, onChange, onRemover, controles, extra }: {
+function LinhaBloco({ opcoes, bloco, onChange, onRemover, controles, extra, condicoes }: {
   opcoes: BlocoDef[];
   bloco: BlocoConfig;
   onChange: (novo: BlocoConfig) => void;
@@ -114,6 +144,7 @@ function LinhaBloco({ opcoes, bloco, onChange, onRemover, controles, extra }: {
   // Editor dedicado para blocos com config aninhado (ex.: saltar_se), renderizado
   // no lugar do CamposEditor genérico.
   extra?: React.ReactNode;
+  condicoes?: BlocoConfig[];
 }) {
   const def = acharBlocoDef(bloco.tipo) ?? opcoes[0];
   return (
@@ -143,6 +174,8 @@ function LinhaBloco({ opcoes, bloco, onChange, onRemover, controles, extra }: {
           def={def}
           config={bloco.config}
           onChange={(nome, valor) => onChange({ ...bloco, config: { ...bloco.config, [nome]: valor } })}
+          blocoTipo={bloco.tipo}
+          condicoes={condicoes}
         />
       )}
     </div>
@@ -574,6 +607,7 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
                       bloco={a}
                       onChange={novo => setDef({ ...def, acoes: def.acoes.map((x, j) => (j === i ? novo : x)) })}
                       onRemover={() => setDef({ ...def, acoes: def.acoes.filter((_, j) => j !== i) })}
+                      condicoes={def.condicoes}
                       extra={a.tipo === 'saltar_se' ? (
                         <SaltarSeEditor
                           bloco={a}

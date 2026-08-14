@@ -209,6 +209,14 @@ export const CONDICOES: BlocoDef[] = [
       },
     ],
   },
+  {
+    tipo: 'responsavel_lead_igual',
+    label: 'Responsável do lead',
+    descricao: 'Passa somente se o responsável do lead for o usuário selecionado. Use para direcionar ações apenas a leads de uma pessoa específica.',
+    campos: [
+      { nome: 'responsavel_id', label: 'Responsável', tipo: 'usuario', padrao: '', dica: 'Só leads cujo responsável for este usuário passarão pela condição.' },
+    ],
+  },
 ]
 
 // Estágios do pipeline (leads.estagio) para atualizar_status / mover_pipeline.

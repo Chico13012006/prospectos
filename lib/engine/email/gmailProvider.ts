@@ -47,16 +47,19 @@ export interface GmailCredenciais {
 
 // Papel da conta de e-mail (item 2.7): duas caixas separadas para não misturar
 // reputação/inbox entre a 1ª abordagem (prospecção) e a cadência (follow-up).
+// Aceita também chave livre (string) para conta por organização — ex.: 'LAUDO'
+// lê GMAIL_USER_LAUDO / GMAIL_APP_PASSWORD_LAUDO. Mantém compatibilidade total
+// com os papéis predefinidos.
 export type PapelEmail = 'followup' | 'prospeccao'
 
-// Credenciais Gmail por PAPEL. Cada papel pode ter a própria conta:
-//   follow-up : GMAIL_USER_FOLLOWUP  / GMAIL_APP_PASSWORD_FOLLOWUP
-//   prospecção: GMAIL_USER_PROSPECCAO / GMAIL_APP_PASSWORD_PROSPECCAO
-// FALLBACK (ambos os papéis): a conta única atual GMAIL_USER / GMAIL_APP_PASSWORD.
-// Enquanto a 2ª conta (prospecção) não existir, tudo cai na conta única — exato
-// comportamento de hoje, sem quebrar nada. Basta setar as env vars novas depois.
-export function lerCredenciaisGmail(papel: PapelEmail = 'followup'): GmailCredenciais | null {
-  const prefixo = papel === 'prospeccao' ? 'PROSPECCAO' : 'FOLLOWUP'
+// Credenciais Gmail por PAPEL ou chave livre por org. Lookup em cascata:
+//   1. GMAIL_USER_<PREFIXO> / GMAIL_APP_PASSWORD_<PREFIXO>  (conta específica)
+//   2. GMAIL_USER / GMAIL_APP_PASSWORD                       (conta padrão)
+export function lerCredenciaisGmail(papel: PapelEmail | string = 'followup'): GmailCredenciais | null {
+  const prefixo =
+    papel === 'prospeccao' ? 'PROSPECCAO'
+    : papel === 'followup'  ? 'FOLLOWUP'
+    : papel.toUpperCase()
   const user = process.env[`GMAIL_USER_${prefixo}`] ?? process.env.GMAIL_USER
   const appPassword = process.env[`GMAIL_APP_PASSWORD_${prefixo}`] ?? process.env.GMAIL_APP_PASSWORD
   if (!user || !appPassword) return null

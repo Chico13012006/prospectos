@@ -41,7 +41,7 @@ const TEMPLATES_EMAIL = [
     assunto: 'Podemos retomar os laudos da {empresa}?',
     corpo: `Olá, {nome}. Tudo bem?
 
-Aqui é {responsavel_comercial}, da Laudo de Brinquedos.
+Aqui é {responsavel_comercial}, da {nome_servico}.
 
 Já tivemos contato anteriormente sobre os laudos dos brinquedos da {empresa}, mas não conseguimos concluir o alinhamento.
 
@@ -53,7 +53,7 @@ Posso dar continuidade por aqui?
 
 Abraço,
 {responsavel_comercial}
-Laudo de Brinquedos`,
+{nome_servico}`,
   },
   {
     tipo: 'reativacao_3',
@@ -71,7 +71,7 @@ Você consegue me confirmar a situação atual?
 
 Atenciosamente,
 {responsavel_comercial}
-Laudo de Brinquedos`,
+{nome_servico}`,
   },
   {
     tipo: 'reativacao_3b',
@@ -91,7 +91,7 @@ Pode responder apenas com o número da opção. Assim, atualizo nosso acompanham
 
 Obrigado,
 {responsavel_comercial}
-Laudo de Brinquedos`,
+{nome_servico}`,
   },
   {
     tipo: 'reativacao_5',
@@ -108,7 +108,7 @@ Caso outra pessoa seja responsável atualmente, você também pode me indicar o 
 Obrigado e fico à disposição.
 
 {responsavel_comercial}
-Laudo de Brinquedos`,
+{nome_servico}`,
   },
   {
     tipo: 'reativacao_6',
@@ -126,7 +126,7 @@ Se preferir, posso fazer algumas perguntas rápidas por aqui e indicar o próxim
 
 Abraço,
 {responsavel_comercial}
-Laudo de Brinquedos`,
+{nome_servico}`,
   },
 ]
 
@@ -191,8 +191,25 @@ async function main() {
   try {
     console.log('=== Atualização do Workflow de Reativação (v2) ===')
 
+    // 0. Gravar nomenclaturas.nome_servico no blob de config da org.
+    console.log('\n[0/5] Configurando nomenclaturas.nome_servico...')
+    const cfgRes = await c.query(`SELECT configuracoes FROM organizacoes WHERE id=$1`, [ORG])
+    const cfgBlob = (cfgRes.rows[0]?.configuracoes as Record<string, unknown>) ?? {}
+    const nomenclaturasAtuais = (cfgBlob.nomenclaturas as Record<string, string> | undefined) ?? {}
+    const novoCfg = {
+      ...cfgBlob,
+      nomenclaturas: {
+        ...nomenclaturasAtuais,
+        nome_servico: 'Laudo de Brinquedos',
+        email_conta_key: 'LAUDO',
+      },
+    }
+    await c.query(`UPDATE organizacoes SET configuracoes=$1 WHERE id=$2`, [JSON.stringify(novoCfg), ORG])
+    console.log(`  ✔ nomenclaturas.nome_servico  = "Laudo de Brinquedos"`)
+    console.log(`  ✔ nomenclaturas.email_conta_key = "LAUDO" (usa GMAIL_USER_LAUDO / GMAIL_APP_PASSWORD_LAUDO)`)
+
     // 1. Upsert templates de e-mail
-    console.log('\n[1/4] Templates de e-mail...')
+    console.log('\n[1/5] Templates de e-mail...')
     for (const t of TEMPLATES_EMAIL) {
       const ex = await c.query(
         `SELECT id FROM templates WHERE organizacao_id=$1 AND canal='email' AND tipo=$2`,
@@ -215,7 +232,7 @@ async function main() {
     }
 
     // 2. Deletar execuções v1 (todas no passo 0, dry_run=true, sem e-mail enviado)
-    console.log('\n[2/4] Limpando execuções v1...')
+    console.log('\n[2/5] Limpando execuções v1...')
     const exIds = await c.query(
       `SELECT id FROM workflow_execucoes WHERE campanha_id=$1`,
       [CAMPANHA_ID]
@@ -237,7 +254,7 @@ async function main() {
     }
 
     // 3. Publicar versão 2 do workflow
-    console.log('\n[3/4] Publicando workflow v2...')
+    console.log('\n[3/5] Publicando workflow v2...')
     const versaoAtual = await c.query(
       `SELECT versao_atual_id FROM workflows WHERE id=$1`,
       [WORKFLOW_ID]
@@ -264,7 +281,7 @@ async function main() {
     console.log(`  ✔ workflows.versao_atual_id atualizado para v${nextNum}`)
 
     // 4. Re-enrollar leads (agora que execuções v1 foram deletadas)
-    console.log('\n[4/4] Re-enrollment na v2...')
+    console.log('\n[4/5] Re-enrollment na v2...')
     const leads = await c.query(
       `SELECT id, empresa FROM leads
        WHERE organizacao_id=$1
@@ -324,6 +341,82 @@ async function main() {
     console.log(`  → senão: T5 encerramento → 90 dias → T6 reativação → encerrar`)
     console.log(`\nConfirme com o usuário antes de liberar dry_run.`)
     console.log(`${'─'.repeat(60)}`)
+
+    // Preview: renderiza os 5 e-mails com dados reais de leads da campanha.
+    console.log(`\n${'═'.repeat(60)}`)
+    console.log('PREVIEW DOS 5 E-MAILS (dados reais)')
+    console.log(`${'═'.repeat(60)}`)
+
+    // Busca nome do serviço: nomenclaturas.nome_servico tem prioridade sobre organizacoes.nome.
+    const orgRow = await c.query(`SELECT nome, configuracoes FROM organizacoes WHERE id=$1`, [ORG])
+    const orgCfg = (orgRow.rows[0]?.configuracoes as Record<string, unknown> | undefined) ?? {}
+    const orgNomenclaturas = (orgCfg['nomenclaturas'] as Record<string, string> | undefined) ?? {}
+    const nomeServico = orgNomenclaturas['nome_servico'] ?? (orgRow.rows[0]?.nome as string | undefined) ?? 'Laudo de Brinquedos'
+
+    // Lead qualquer (fallback para T1/T5/T6 quando nenhum tem data_validade).
+    const leadQualquer = await c.query(
+      `SELECT l.contato_nome, l.empresa, l.responsavel_nome, u.nome AS responsavel_usuario_nome,
+              to_char(l.data_validade, 'DD/MM/YYYY') AS data_validade_fmt
+       FROM leads l
+       LEFT JOIN usuarios u ON u.id = l.responsavel_id
+       WHERE l.organizacao_id=$1 AND l.contato_email IS NOT NULL
+       ORDER BY l.created_at LIMIT 1`,
+      [ORG]
+    )
+    // Lead COM data_validade (para T3).
+    const leadComData = await c.query(
+      `SELECT l.contato_nome, l.empresa, l.responsavel_nome, u.nome AS responsavel_usuario_nome,
+              to_char(l.data_validade, 'DD/MM/YYYY') AS data_validade_fmt
+       FROM leads l
+       LEFT JOIN usuarios u ON u.id = l.responsavel_id
+       WHERE l.organizacao_id=$1 AND l.contato_email IS NOT NULL AND l.data_validade IS NOT NULL
+       LIMIT 1`,
+      [ORG]
+    )
+    // Lead SEM data_validade (para T3B).
+    const leadSemData = await c.query(
+      `SELECT l.contato_nome, l.empresa, l.responsavel_nome, u.nome AS responsavel_usuario_nome,
+              to_char(l.data_validade, 'DD/MM/YYYY') AS data_validade_fmt
+       FROM leads l
+       LEFT JOIN usuarios u ON u.id = l.responsavel_id
+       WHERE l.organizacao_id=$1 AND l.contato_email IS NOT NULL AND l.data_validade IS NULL
+       LIMIT 1`,
+      [ORG]
+    )
+
+    type DadosLead = {
+      contato_nome: string; empresa: string; responsavel_nome: string | null;
+      responsavel_usuario_nome: string | null; data_validade_fmt: string | null
+    }
+    const dadosQualquer = leadQualquer.rows[0] as DadosLead | undefined
+    const dadosCom = (leadComData.rows[0] as DadosLead | undefined) ?? dadosQualquer
+    const dadosSem = leadSemData.rows[0] as DadosLead | undefined
+
+    function render(texto: string, vars: Record<string, string>): string {
+      return texto.replace(/\{(\w+)\}/g, (_m, k: string) => vars[k] ?? `{${k}}`)
+    }
+    function vars(d: DadosLead | undefined): Record<string, string> {
+      return {
+        nome: (d?.contato_nome ?? '').trim().split(/\s+/)[0] || '(contato)',
+        empresa: d?.empresa?.trim() || 'sua empresa',
+        responsavel_comercial: d?.responsavel_usuario_nome ?? d?.responsavel_nome ?? 'Francisco',
+        data_validade: d?.data_validade_fmt ?? '(sem data)',
+        nome_servico: nomeServico,
+      }
+    }
+
+    const LINHA = '─'.repeat(60)
+    for (const t of TEMPLATES_EMAIL) {
+      const d = t.tipo === 'reativacao_3b' ? dadosSem : dadosCom
+      const v = vars(d)
+      const leadRef = d ? `${v.nome} / ${v.empresa}` : '(sem lead)'
+      console.log(`\n${LINHA}`)
+      console.log(`TEMPLATE: ${t.nome}  [lead: ${leadRef}]`)
+      console.log(`ASSUNTO : ${render(t.assunto, v)}`)
+      console.log(`${LINHA}`)
+      console.log(render(t.corpo, v))
+    }
+    console.log(`\n${'═'.repeat(60)}`)
   } finally {
     await c.end()
   }

@@ -8,6 +8,101 @@ import { Zap, Filter, Clock, GitBranch, Flag, PlayCircle, CornerDownRight, Arrow
 import type { BlocoConfig, DefinicaoWorkflow } from '@/lib/workflows/types';
 import { acharBlocoDef, descreverBloco, type UsuarioRotulo } from '@/lib/workflows/catalogo';
 
+// --- Frase em linguagem natural do fluxo ------------------------------------
+
+function nomeUsuario(uid: string, usuarios?: UsuarioRotulo[]): string {
+  return uid ? (usuarios?.find(u => u.id === uid)?.nome ?? uid) : '';
+}
+
+function fraseGatilho(g: BlocoConfig): string {
+  const cfg = g.config ?? {};
+  switch (g.tipo) {
+    case 'lead_respondeu_gatilho': {
+      const dias = Number(cfg.dentro_de_dias ?? 3);
+      return `um lead responder nos últimos ${dias} dias`;
+    }
+    case 'manual':
+      return 'um lead for inscrito manualmente';
+    case 'nao_respondeu_em_dias': {
+      const dias = Number(cfg.dias ?? 30);
+      return `um lead não responder em ${dias} dias`;
+    }
+    case 'validade_laudo_venceu': {
+      const dias = Number(cfg.dias_apos ?? 0);
+      return dias === 0 ? 'a validade do laudo vencer' : `a validade do laudo vencer há ${dias} dias`;
+    }
+    case 'campo_data_vence': {
+      const campo = String(cfg.campo ?? 'data');
+      const dias = Number(cfg.dias ?? 0);
+      return `o campo "${campo}" vencer em ${dias} dias`;
+    }
+    case 'status_mudou':
+      return `o status mudar para "${String(cfg.estagio ?? '')}"`;
+    case 'sem_resposta_ha_dias': {
+      const dias = Number(cfg.dias ?? 30);
+      return `um lead ficar sem resposta por ${dias} dias`;
+    }
+    default:
+      return descreverBloco(g).toLowerCase();
+  }
+}
+
+function fraseCondicoes(condicoes: BlocoConfig[], usuarios?: UsuarioRotulo[]): string {
+  if (condicoes.length === 0) return 'para qualquer lead, não filtrado por responsável';
+  return condicoes.map(c => {
+    if (c.tipo === 'responsavel_lead_igual') {
+      const uid = String(c.config?.responsavel_id ?? '');
+      const nome = nomeUsuario(uid, usuarios);
+      return nome ? `responsável do lead é ${nome}` : 'com responsável definido';
+    }
+    return descreverBloco(c, usuarios).toLowerCase();
+  }).join(' e ');
+}
+
+function fraseAcoes(acoes: BlocoConfig[], usuarios?: UsuarioRotulo[]): string {
+  if (acoes.length === 0) return 'sem ações';
+  const partes: string[] = [];
+  for (const a of acoes) {
+    if (a.tipo === 'esperar') {
+      const dias = Number(a.config?.dias ?? 0);
+      const horas = Number(a.config?.horas ?? 0);
+      const t: string[] = [];
+      if (dias) t.push(`${dias} dia${dias === 1 ? '' : 's'}`);
+      if (horas) t.push(`${horas}h`);
+      partes.push(`espera ${t.join(' e ') || '0'}`);
+    } else if (a.tipo === 'encerrar') {
+      partes.push('encerra o fluxo');
+      break;
+    } else if (a.tipo === 'criar_tarefa' || a.tipo === 'criar_tarefa_ligacao') {
+      const titulo = String(a.config?.titulo ?? '');
+      const uid = String(a.config?.responsavel_id ?? '');
+      const nome = nomeUsuario(uid, usuarios);
+      const tipo = a.tipo === 'criar_tarefa_ligacao' ? 'tarefa de ligação' : 'tarefa';
+      partes.push(nome ? `cria ${tipo} "${titulo}" para ${nome}` : `cria ${tipo} "${titulo}"`);
+    } else if (a.tipo === 'atribuir_responsavel') {
+      const uid = String(a.config?.responsavel_id ?? '');
+      const nome = nomeUsuario(uid, usuarios);
+      partes.push(nome ? `atribui o lead a ${nome}` : 'atribui responsável');
+    } else if (a.tipo === 'notificar') {
+      const uid = String(a.config?.responsavel_id ?? '');
+      const nome = nomeUsuario(uid, usuarios);
+      partes.push(nome ? `notifica ${nome}` : 'envia notificação');
+    } else {
+      partes.push(descreverBloco(a, usuarios).toLowerCase());
+    }
+    if (partes.length >= 4) { partes.push('…'); break; }
+  }
+  return partes.join(' e depois ');
+}
+
+function montarFraseFluxo(def: DefinicaoWorkflow, usuarios?: UsuarioRotulo[]): string | null {
+  if (!def.gatilho?.tipo) return null;
+  const g = fraseGatilho(def.gatilho);
+  const c = fraseCondicoes(def.condicoes ?? [], usuarios);
+  const a = fraseAcoes(def.acoes ?? [], usuarios);
+  return `Quando ${g} — ${c} — ${a}.`;
+}
+
 function rotuloPasso(acoes: BlocoConfig[], indice: number): string {
   const b = acoes[indice];
   if (!b) return `passo ${indice + 1} (inexistente)`;
@@ -95,9 +190,15 @@ function FluxoPasso({ bloco, indice, acoes, usuarios }: { bloco: BlocoConfig; in
 export default function ResumoFluxo({ def, usuarios }: { def: DefinicaoWorkflow; usuarios?: UsuarioRotulo[] }) {
   const acoes = def.acoes ?? [];
   const condicoes = def.condicoes ?? [];
+  const frase = montarFraseFluxo(def, usuarios);
   return (
     <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] p-4">
       <div className="text-sm font-semibold text-slate-200 mb-3">Resumo do fluxo</div>
+      {frase && (
+        <p className="text-xs text-slate-300 leading-relaxed bg-[#0f1117]/60 rounded-lg px-3 py-2.5 mb-3 border border-[#2a3147]">
+          {frase}
+        </p>
+      )}
       <ol className="space-y-2">
         <li className="flex items-center gap-2">
           <span className="w-5 shrink-0" />

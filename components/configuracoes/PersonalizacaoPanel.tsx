@@ -394,6 +394,10 @@ export default function PersonalizacaoPanel() {
       {/* --- Aba Filtros e visualizações --- */}
       {aba === 'filtros' && (
         <div className="space-y-4">
+          <div className="flex items-start gap-2 text-xs text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 rounded-lg px-4 py-3">
+            <Info size={13} className="shrink-0 mt-0.5" />
+            <span>Isto reflete os campos marcados como &quot;Usar como filtro&quot; na aba <strong>Campos</strong>. Para adicionar ou remover um filtro, edite lá.</span>
+          </div>
           <p className="text-sm text-slate-400">Os filtros disponíveis em Base de Leads e Pipeline são definidos pelo toggle <strong className="text-slate-300">Usar como filtro</strong> na aba Campos.</p>
           <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-5">
             <h3 className="font-semibold text-slate-200 text-sm mb-3">Filtros ativos neste workspace</h3>
@@ -419,6 +423,10 @@ export default function PersonalizacaoPanel() {
       {/* --- Aba Terminologia --- */}
       {aba === 'terminologia' && (
         <div className="space-y-4">
+          <div className="flex items-start gap-2 text-xs text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 rounded-lg px-4 py-3">
+            <Info size={13} className="shrink-0 mt-0.5" />
+            <span>Isto muda só como o termo aparece na tela (cosmético) — não altera comportamento, filtros ou dados. Para controlar o que a plataforma processa de verdade, use a aba <strong>Campos</strong>.</span>
+          </div>
           <p className="text-sm text-slate-400">
             Renomeie termos comerciais do seu workspace. Termos estruturais (Campanha, Workflow, Empresa, Contato, Tarefa, Configurações) não podem ser renomeados.
           </p>
