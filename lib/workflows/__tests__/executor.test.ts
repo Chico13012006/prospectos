@@ -387,4 +387,28 @@ describe('executor de workflows', () => {
     expect(() => registro.obterAcao('inexistente')).toThrow(/não registrada/)
     expect(() => registro.obterGatilho('inexistente')).toThrow(/não registrado/)
   })
+
+  it('responsavel_lead_igual: só lead do responsável selecionado recebe a ação; outro é barrado', async () => {
+    const def: DefinicaoWorkflow = {
+      gatilho,
+      condicoes: [{ tipo: 'responsavel_lead_igual', config: { responsavel_id: 'user-francisco' } }],
+      acoes: [{ tipo: 'criar_tarefa', config: { titulo: 'SÓ PARA FRANCISCO' } }],
+    }
+
+    // Lead cujo dono É Francisco → condição passa → tarefa criada
+    const sA = new MemoryWorkflowStore(); const aA = new AmbienteFake()
+    aA.alvos = ['lead-francisco']
+    aA.campos = { 'lead-francisco': { responsavel_id: 'user-francisco' } }
+    await publicarWorkflow(sA, def)
+    await processarTudo(sA, registro, aA)
+    expect(aA.tarefas).toEqual([{ leadId: 'lead-francisco', titulo: 'SÓ PARA FRANCISCO' }])
+
+    // Lead cujo dono é Silmara → condição falha → nenhuma tarefa criada
+    const sB = new MemoryWorkflowStore(); const aB = new AmbienteFake()
+    aB.alvos = ['lead-silmara']
+    aB.campos = { 'lead-silmara': { responsavel_id: 'user-silmara' } }
+    await publicarWorkflow(sB, def)
+    await processarTudo(sB, registro, aB)
+    expect(aB.tarefas).toHaveLength(0)
+  })
 })
