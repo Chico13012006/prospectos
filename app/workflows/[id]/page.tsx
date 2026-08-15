@@ -4,7 +4,7 @@ import { createContext, use, useContext, useEffect, useMemo, useState } from 're
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, Zap, Filter, PlayCircle,
+  ArrowLeft, List, GitBranch, Loader2, Plus, Trash2, ChevronUp, ChevronDown, Zap, Filter, PlayCircle,
   CheckCircle2, PauseCircle, Rocket, Save, AlertTriangle, UserPlus, Search,
   FlaskConical, Users, X, Info,
 } from 'lucide-react';
@@ -14,6 +14,7 @@ import {
   garantirIdsAcoes, type BlocoDef, type CampoDef,
 } from '@/lib/workflows/catalogo';
 import ResumoFluxo from '@/components/workflows/ResumoFluxo';
+import WorkflowCanvas from '@/components/workflows/WorkflowCanvas';
 import { getUsuarios, getLeads } from '@/lib/api';
 import type { Usuario, Lead } from '@/lib/supabase';
 
@@ -284,6 +285,7 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
   const [confirmPub, setConfirmPub] = useState<{ alvos: number } | null>(null);
   const [simulando, setSimulando] = useState(false);
   const [simResult, setSimResult] = useState<SimResultado | null>(null);
+  const [vista, setVista] = useState<'lista' | 'fluxo'>('lista');
 
   useEffect(() => {
     getUsuarios().then(setUsuarios).catch(() => {});
@@ -558,10 +560,23 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
         </div>
       )}
 
+      {/* Toggle lista / fluxo */}
+      <div className="flex items-center gap-1 mt-5">
+        {(['lista', 'fluxo'] as const).map(v => (
+          <button key={v} onClick={() => setVista(v)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium inline-flex items-center gap-1.5 transition-colors ${vista === v ? 'bg-[#1a1f2e] text-slate-100 border border-[#3f4d6b]' : 'text-slate-500 hover:text-slate-300'}`}>
+            {v === 'lista' ? <><List size={13} /> Ver como lista</> : <><GitBranch size={13} /> Ver como fluxo</>}
+          </button>
+        ))}
+      </div>
+
       {/* Layout de duas colunas: editor (esquerda) + resumo VIVO do fluxo (direita,
           fixo ao rolar) — edita de um lado e vê o fluxo tomar forma do outro. */}
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-5 mt-5 items-start">
-        {/* Coluna do editor — a "espinha" do fluxo (gatilho → condições → ações) */}
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-5 mt-4 items-start">
+        {/* Coluna esquerda: editor em lista ou canvas de fluxo */}
+        {vista === 'fluxo' ? (
+          <WorkflowCanvas def={def} usuarios={usuarios} />
+        ) : (
         <div>
           <section className="card p-4 animate-in stagger-1">
             <CabecalhoEtapa n={1} Icon={Zap} cor={COR_GATILHO} titulo="Gatilho" hint="quando o lead entra no workflow" />
@@ -646,6 +661,7 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
             </button>
           </section>
         </div>
+        )}
 
         {/* Coluna do resumo — fixa ao rolar (segue o editor) */}
         <aside className="lg:sticky lg:top-6 space-y-4">
