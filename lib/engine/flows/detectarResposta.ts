@@ -4,6 +4,9 @@
 //  - casa a mensagem ao lead por e-mail EXATO ou por DOMÍNIO (encaminhamento)
 //  - PAUSA a cadência do lead (sai da esteira de follow-up)
 //  - enfileira o direcionamento ao closer (Fluxo 3)
+// Quando um BOUNCE SMTP é detectado (migration 0027):
+//  - marca o lead como bounced=true
+//  - cancela todas as workflow_execucoes ativas do lead
 import { OWNER_ENGINE } from '../config'
 import { log } from '../logger'
 import { ESTAGIOS_EM_CADENCIA, dominioDoLead } from '../templates'
@@ -22,10 +25,29 @@ const PADROES_AUTO = [
   'não foi possível entregar', 'devolvido', 'mailer-daemon', 'postmaster',
 ]
 
+// Padrões que indicam especificamente BOUNCE SMTP (falha de entrega permanente).
+// Subconjunto de PADROES_AUTO: toda bounce é auto-resposta, mas não o contrário.
+// Remetente mailer-daemon/postmaster OU assunto com padrões canônicos de bounce.
+const PADROES_BOUNCE_REMETENTE = ['mailer-daemon@', 'postmaster@']
+const PADROES_BOUNCE_ASSUNTO = [
+  'undeliverable', 'delivery status notification', 'mail delivery failed',
+  'returned mail', 'delivery failure', 'não foi possível entregar',
+  'failure notice', 'message not delivered',
+]
+
 export function ehAutoResposta(msg: MensagemRecebida): boolean {
   if (msg.automatica) return true
   const alvo = `${msg.assunto}\n${msg.corpo}\n${msg.de}`.toLowerCase()
   return PADROES_AUTO.some((p) => alvo.includes(p))
+}
+
+// Bounce SMTP: falha permanente de entrega — o email não existe ou o servidor
+// rejeitou definitivamente. Distingue de auto-reply de ausência (recuperável).
+export function ehBounce(msg: MensagemRecebida): boolean {
+  const de = msg.de.toLowerCase()
+  if (PADROES_BOUNCE_REMETENTE.some((p) => de.includes(p))) return true
+  const assunto = msg.assunto.toLowerCase()
+  return PADROES_BOUNCE_ASSUNTO.some((p) => assunto.includes(p))
 }
 
 // Prefixo-marcador da nota de sugestão (item 7). O LeadPanel reconhece este
@@ -49,22 +71,30 @@ export async function detectarResposta(
   email: EmailProvider,
   fila: Queue,
   opts: DetectarRespostaOpts = {},
-): Promise<{ respostas: number; ignoradas: number; contatosAlternativos: number }> {
+): Promise<{ respostas: number; ignoradas: number; contatosAlternativos: number; bounces: number }> {
   const mensagens = await email.lerCaixaEntrada()
   if (mensagens.length === 0) {
     log.info('Caixa de entrada: nenhuma mensagem nova.')
-    return { respostas: 0, ignoradas: 0, contatosAlternativos: 0 }
+    return { respostas: 0, ignoradas: 0, contatosAlternativos: 0, bounces: 0 }
   }
 
   let respostas = 0
   let ignoradas = 0
   let contatosAlternativos = 0
+  let bounces = 0
 
   for (const msg of mensagens) {
-    // 1) Auto-resposta nunca é tratada como resposta real. Mas, em vez de só
-    // ignorar (item 7), se for um auto-reply de ausência com contato alternativo
-    // no corpo, registra uma SUGESTÃO no lead para o comercial revisar.
+    // 1) Auto-resposta: verifica se é bounce antes de tratar como férias/ausência.
     if (ehAutoResposta(msg)) {
+      if (ehBounce(msg)) {
+        // Bounce SMTP: marcar lead, cancelar cadência, registrar nota.
+        const bouncou = await tratarBounce(store, msg)
+        if (bouncou) bounces++
+        else log.aviso('Bounce não casou com nenhum lead. Ignorado.', { de: msg.de })
+        ignoradas++
+        continue
+      }
+      // Auto-reply de ausência: tentar extrair contato alternativo.
       const sugeriu = await tratarAutoResposta(store, msg, opts)
       if (sugeriu) contatosAlternativos++
       else log.aviso('Ignorado (auto-resposta).', { de: msg.de, assunto: msg.assunto })
@@ -118,7 +148,7 @@ export async function detectarResposta(
     fila.enfileirar('direcionar_closer', { leadId: lead.id, textoResposta: msg.corpo })
   }
 
-  return { respostas, ignoradas, contatosAlternativos }
+  return { respostas, ignoradas, contatosAlternativos, bounces }
 }
 
 // Casa uma mensagem a um lead do motor: e-mail EXATO primeiro, senão pelo
@@ -138,6 +168,51 @@ async function casarLead(store: Store, de: string): Promise<Lead | null> {
   }
   if (!lead || lead.owner !== OWNER_ENGINE) return null
   return lead
+}
+
+// Bounce SMTP: casa o lead pelo DESTINATÁRIO (campo "To" não disponível na
+// mensagem recebida — casamos pelo endereço no corpo do bounce ou por domínio).
+// Como o bounce vem do mailer-daemon, o campo `de` não é o lead — precisa
+// extrair o email original do assunto/corpo.
+// Estratégia pragmática: busca qualquer lead que tenha sido o DESTINATÁRIO;
+// o bounce geralmente inclui o endereço original no corpo ou no assunto.
+async function tratarBounce(store: Store, msg: MensagemRecebida): Promise<boolean> {
+  // Extrai endereço de e-mail do corpo/assunto do bounce.
+  const alvo = `${msg.assunto} ${msg.corpo}`
+  const match = alvo.match(/[\w.+%-]+@[\w.-]+\.[a-z]{2,}/i)
+  if (!match) {
+    log.aviso('Bounce sem e-mail identificável no corpo.', { de: msg.de, assunto: msg.assunto })
+    return false
+  }
+  const emailOriginal = match[0].toLowerCase()
+  const lead = await store.buscarLeadPorEmail(emailOriginal)
+  if (!lead) {
+    log.aviso('Bounce: e-mail não casa com nenhum lead.', { emailOriginal })
+    return false
+  }
+
+  // Marca o lead como bounced e cancela as execuções ativas.
+  await store.atualizarLead(lead.id, {
+    bounced: true,
+    bounced_em: new Date().toISOString(),
+    proxima_acao: null,
+    proxima_acao_data: null,
+  })
+  await store.cancelarExecucoesWorkflow(lead.id)
+  await store.registrarInteracao({
+    lead_id: lead.id,
+    tipo: 'nota',
+    canal: 'sistema',
+    descricao: `Bounce SMTP detectado: e-mail devolvido pelo servidor. Lead marcado como bounced — removido da cadência automática. Assunto original: "${msg.assunto}"`,
+    origem_acao: 'ia',
+    responsavel_id: lead.responsavel_id ?? null,
+  })
+  log.ok('BOUNCE detectado — lead marcado e cadência cancelada.', {
+    leadId: lead.id,
+    empresa: lead.empresa,
+    emailOriginal,
+  })
+  return true
 }
 
 // Item 7: trata um auto-reply de ausência. Se houver extrator injetado, casa o

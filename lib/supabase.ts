@@ -42,6 +42,8 @@ export type Lead = {
   perdido: boolean
   perdido_motivo?: string
   data_validade?: string | null
+  bounced?: boolean | null
+  bounced_em?: string | null
   created_at: string
   updated_at: string
 }

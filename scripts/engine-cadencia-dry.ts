@@ -56,6 +56,7 @@ async function main() {
       escritas.push(`INSERT interacoes lead=${i.lead_id} tipo=${i.tipo}`)
       console.log(`${C.yel}  [DRY-RUN] NÃO escrito → registrarInteracao:${C.r} lead=${i.lead_id} tipo=${i.tipo} canal=${i.canal}`)
     },
+    async cancelarExecucoesWorkflow(_leadId) { /* dry-run: no-op */ },
   }
 
   const gmail = new GmailProvider(cred)

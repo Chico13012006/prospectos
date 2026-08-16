@@ -135,6 +135,8 @@ export class SupabaseStore implements Store {
       .eq('perdido', false)
       // Opt-out (item 2.4): quem pediu p/ sair nunca mais é contatado pelo motor.
       .eq('optout', false)
+      // Bounce (migration 0027): email inválido/devolvido — nunca mais contatado.
+      .eq('bounced', false)
       .in('estagio', ESTAGIOS_EM_CADENCIA)
     if (error) throw error
 
@@ -165,6 +167,7 @@ export class SupabaseStore implements Store {
       .eq('organizacao_id', this.organizacaoId)
       .eq('owner', OWNER_ENGINE)
       .eq('perdido', false)
+      .eq('bounced', false)
       .in('estagio', ESTAGIOS_EM_CADENCIA)
     if (error) throw error
 
@@ -193,6 +196,18 @@ export class SupabaseStore implements Store {
       .maybeSingle()
     if (error) throw error
     return (data as UsuarioBasico) ?? null
+  }
+
+  async cancelarExecucoesWorkflow(leadId: string): Promise<void> {
+    // Cancela todas as execuções ativas (em_andamento/aguardando) do lead.
+    // Chamado quando um bounce SMTP é detectado.
+    const { error } = await this.db
+      .from('workflow_execucoes')
+      .update({ status: 'cancelado' })
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('lead_id', leadId)
+      .in('status', ['em_andamento', 'aguardando'])
+    if (error) throw error
   }
 
   async buscarTemplateEmail(nicho: string | null, tipo: string): Promise<TemplateEmail[]> {

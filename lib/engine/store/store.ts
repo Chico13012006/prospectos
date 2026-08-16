@@ -39,4 +39,7 @@ export interface Store {
   // TODAS as variantes de e-mail ATIVAS por (nicho, tipo). nicho=null busca o
   // GENÉRICO. A seleção da variante (A/B) e o fallback ficam em mensagem.ts.
   buscarTemplateEmail(nicho: string | null, tipo: string): Promise<TemplateEmail[]>
+  // Cancela todas as workflow_execucoes ativas (em_andamento/aguardando) do lead.
+  // Chamado quando um bounce SMTP é detectado — impede futuros envios do workflow.
+  cancelarExecucoesWorkflow(leadId: string): Promise<void>
 }

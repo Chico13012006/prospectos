@@ -76,6 +76,7 @@ export class MemoryStore implements Store {
     for (const lead of this.leads) {
       if (lead.owner !== OWNER_ENGINE) continue
       if (lead.perdido) continue
+      if (lead.bounced) continue
       if (!ESTAGIOS_EM_CADENCIA.includes(lead.estagio as never)) continue
       const enviados = await this.contarInteracoes(lead.id, 'follow_up')
       if (enviados >= engineConfig.maxFollowups) continue
@@ -96,6 +97,7 @@ export class MemoryStore implements Store {
     for (const lead of this.leads) {
       if (lead.owner !== OWNER_ENGINE) continue
       if (lead.perdido) continue
+      if (lead.bounced) continue
       if (!ESTAGIOS_EM_CADENCIA.includes(lead.estagio as never)) continue
       const enviados = await this.contarInteracoes(lead.id, 'follow_up')
       if (enviados < engineConfig.maxFollowups) continue
@@ -111,6 +113,10 @@ export class MemoryStore implements Store {
   async buscarUsuario(id: string): Promise<UsuarioBasico | null> {
     return this.usuarios.find((u) => u.id === id) ?? null
   }
+
+  // MemoryStore não rastreia workflow_execucoes — no-op satisfatório para testes
+  // que só verificam leads.bounced e elegibilidade de follow-up.
+  async cancelarExecucoesWorkflow(_leadId: string): Promise<void> {}
 
   // Lê do mesmo seed que popula a tabela `templates` (mantém os testes offline).
   // Retorna TODAS as variantes (o seed tem 1 por chave) com id sintético estável.

@@ -47,6 +47,7 @@ export interface Campanha {
   workflow_id: string | null;
   publico: Publico | null;
   meta_leads: number | null;
+  dry_run: boolean | null;
   iniciada_em: string | null;
   concluida_em: string | null;
   criado_em: string;

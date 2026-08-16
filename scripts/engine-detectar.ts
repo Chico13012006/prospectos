@@ -84,6 +84,7 @@ async function main() {
       escritas.push('INSERT interacoes tipo=' + i.tipo)
       console.log(`${C.yel}  [DRY-RUN] NÃO escrito → registrarInteracao:${C.r} tipo=${i.tipo}`)
     },
+    async cancelarExecucoesWorkflow(_leadId) { /* dry-run: no-op */ },
   }
   const store: Store = ensaio ? dryStore : real
 

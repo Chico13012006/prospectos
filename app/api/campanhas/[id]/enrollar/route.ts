@@ -25,7 +25,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (!campanha.workflow_id)
     return NextResponse.json({ erro: 'Campanha sem workflow vinculado.' }, { status: 400 })
 
-  // Leads elegíveis: têm e-mail, não estão perdidos, não optaram por saída.
+  // Leads elegíveis: têm e-mail, não estão perdidos, não optaram por saída, sem bounce.
   const { data: leads, error: eLead } = await createSupabaseAdminClient()
     .from('leads')
     .select('id')
@@ -34,6 +34,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .neq('contato_email', '')
     .or('perdido.is.null,perdido.eq.false')
     .or('optout.is.null,optout.eq.false')
+    .or('bounced.is.null,bounced.eq.false')
     .limit(2000)
   if (eLead) return NextResponse.json({ erro: eLead.message }, { status: 500 })
 

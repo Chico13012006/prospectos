@@ -86,6 +86,7 @@ async function main() {
         `${C.yel}  [DRY-RUN] NÃO escrito → registrarInteracao:${C.r} tipo=${i.tipo} canal=${i.canal}`,
       )
     },
+    async cancelarExecucoesWorkflow(_leadId) { /* dry-run: no-op */ },
   }
 
   // Em ENSAIO: store dry-run (não escreve) + provedor simulado (não envia).

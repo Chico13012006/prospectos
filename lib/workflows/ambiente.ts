@@ -376,6 +376,15 @@ export class AmbienteSupabase implements AmbienteWorkflow {
 
   async inscreverEmCampanha(leadId: string, campanhaId: string): Promise<void> {
     if (this.simular) return
+    // Lead bounced não entra em nenhuma nova campanha.
+    const { data: leadCheck } = await this.db
+      .from('leads')
+      .select('bounced')
+      .eq('id', leadId)
+      .eq('organizacao_id', this.organizacaoId)
+      .maybeSingle()
+    if ((leadCheck as { bounced?: boolean | null } | null)?.bounced === true) return
+
     const { data: camp } = await this.db
       .from('campanhas')
       .select('workflow_id')

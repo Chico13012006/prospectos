@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ChevronRight, Loader2, PencilLine, Play, Pause, CheckCircle2, Building2, Users,
-  MessageSquare, BarChart3, ClipboardList, Workflow, TrendingUp, Info, Target,
+  MessageSquare, BarChart3, ClipboardList, Workflow, TrendingUp, Info, Target, AlertTriangle,
 } from 'lucide-react';
 import { type Campanha, type Publico, STATUS_BADGE, STATUS_LABEL, fmtData, resumoPublico } from './tiposCampanha';
 
@@ -41,6 +41,8 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
   const [estado, setEstado] = useState<'carregando' | 'ok' | 'erro'>('carregando');
   const [aba, setAba] = useState<Aba>('geral');
   const [agindo, setAgindo] = useState(false);
+  const [modalDryRun, setModalDryRun] = useState(false);
+  const [confirmacaoTexto, setConfirmacaoTexto] = useState('');
 
   const carregar = useCallback(async () => {
     try {
@@ -66,6 +68,21 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
     } finally { setAgindo(false); }
   }
 
+  async function ativarEnvioReal() {
+    if (confirmacaoTexto !== 'CONFIRMAR') return;
+    setAgindo(true);
+    try {
+      await fetch(`/api/campanhas/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dry_run: false }),
+      });
+      setModalDryRun(false);
+      setConfirmacaoTexto('');
+      await carregar();
+    } finally { setAgindo(false); }
+  }
+
   if (estado === 'carregando') return <div className="flex items-center justify-center gap-2 py-24 text-slate-500"><Loader2 size={18} className="animate-spin" /> Carregando campanha…</div>;
   if (estado === 'erro' || !c) return (
     <div className="p-6">
@@ -78,8 +95,71 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
   const emp = pub.empresas ?? {};
   const dec = pub.decisores ?? {};
 
+  const emEnsaio = c.dry_run !== false;
+
   return (
     <div className="p-6 max-w-[100rem] mx-auto space-y-5">
+      {/* Banner dry_run */}
+      {emEnsaio ? (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-amber-300">
+            <AlertTriangle size={15} className="shrink-0" />
+            <span><b>Modo ensaio ativo</b> — nenhum e-mail real está sendo enviado. Os leads estão sendo processados, mas o envio é simulado.</span>
+          </div>
+          <button
+            onClick={() => { setModalDryRun(true); setConfirmacaoTexto(''); }}
+            className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 font-semibold whitespace-nowrap transition-colors"
+          >
+            Ativar envio real
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 rounded-xl border border-green-500/25 bg-green-500/10 px-4 py-3 text-sm text-green-300">
+          <CheckCircle2 size={15} className="shrink-0" />
+          <span><b>Envio real ativo</b> — os e-mails estão sendo enviados para os leads reais.</span>
+        </div>
+      )}
+
+      {/* Modal de confirmação dry_run → real */}
+      {modalDryRun && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1a1f2e] border border-red-500/30 rounded-2xl p-7 w-full max-w-md shadow-2xl space-y-5">
+            <div className="flex items-center gap-2 text-red-400">
+              <AlertTriangle size={20} />
+              <h2 className="text-lg font-bold">Ativar envio real</h2>
+            </div>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Esta ação desativa o modo ensaio. A partir daí, <b>e-mails reais serão enviados</b> para os {(c.meta_leads ?? 0) > 0 ? `~${c.meta_leads} leads` : 'leads'} desta campanha.<br /><br />
+              Para confirmar, digite exatamente <code className="bg-red-500/20 text-red-300 px-1 rounded">CONFIRMAR</code> no campo abaixo.
+            </p>
+            <input
+              type="text"
+              value={confirmacaoTexto}
+              onChange={(e) => setConfirmacaoTexto(e.target.value)}
+              placeholder="CONFIRMAR"
+              className="w-full bg-[#0f1117] border border-[#2a3147] rounded-lg px-3 py-2.5 text-slate-100 text-sm placeholder-slate-600 focus:outline-none focus:border-red-500/60"
+              autoFocus
+            />
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => { setModalDryRun(false); setConfirmacaoTexto(''); }}
+                className="flex-1 text-sm px-4 py-2.5 rounded-lg border border-[#2a3147] text-slate-300 hover:bg-[#0f1117] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={ativarEnvioReal}
+                disabled={confirmacaoTexto !== 'CONFIRMAR' || agindo}
+                className="flex-1 text-sm px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2"
+              >
+                {agindo ? <Loader2 size={14} className="animate-spin" /> : null}
+                Confirmar e ativar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Cabeçalho */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
