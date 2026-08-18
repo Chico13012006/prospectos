@@ -104,10 +104,12 @@ export class GmailProvider implements EmailProvider {
     })
   }
 
-  // Lê as mensagens NÃO LIDAS da INBOX via IMAP (imap.gmail.com:993, SSL) e as
-  // mapeia para o formato que o Fluxo 2 (detectarResposta) espera.
-  // Em MODO_ENSAIO a leitura acontece normalmente (não é envio), mas as mensagens
-  // NÃO são marcadas como lidas — para não mexer na sua caixa durante testes.
+  // Lê as mensagens NÃO LIDAS da INBOX e de [Gmail]/Spam via IMAP (imap.gmail.com:993).
+  // Bounces de servidores externos (ex.: Office 365) frequentemente caem em Spam no
+  // Gmail — não checar Spam causaria detecção zero em escala. Spam é lido na mesma
+  // conexão; falha ao abrir a pasta de Spam é ignorada (não derruba a INBOX).
+  // Em MODO_ENSAIO a leitura acontece normalmente, mas as mensagens NÃO são marcadas
+  // como lidas para não mexer na caixa durante testes.
   async lerCaixaEntrada(): Promise<MensagemRecebida[]> {
     const client = new ImapFlow({
       host: 'imap.gmail.com',
@@ -118,9 +120,6 @@ export class GmailProvider implements EmailProvider {
       greetingTimeout: 15000,
       socketTimeout: 30000,
     })
-    // ImapFlow emite 'error' de forma assíncrona; sem um listener, um timeout de
-    // socket viraria "unhandled error" e derrubaria o processo. Aqui só logamos —
-    // a falha de connect()/fetch() já é propagada como exceção normal.
     client.on('error', (e: unknown) => {
       log.aviso('IMAP erro de conexão', { erro: e instanceof Error ? e.message : String(e) })
     })
@@ -128,58 +127,62 @@ export class GmailProvider implements EmailProvider {
     const mensagens: MensagemRecebida[] = []
     await client.connect()
     try {
-      const lock = await client.getMailboxLock('INBOX')
-      try {
-        // Busca os UIDs das NÃO LIDAS; se não houver, evita o fetch.
-        const uids = await client.search({ seen: false }, { uid: true })
-        if (!uids || uids.length === 0) {
-          log.info('Caixa lida via IMAP', { naoLidas: 0, marcadasComoLidas: 0 })
-          return []
-        }
-        // Limita ao lote mais recente (UIDs maiores = mais recentes). Protege
-        // contra caixas com milhares de não lidas — baixar o source de todas
-        // estouraria o socket. Configurável via GMAIL_MAX_FETCH (padrão 50).
-        const limite = Math.max(1, Number(process.env.GMAIL_MAX_FETCH ?? '50') || 50)
-        const recentes = uids.slice(-limite)
-        if (uids.length > recentes.length) {
-          log.aviso('Muitas não lidas; processando só as mais recentes', {
-            totalNaoLidas: uids.length,
-            processando: recentes.length,
-          })
-        }
-        // Baixa o source para parse MIME completo. IMPORTANTE: não emitir outro
-        // comando IMAP (ex.: marcar lida) DENTRO deste laço — o imapflow não
-        // permite comandos concorrentes durante um fetch em streaming e isso
-        // trava a conexão. Coletamos os UIDs e marcamos DEPOIS do laço.
-        const uidsLidos: number[] = []
-        for await (const m of client.fetch(recentes, { source: true, uid: true }, { uid: true })) {
-          const parsed = await simpleParser(m.source as Buffer)
-          const de = parsed.from?.value?.[0]?.address?.toLowerCase() ?? ''
-          mensagens.push({
-            de,
-            assunto: parsed.subject ?? '',
-            corpo: corpoTexto(parsed),
-            automatica: detectarAutomatica(parsed),
-            em: parsed.date ?? new Date(),
-          })
-          if (m.uid) uidsLidos.push(m.uid)
-        }
-
-        // Consome as mensagens (marca como lidas) só fora do ensaio — agora que
-        // o fetch terminou, é seguro emitir o comando.
-        let marcadas = 0
-        if (!engineConfig.modoEnsaio && uidsLidos.length) {
-          await client.messageFlagsAdd(uidsLidos, ['\\Seen'], { uid: true })
-          marcadas = uidsLidos.length
-        }
-        log.info('Caixa lida via IMAP', { naoLidas: mensagens.length, marcadasComoLidas: marcadas })
-      } finally {
-        lock.release()
+      for (const mailbox of ['INBOX', '[Gmail]/Spam']) {
+        await this.lerMailbox(client, mailbox, mensagens)
       }
     } finally {
       await client.logout()
     }
 
     return mensagens
+  }
+
+  private async lerMailbox(
+    client: ImapFlow,
+    mailbox: string,
+    resultado: MensagemRecebida[],
+  ): Promise<void> {
+    let lock: Awaited<ReturnType<ImapFlow['getMailboxLock']>> | null = null
+    try {
+      lock = await client.getMailboxLock(mailbox)
+    } catch {
+      // Pasta não existe nesta conta (ex.: conta sem Spam configurado). Silencioso.
+      return
+    }
+    try {
+      const uids = await client.search({ seen: false }, { uid: true })
+      if (!uids || uids.length === 0) {
+        log.info('IMAP caixa lida', { mailbox, naoLidas: 0 })
+        return
+      }
+      const limite = Math.max(1, Number(process.env.GMAIL_MAX_FETCH ?? '50') || 50)
+      const recentes = uids.slice(-limite)
+      if (uids.length > recentes.length) {
+        log.aviso('IMAP: muitas não lidas; processando só as mais recentes', {
+          mailbox, totalNaoLidas: uids.length, processando: recentes.length,
+        })
+      }
+      const uidsLidos: number[] = []
+      for await (const m of client.fetch(recentes, { source: true, uid: true }, { uid: true })) {
+        const parsed = await simpleParser(m.source as Buffer)
+        const de = parsed.from?.value?.[0]?.address?.toLowerCase() ?? ''
+        resultado.push({
+          de,
+          assunto: parsed.subject ?? '',
+          corpo: corpoTexto(parsed),
+          automatica: detectarAutomatica(parsed),
+          em: parsed.date ?? new Date(),
+        })
+        if (m.uid) uidsLidos.push(m.uid)
+      }
+      let marcadas = 0
+      if (!engineConfig.modoEnsaio && uidsLidos.length) {
+        await client.messageFlagsAdd(uidsLidos, ['\\Seen'], { uid: true })
+        marcadas = uidsLidos.length
+      }
+      log.info('IMAP caixa lida', { mailbox, naoLidas: resultado.length, marcadasComoLidas: marcadas })
+    } finally {
+      lock.release()
+    }
   }
 }

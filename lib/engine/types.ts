@@ -54,3 +54,14 @@ export interface UsuarioBasico {
   nome: string
   email: string
 }
+
+export interface ContextoCampanhaResposta {
+  id: string
+  nome: string
+  tipo: string | null
+  responsavel: UsuarioBasico | null
+  notificarResponsavel: boolean
+  emailAssunto: string | null
+  emailCorpo: string | null
+  emailHtml: string | null
+}

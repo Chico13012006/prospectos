@@ -1,8 +1,6 @@
-// Enrollment REAL, separado da publicação em dry-run. Recalcula o público e
-// exige confirmação numérica exata antes de desativar o modo ensaio.
 import { NextResponse } from 'next/server'
 import { exigirPermissao } from '@/lib/rbac/servidor'
-import { inscreverCampanhaReal } from '@/lib/campanhas/ativacaoServidor'
+import { ativarCampanhaGuiada } from '@/lib/campanhas/ativacaoServidor'
 
 export const runtime = 'nodejs'
 
@@ -10,12 +8,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params
   const acc = await exigirPermissao('campaigns.manage')
   if ('erro' in acc) return acc.erro
+
   try {
     const body = await req.json().catch(() => ({}))
-    const resultado = await inscreverCampanhaReal(
+    const resultado = await ativarCampanhaGuiada(
       acc.acesso.admin,
       acc.acesso.org,
       id,
+      acc.acesso.user.id,
       typeof body.confirmarQuantidade === 'number' ? body.confirmarQuantidade : undefined,
     )
     return NextResponse.json({ ok: true, ...resultado })
@@ -23,3 +23,4 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ erro: e instanceof Error ? e.message : 'Erro' }, { status: 400 })
   }
 }
+

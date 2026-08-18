@@ -1,639 +1,1003 @@
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
-  Target, Users, Workflow, Calendar, CheckCircle2, ArrowLeft, ArrowRight,
-  Loader2, Save, Info, Lock, ChevronRight, Check, AlertTriangle,
-  Mail, MessageSquare, Phone, Clock, ToggleLeft, ToggleRight,
-} from 'lucide-react';
-import type { Campanha, Publico } from './tiposCampanha';
-import { acharBlocoDef } from '@/lib/workflows/catalogo';
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Building2,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  Clock3,
+  FileText,
+  Loader2,
+  Mail,
+  Megaphone,
+  RefreshCcw,
+  Save,
+  Search,
+  Send,
+  ShieldCheck,
+  Trash2,
+  Users,
+} from 'lucide-react'
+import type { Campanha, FollowupCampanha, MensagemCampanha, Publico } from './tiposCampanha'
+import HtmlEmailEditor from './HtmlEmailEditor'
+import {
+  aplicarRegraPublicoPorTipo,
+  GRUPOS_STATUS_PUBLICO,
+  labelTipoCampanha,
+  LIMITE_CONFIRMACAO_CAMPANHA,
+  modeloEmailRespostaCampanha,
+  normalizarPublicoCampanha,
+  regraPublicoCampanha,
+  TIPOS_CAMPANHA,
+  VARIAVEIS_EMAIL_RESPOSTA,
+  validarCampanhaGuiada,
+} from '@/lib/campanhas/configuracaoGuiada'
+import { documentoPreviewHtml, montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha'
 
-// Wizard de campanha — 5 etapas conforme spec Fase 2:
-//   0. Objetivo e nome
-//   1. Público e filtros
-//   2. Seleção ou criação do workflow/cadência
-//   3. Agenda, limites e regras
-//   4. Revisão e publicação
+interface TemplateOpcao {
+  id: string
+  nome: string
+  tipo: string
+  assunto: string | null
+  corpo: string
+  nicho: string | null
+}
 
-interface WorkflowOpc { id: string; nome: string; status: string; etapas?: number; gatilho_tipo?: string | null }
-interface PassoCadencia { tipo: string; label: string; icon: 'email' | 'whatsapp' | 'phone' | 'wait' | 'task' }
+interface Membro {
+  id: string
+  nome: string | null
+  email: string | null
+}
+
+interface PreviaPublico {
+  totalSelecionado: number
+  totalEmpresas: number
+  totalEmpresasSelecionadas: number
+  emailsValidos: number
+  emailsAusentesOuInvalidos: number
+  duplicados: number
+  bloqueados: number
+  semResponsavel: number
+  incompativeis: number
+  elegiveis: number
+  truncado: boolean
+  amostra: { id: string; empresa: string | null; contato: string | null }[]
+  empresas: {
+    chave: string
+    nome: string
+    segmento: string | null
+    contatos: number
+    elegiveis: number
+    selecionada: boolean
+  }[]
+}
+
+interface InicialCampanha {
+  tipo?: string
+  leadIds?: string[]
+}
 
 const PASSOS = [
-  { label: 'Objetivo e nome', Icon: Target },
-  { label: 'Público e filtros', Icon: Users },
-  { label: 'Workflow / cadência', Icon: Workflow },
-  { label: 'Agenda e regras', Icon: Calendar },
-  { label: 'Revisão e publicação', Icon: CheckCircle2 },
-] as const;
-type Etapa = 0 | 1 | 2 | 3 | 4;
+  { titulo: 'Público', label: 'Quem receberá', Icon: Users },
+  { titulo: 'Mensagem', label: 'O que será enviado', Icon: Mail },
+  { titulo: 'Cadência', label: 'O que acontece depois', Icon: CalendarDays },
+  { titulo: 'Revisão', label: 'Revisar e ativar', Icon: CheckCircle2 },
+] as const
 
-const DIAS_SEMANA = [
+const ICONES_OBJETIVO = {
+  prospeccao: Users,
+  followup: RefreshCcw,
+  reativacao: RefreshCcw,
+  novidade_clientes: Megaphone,
+  renovacao: CalendarDays,
+} as const
+
+const DIAS = [
   { id: 'seg', label: 'Seg' }, { id: 'ter', label: 'Ter' }, { id: 'qua', label: 'Qua' },
-  { id: 'qui', label: 'Qui' }, { id: 'sex', label: 'Sex' }, { id: 'sab', label: 'Sáb' }, { id: 'dom', label: 'Dom' },
-];
+  { id: 'qui', label: 'Qui' }, { id: 'sex', label: 'Sex' }, { id: 'sab', label: 'Sáb' },
+  { id: 'dom', label: 'Dom' },
+]
+const EMPRESAS_POR_PAGINA = 10
 
-const input = 'w-full bg-[#0f1117] border border-[#2a3147] rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500';
-const lbl = 'text-xs text-slate-400 mb-1 block';
-const card = 'bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-5';
+const input = 'w-full rounded-lg border border-[#2a3147] bg-[#0f1117] px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none'
+const label = 'mb-1.5 block text-xs font-medium text-slate-400'
+const card = 'rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-5'
 
-function ToggleBtn({ on, set }: { on: boolean; set: (v: boolean) => void }) {
-  return (
-    <button type="button" onClick={() => set(!on)} className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border transition-colors"
-      style={on ? { borderColor: 'rgba(99,102,241,0.5)', background: 'rgba(99,102,241,0.1)', color: '#c7d2fe' } : { borderColor: '#2a3147', color: '#94a3b8' }}>
-      <span className={`w-8 h-4 rounded-full relative transition-colors ${on ? 'bg-indigo-500' : 'bg-[#2a3147]'}`}>
-        <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${on ? 'left-4' : 'left-0.5'}`} />
-      </span>
-    </button>
-  );
+function textoOuNaoConfigurado(valor: string | null | undefined) {
+  return valor?.trim() || 'Não configurado'
 }
 
-function PassoIcon({ icon }: { icon: PassoCadencia['icon'] }) {
-  if (icon === 'email') return <Mail size={14} className="text-indigo-400" />;
-  if (icon === 'whatsapp') return <MessageSquare size={14} className="text-green-400" />;
-  if (icon === 'phone') return <Phone size={14} className="text-sky-400" />;
-  if (icon === 'wait') return <Clock size={14} className="text-slate-400" />;
-  return <CheckCircle2 size={14} className="text-amber-400" />;
+function nomeMembro(membro: Membro | undefined) {
+  return membro?.nome?.trim() || membro?.email?.trim() || 'Não configurado'
 }
 
-function iconPorTipo(tipo: string): PassoCadencia['icon'] {
-  if (tipo === 'enviar_email') return 'email';
-  if (tipo === 'enviar_whatsapp') return 'whatsapp';
-  if (tipo === 'criar_tarefa_ligacao' || tipo === 'criar_tarefa') return 'task';
-  if (tipo === 'esperar') return 'wait';
-  return 'task';
+function mensagemVazia(): MensagemCampanha {
+  return { assunto: '', corpo: '', link: '' }
 }
 
-export default function CampanhaWizardPage({ campanha }: { campanha?: Campanha | null }) {
-  const router = useRouter();
-  const edit = !!campanha;
-  const [etapa, setEtapa] = useState<Etapa>(0);
-  const [salvando, setSalvando] = useState<false | 'rascunho' | 'criar'>(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const [ok, setOk] = useState(false);
-  const [workflows, setWorkflows] = useState<WorkflowOpc[]>([]);
-  const [baseLeads, setBaseLeads] = useState<number | null>(null);
-  const [wfPassos, setWfPassos] = useState<PassoCadencia[]>([]);
-  const [wfCarregando, setWfCarregando] = useState(false);
+export default function CampanhaWizardPage({
+  campanha,
+  inicial,
+}: {
+  campanha?: Campanha | null
+  inicial?: InicialCampanha
+}) {
+  const router = useRouter()
+  const tipoInicial = campanha?.tipo ?? inicial?.tipo ?? 'prospeccao'
+  const [etapa, setEtapa] = useState(0)
+  const [campanhaId, setCampanhaId] = useState(campanha?.id ?? '')
+  const [nome, setNome] = useState(campanha?.nome ?? '')
+  const [tipo, setTipo] = useState(tipoInicial)
+  const [descricao, setDescricao] = useState(campanha?.descricao ?? '')
+  const [publico, setPublico] = useState<Publico>(() => {
+    const bruto = campanha?.publico ?? {
+      selecao: inicial?.leadIds?.length ? { modo: 'manual', leadIds: inicial.leadIds } : undefined,
+    }
+    const normalizado = aplicarRegraPublicoPorTipo(normalizarPublicoCampanha(bruto), tipoInicial)
+    return {
+      ...normalizado,
+      operacao: {
+        ...normalizado.operacao,
+        mensagemInicial: normalizado.operacao?.mensagemInicial ?? mensagemVazia(),
+      },
+    }
+  })
+  const [templates, setTemplates] = useState<TemplateOpcao[]>([])
+  const [nichos, setNichos] = useState<string[]>([])
+  const [membros, setMembros] = useState<Membro[]>([])
+  const [carregandoOpcoes, setCarregandoOpcoes] = useState(true)
+  const [previa, setPrevia] = useState<PreviaPublico | null>(null)
+  const [carregandoPrevia, setCarregandoPrevia] = useState(false)
+  const [salvando, setSalvando] = useState<'rascunho' | 'ativar' | false>(false)
+  const [erro, setErro] = useState<string | null>(null)
+  const [salvo, setSalvo] = useState(false)
+  const [confirmando, setConfirmando] = useState(false)
+  const [confirmacao, setConfirmacao] = useState('')
+  const [buscaEmpresa, setBuscaEmpresa] = useState('')
+  const [paginaEmpresas, setPaginaEmpresas] = useState(1)
 
-  const p0: Publico = campanha?.publico ?? {};
-
-  // --- Etapa 0: Objetivo e nome ---
-  const [nome, setNome] = useState(campanha?.nome ?? '');
-  const [tipo, setTipo] = useState(campanha?.tipo ?? 'prospeccao');
-  const [objetivo, setObjetivo] = useState(campanha?.descricao ?? '');
-  const [meta, setMeta] = useState(campanha?.meta_leads != null ? String(campanha.meta_leads) : '');
-  const [responsavelId, setResponsavelId] = useState(p0.responsavel_id ?? '');
-  const [prazo, setPrazo] = useState(p0.prazo ?? '');
-  const [membros, setMembros] = useState<{ id: string; nome: string; email: string }[]>([]);
-
-  // --- Etapa 1: Público e filtros ---
-  const [segmento, setSegmento] = useState(p0.empresas?.segmento ?? '');
-  const [cidades, setCidades] = useState(p0.empresas?.cidades ?? '');
-  const [pais, setPais] = useState(p0.empresas?.pais ?? '');
-  const [limite, setLimite] = useState(p0.empresas?.limite != null ? String(p0.empresas.limite) : '');
-  const [removerDup, setRemoverDup] = useState(p0.empresas?.removerDuplicados ?? true);
-  const [exigirSite, setExigirSite] = useState(p0.empresas?.exigirSite ?? false);
-  const [departamento, setDepartamento] = useState(p0.decisores?.departamento ?? '');
-  const [cargos, setCargos] = useState(p0.decisores?.cargos ?? '');
-  const [senioridade, setSenioridade] = useState(p0.decisores?.senioridade ?? '');
-  const [exigirEmail, setExigirEmail] = useState(p0.decisores?.exigirEmail ?? true);
-  const [exigirTelefone, setExigirTelefone] = useState(p0.decisores?.exigirTelefone ?? false);
-  const [idioma, setIdioma] = useState(p0.idioma ?? 'pt-BR');
-
-  // --- Etapa 2: Workflow/cadência ---
-  const [workflowId, setWorkflowId] = useState(campanha?.workflow_id ?? '');
-
-  // --- Etapa 3: Agenda e regras ---
-  const ag = p0.agenda ?? {};
-  const [diasSemana, setDiasSemana] = useState<string[]>(ag.diasSemana ?? ['seg', 'ter', 'qua', 'qui', 'sex']);
-  const [horarioInicio, setHorarioInicio] = useState(ag.horarioInicio ?? '09:00');
-  const [horarioFim, setHorarioFim] = useState(ag.horarioFim ?? '18:00');
-  const [limiteDiario, setLimiteDiario] = useState(ag.limiteDiario != null ? String(ag.limiteDiario) : '');
-  const [pararAoResponder, setPararAoResponder] = useState(ag.pararAoResponder ?? true);
+  const responsavel = membros.find((membro) => membro.id === publico.responsavel_id)
+  const mensagemInicial = publico.operacao?.mensagemInicial ?? mensagemVazia()
+  const followups = publico.operacao?.followups ?? []
+  const regraPublico = regraPublicoCampanha(tipo)
+  const resposta = publico.operacao?.resposta
+  const htmlMensagemInicial = montarEmailCampanhaHtml(
+    mensagemInicial.corpo?.trim() || 'Não configurado',
+    { responsavelNome: nomeMembro(responsavel) },
+    mensagemInicial.html,
+  )
+  const htmlResposta = montarEmailCampanhaHtml(resposta?.emailCorpo ?? '', {}, resposta?.emailHtml)
+  const empresasFiltradas = useMemo(() => {
+    const termo = buscaEmpresa.trim().toLocaleLowerCase('pt-BR')
+    if (!termo) return previa?.empresas ?? []
+    return (previa?.empresas ?? []).filter((empresa) =>
+      empresa.nome.toLocaleLowerCase('pt-BR').includes(termo)
+      || empresa.segmento?.toLocaleLowerCase('pt-BR').includes(termo),
+    )
+  }, [buscaEmpresa, previa?.empresas])
+  const totalPaginasEmpresas = Math.max(1, Math.ceil(empresasFiltradas.length / EMPRESAS_POR_PAGINA))
+  const paginaEmpresasSegura = Math.min(paginaEmpresas, totalPaginasEmpresas)
+  const empresasDaPagina = empresasFiltradas.slice(
+    (paginaEmpresasSegura - 1) * EMPRESAS_POR_PAGINA,
+    paginaEmpresasSegura * EMPRESAS_POR_PAGINA,
+  )
 
   useEffect(() => {
-    fetch('/api/workflows').then((r) => (r.ok ? r.json() : { workflows: [] }))
-      .then((d) => setWorkflows((d.workflows ?? []).map((w: WorkflowOpc) => ({
-        id: w.id, nome: w.nome, status: w.status, etapas: w.etapas, gatilho_tipo: w.gatilho_tipo,
-      }))))
-      .catch(() => {});
-    fetch('/api/dashboard/resumo').then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d && typeof d.leads === 'number') setBaseLeads(d.leads); })
-      .catch(() => {});
-    fetch('/api/equipe/listar').then((r) => (r.ok ? r.json() : { membros: [] }))
-      .then((d) => setMembros((d.membros ?? []).filter((m: { nome: string; email: string }) => m.nome || m.email)))
-      .catch(() => {});
-  }, []);
+    let ativo = true
+    Promise.all([
+      fetch('/api/campanhas/opcoes').then(async (res) => {
+        const dados = await res.json()
+        if (!res.ok) throw new Error(dados.erro || 'Não foi possível carregar as opções da campanha.')
+        return dados
+      }),
+      fetch('/api/equipe/listar').then(async (res) => {
+        const dados = await res.json()
+        if (!res.ok) throw new Error(dados.erro || 'Não foi possível carregar a equipe.')
+        return dados
+      }),
+    ]).then(([opcoes, equipe]) => {
+      if (!ativo) return
+      setTemplates(opcoes.templates ?? [])
+      setNichos(opcoes.nichos ?? [])
+      setMembros((equipe.membros ?? []).filter((m: Membro) => m.nome || m.email))
+      setPublico((atual) => ({
+        ...atual,
+        operacao: {
+          ...atual.operacao,
+          mensagemInicial: atual.operacao?.mensagemInicial ?? mensagemVazia(),
+          remetenteConta: opcoes.remetente?.conta,
+          remetenteEmail: opcoes.remetente?.email,
+        },
+      }))
+    }).catch((e) => {
+      if (ativo) setErro(e instanceof Error ? e.message : 'Erro ao carregar opções.')
+    }).finally(() => {
+      if (ativo) setCarregandoOpcoes(false)
+    })
+    return () => { ativo = false }
+  }, [])
 
-  // Ao selecionar workflow, busca os passos para preview
   useEffect(() => {
-    if (!workflowId) { setWfPassos([]); return; }
-    setWfCarregando(true);
-    fetch(`/api/workflows/${workflowId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!d?.workflow) return;
-        const def = d.workflow.rascunho_definicao ?? (d.versoes?.[0]?.definicao ?? null);
-        if (!def?.acoes) { setWfPassos([]); return; }
-        const passos: PassoCadencia[] = (def.acoes as Array<{ tipo: string; config: Record<string, unknown> }>).map((a) => {
-          const bl = acharBlocoDef(a.tipo);
-          const label = bl?.label ?? a.tipo;
-          const icon = iconPorTipo(a.tipo);
-          return { tipo: a.tipo, label, icon };
-        });
-        setWfPassos(passos);
-      })
-      .catch(() => setWfPassos([]))
-      .finally(() => setWfCarregando(false));
-  }, [workflowId]);
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      setCarregandoPrevia(true)
+      try {
+        const res = await fetch('/api/campanhas/publico/previa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ publico, tipo, workflowId: campanha?.workflow_id }),
+          signal: controller.signal,
+        })
+        const dados = await res.json()
+        if (!res.ok) throw new Error(dados.erro || 'Não foi possível calcular o público.')
+        setPrevia(dados.previa)
+      } catch (e) {
+        if (!controller.signal.aborted) {
+          setPrevia(null)
+          setErro(e instanceof Error ? e.message : 'Erro ao calcular o público.')
+        }
+      } finally {
+        if (!controller.signal.aborted) setCarregandoPrevia(false)
+      }
+    }, 350)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [publico.empresas, publico.selecao, tipo, campanha?.workflow_id])
 
-  function montarBody() {
-    const publico: Publico = {
-      objetivo: objetivo.trim() || undefined,
-      responsavel_id: responsavelId || undefined,
-      idioma: idioma || undefined,
-      prazo: prazo || undefined,
-      empresas: {
-        fonte: 'base',
-        pais: pais.trim() || undefined,
-        segmento: segmento.trim() || undefined,
-        cidades: cidades.trim() || undefined,
-        limite: limite.trim() ? Number(limite) : undefined,
-        removerDuplicados: removerDup,
-        exigirSite,
+  function atualizarEmpresas(patch: Partial<NonNullable<Publico['empresas']>>) {
+    setPublico((atual) => ({ ...atual, empresas: { ...atual.empresas, ...patch } }))
+  }
+
+  function atualizarSelecao(patch: Partial<NonNullable<Publico['selecao']>>) {
+    setPublico((atual) => ({ ...atual, selecao: { ...atual.selecao, ...patch } }))
+  }
+
+  function atualizarAgenda(patch: Partial<NonNullable<Publico['agenda']>>) {
+    setPublico((atual) => ({ ...atual, agenda: { ...atual.agenda, ...patch } }))
+  }
+
+  function atualizarResposta(patch: Partial<NonNullable<NonNullable<Publico['operacao']>['resposta']>>) {
+    setPublico((atual) => ({
+      ...atual,
+      operacao: {
+        ...atual.operacao,
+        mensagemInicial: atual.operacao?.mensagemInicial ?? mensagemVazia(),
+        resposta: { ...atual.operacao?.resposta, ...patch },
       },
-      decisores: {
-        departamento: departamento.trim() || undefined,
-        cargos: cargos.trim() || undefined,
-        senioridade: senioridade.trim() || undefined,
-        exigirEmail,
-        exigirTelefone,
+    }))
+  }
+
+  function alterarTipo(novoTipo: string) {
+    const modeloAnterior = modeloEmailRespostaCampanha(tipo)
+    const novoModelo = modeloEmailRespostaCampanha(novoTipo)
+    setTipo(novoTipo)
+    setPublico((atual) => {
+      const respostaAtual = atual.operacao?.resposta
+      const assuntoAindaPadrao = !respostaAtual?.emailAssunto || respostaAtual.emailAssunto === modeloAnterior.assunto
+      const corpoAindaPadrao = !respostaAtual?.emailCorpo || respostaAtual.emailCorpo === modeloAnterior.corpo
+      return aplicarRegraPublicoPorTipo({
+        ...atual,
+        selecao: { ...atual.selecao, excluirEmpresas: undefined },
+        operacao: {
+          ...atual.operacao,
+          resposta: {
+            ...respostaAtual,
+            emailAssunto: assuntoAindaPadrao ? novoModelo.assunto : respostaAtual?.emailAssunto,
+            emailCorpo: corpoAindaPadrao ? novoModelo.corpo : respostaAtual?.emailCorpo,
+          },
+        },
+      }, novoTipo)
+    })
+  }
+
+  function selecionarEmpresa(chave: string, selecionar: boolean) {
+    const excluidas = new Set(publico.selecao?.excluirEmpresas ?? [])
+    if (selecionar) excluidas.delete(chave)
+    else excluidas.add(chave)
+    atualizarSelecao({ excluirEmpresas: [...excluidas] })
+  }
+
+  function selecionarTodasEmpresas() {
+    atualizarSelecao({ excluirEmpresas: undefined })
+  }
+
+  function limparSelecaoEmpresas() {
+    atualizarSelecao({ excluirEmpresas: previa?.empresas.map((empresa) => empresa.chave) ?? [] })
+  }
+
+  function atualizarMensagem(indice: number | null, patch: Partial<MensagemCampanha>) {
+    setPublico((atual) => {
+      const op = atual.operacao ?? {}
+      if (indice == null) {
+        return {
+          ...atual,
+          operacao: { ...op, mensagemInicial: { ...(op.mensagemInicial ?? mensagemVazia()), ...patch } },
+        }
+      }
+      const lista = [...(op.followups ?? [])]
+      lista[indice] = { ...lista[indice], ...patch }
+      return { ...atual, operacao: { ...op, followups: lista } }
+    })
+  }
+
+  function aplicarTemplate(templateId: string, indice: number | null) {
+    const template = templates.find((item) => item.id === templateId)
+    if (!template) {
+      atualizarMensagem(indice, { templateOrigemId: undefined })
+      return
+    }
+    atualizarMensagem(indice, {
+      templateOrigemId: template.id,
+      assunto: template.assunto ?? '',
+      corpo: template.corpo,
+    })
+  }
+
+  function adicionarFollowup() {
+    if (followups.length >= 4) return
+    const ultimoDia = followups.at(-1)?.diasApos ?? 0
+    setPublico((atual) => ({
+      ...atual,
+      operacao: {
+        ...atual.operacao,
+        mensagemInicial: atual.operacao?.mensagemInicial ?? mensagemVazia(),
+        followups: [
+          ...(atual.operacao?.followups ?? []),
+          { ...mensagemVazia(), diasApos: ultimoDia ? ultimoDia + 4 : 3 },
+        ],
       },
-      agenda: {
-        diasSemana,
-        horarioInicio: horarioInicio || '09:00',
-        horarioFim: horarioFim || '18:00',
-        limiteDiario: limiteDiario.trim() ? Number(limiteDiario) : undefined,
-        pararAoResponder,
+    }))
+  }
+
+  function removerFollowup(indice: number) {
+    setPublico((atual) => ({
+      ...atual,
+      operacao: {
+        ...atual.operacao,
+        mensagemInicial: atual.operacao?.mensagemInicial ?? mensagemVazia(),
+        followups: (atual.operacao?.followups ?? []).filter((_, i) => i !== indice),
       },
-    };
+    }))
+  }
+
+  function bodyCampanha() {
+    const publicoComOperacao = {
+      ...publico,
+      objetivo: descricao.trim() || undefined,
+      agenda: { ...publico.agenda, pararAoResponder: true },
+      operacao: {
+        ...publico.operacao,
+        mensagemInicial,
+        resposta: {
+          ...publico.operacao?.resposta,
+          pararCadencia: true,
+          criarTarefa: false,
+          notificarResponsavel: true,
+          notificarAdministradores: false,
+          prepararSugestao: false,
+        },
+      },
+    }
     return {
       nome: nome.trim(),
       tipo,
-      descricao: objetivo.trim() || null,
-      meta_leads: meta.trim() ? Number(meta) : null,
-      workflow_id: workflowId || null,
-      publico,
-    };
-  }
-
-  async function salvar(modo: 'rascunho' | 'criar') {
-    if (!nome.trim()) { setEtapa(0); setErro('Informe o nome da campanha.'); return; }
-    setSalvando(modo); setErro(null); setOk(false);
-    try {
-      const body = montarBody();
-      let id = campanha?.id;
-      if (edit) {
-        const r = await fetch(`/api/campanhas/${campanha!.id}`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-        });
-        if (!r.ok) throw new Error((await r.json())?.erro || 'Falha ao salvar');
-      } else {
-        const r = await fetch('/api/campanhas', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-        });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d?.erro || 'Falha ao criar');
-        id = d.id;
-      }
-      if (modo === 'criar' && id) {
-        router.push(`/automacao/campanhas/${id}`);
-        return;
-      }
-      setOk(true); setTimeout(() => setOk(false), 2500);
-      setSalvando(false);
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Erro ao salvar');
-      setSalvando(false);
+      descricao: descricao.trim() || null,
+      meta_leads: null,
+      publico: aplicarRegraPublicoPorTipo(publicoComOperacao, tipo),
     }
   }
 
-  const wfSelecionado = workflows.find((w) => w.id === workflowId);
-  const cadenciaNome = wfSelecionado?.nome;
-  const wfNaoPublicado = wfSelecionado != null && wfSelecionado.status !== 'publicado';
-  const podeAvancar = nome.trim().length > 0 && !(etapa === 2 && wfNaoPublicado);
-
-  function toggleDia(dia: string) {
-    setDiasSemana((prev) => prev.includes(dia) ? prev.filter((d) => d !== dia) : [...prev, dia]);
+  async function persistir(): Promise<string> {
+    if (!nome.trim()) throw new Error('Informe um nome para a campanha.')
+    const url = campanhaId ? `/api/campanhas/${campanhaId}` : '/api/campanhas'
+    const res = await fetch(url, {
+      method: campanhaId ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bodyCampanha()),
+    })
+    const dados = await res.json()
+    if (!res.ok) throw new Error(dados.erro || 'Não foi possível salvar a campanha.')
+    const id = campanhaId || dados.id
+    if (!id) throw new Error('A campanha foi salva sem um identificador.')
+    if (!campanhaId) {
+      setCampanhaId(id)
+      window.history.replaceState(null, '', `/automacao/campanhas/${id}/editar`)
+    }
+    return id
   }
 
+  async function salvarRascunho() {
+    setSalvando('rascunho')
+    setErro(null)
+    setSalvo(false)
+    try {
+      await persistir()
+      setSalvo(true)
+      window.setTimeout(() => setSalvo(false), 2500)
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  async function ativar(confirmarQuantidade?: number) {
+    setSalvando('ativar')
+    setErro(null)
+    try {
+      const id = await persistir()
+      const res = await fetch(`/api/campanhas/${id}/ativar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmarQuantidade }),
+      })
+      const dados = await res.json()
+      if (!res.ok) throw new Error(dados.erro || 'Não foi possível ativar a campanha.')
+      router.push(`/automacao/campanhas/${id}`)
+      router.refresh()
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao ativar.')
+      setConfirmando(false)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  function solicitarAtivacao() {
+    const erros = validarCampanhaGuiada(bodyCampanha().publico)
+    const quantidade = previa?.elegiveis ?? 0
+    if (!quantidade) erros.push('O público precisa ter ao menos um contato elegível.')
+    if (erros.length) {
+      setErro(erros.join(' '))
+      return
+    }
+    if (quantidade > LIMITE_CONFIRMACAO_CAMPANHA) {
+      setConfirmacao('')
+      setConfirmando(true)
+      return
+    }
+    void ativar()
+  }
+
+  const contagens = useMemo(() => [
+    ['Selecionados', previa?.totalSelecionado],
+    ['Elegíveis', previa?.elegiveis],
+    ['Sem e-mail válido', previa?.emailsAusentesOuInvalidos],
+    ['Duplicados', previa?.duplicados],
+    ['Bloqueados', previa?.bloqueados],
+    ['Sem responsável', previa?.semResponsavel],
+    ['Em outra automação', previa?.incompativeis],
+  ] as const, [previa])
+
+  const resumoCadencia = followups.length
+    ? `Mensagem inicial + ${followups.length} follow-up${followups.length > 1 ? 's' : ''} (${followups.map((f) => `dia ${f.diasApos}`).join(', ')})`
+    : 'Somente a mensagem inicial'
+
   return (
-    <div className="p-6 max-w-[100rem] mx-auto">
-      {/* Cabeçalho + ações */}
-      <div className="flex items-start justify-between gap-4 mb-4">
-        <div className="min-w-0">
-          <div className="text-xs text-slate-500 flex items-center gap-1 mb-1">
-            <Link href="/automacao?tab=campanhas" className="hover:text-slate-300">Campanhas</Link>
-            <ChevronRight size={12} />
-            <span className="text-slate-400">{edit ? 'Editar' : 'Nova campanha'}</span>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-100">{edit ? (nome || 'Editar campanha') : 'Nova campanha'}</h1>
+    <div className="mx-auto max-w-[1500px] p-4 font-sans sm:p-6">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <Link href={campanhaId ? `/automacao/campanhas/${campanhaId}` : '/automacao?tab=campanhas'} className="mb-2 inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200">
+            <ArrowLeft size={15} /> Campanhas
+          </Link>
+          <h1 className="text-2xl font-semibold text-slate-100">{campanhaId ? 'Editar campanha' : 'Nova campanha'}</h1>
+          <p className="mt-1 text-sm text-slate-500">Configure público, mensagem e próximos passos usando somente dados existentes.</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {ok && <span className="text-xs text-green-400 inline-flex items-center gap-1"><Check size={13} /> salvo</span>}
-          <button onClick={() => salvar('rascunho')} disabled={!!salvando}
-            className="text-sm px-4 py-2 rounded-lg border border-[#2a3147] text-slate-200 hover:bg-[#0f1117] disabled:opacity-40 inline-flex items-center gap-1">
-            {salvando === 'rascunho' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salvar rascunho
-          </button>
-          <button onClick={() => salvar('criar')} disabled={!!salvando}
-            className="text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-500 disabled:opacity-40 inline-flex items-center gap-1">
-            {salvando === 'criar' ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-            {edit ? 'Salvar campanha' : 'Criar campanha'}
-          </button>
-        </div>
+        <button type="button" onClick={() => void salvarRascunho()} disabled={!!salvando} className="inline-flex items-center gap-2 rounded-lg border border-[#30384e] px-4 py-2 text-sm text-slate-300 hover:bg-white/5 disabled:opacity-50">
+          {salvando === 'rascunho' ? <Loader2 size={15} className="animate-spin" /> : salvo ? <Check size={15} /> : <Save size={15} />}
+          {salvo ? 'Salvo' : 'Salvar rascunho'}
+        </button>
       </div>
 
-      {/* Stepper */}
-      <div className="flex items-center gap-1 mb-6 overflow-x-auto">
-        {PASSOS.map((s, i) => (
-          <div key={s.label} className="flex items-center gap-1 flex-1 last:flex-none min-w-0">
-            <button onClick={() => setEtapa(i as Etapa)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                i === etapa ? 'bg-indigo-500/20 text-indigo-300' : i < etapa ? 'text-slate-300 hover:text-slate-100' : 'text-slate-500 hover:text-slate-300'
-              }`}>
-              <span className={`flex items-center justify-center w-5 h-5 rounded-full text-[11px] shrink-0 ${
-                i === etapa ? 'bg-indigo-500 text-white' : i < etapa ? 'bg-green-600/30 text-green-300' : 'bg-[#2a3147] text-slate-400'
-              }`}>
-                {i < etapa ? <Check size={11} /> : i + 1}
-              </span>
-              <span className="hidden md:inline">{s.label}</span>
-            </button>
-            {i < PASSOS.length - 1 && (
-              <div className={`h-px flex-1 min-w-[12px] ${i < etapa ? 'bg-green-600/40' : 'bg-[#2a3147]'}`} />
-            )}
-          </div>
+      <div className="mb-7 grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {PASSOS.map(({ titulo, label: texto, Icon }, indice) => (
+          <button key={titulo} type="button" onClick={() => setEtapa(indice)} className={`flex min-w-0 items-center gap-2 rounded-xl border p-3 text-left transition-colors ${etapa === indice ? 'border-indigo-500/70 bg-indigo-500/10 text-indigo-200' : indice < etapa ? 'border-emerald-500/25 bg-emerald-500/5 text-slate-300' : 'border-[#2a3147] bg-[#151924] text-slate-500'}`}>
+            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${indice < etapa ? 'bg-emerald-500 text-white' : etapa === indice ? 'bg-indigo-500 text-white' : 'bg-[#252b3c]'}`}>
+              {indice < etapa ? <Check size={14} /> : indice + 1}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-xs font-semibold">Etapa {indice + 1} · {titulo}</span>
+              <span className="hidden truncate text-[11px] text-slate-500 xl:block">{texto}</span>
+            </span>
+            <Icon size={15} className="ml-auto hidden lg:block" />
+          </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
-        {/* Conteúdo por etapa */}
+      {erro && (
+        <div className="mb-5 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" /> {erro}
+        </div>
+      )}
+
+      {etapa === 0 && (
         <div className="space-y-5">
-          {/* Etapa 0: Objetivo e nome */}
-          {etapa === 0 && (
-            <div className={card}>
-              <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
-                <Target size={16} className="text-indigo-400" /> Objetivo e nome
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                  <label className={lbl}>Nome da campanha *</label>
-                  <input className={input} value={nome} autoFocus onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Reativação Laudos Q3" />
-                </div>
-                <div>
-                  <label className={lbl}>Tipo de campanha</label>
-                  <select className={input} value={tipo} onChange={(e) => setTipo(e.target.value)}>
-                    <option value="prospeccao">Prospecção</option>
-                    <option value="renovacao">Renovação</option>
-                    <option value="reativacao">Reativação</option>
-                    <option value="outro">Outro</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={lbl}>Objetivo</label>
-                  <input className={input} value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Ex.: Renovar laudos vencidos no trimestre" />
-                </div>
-                <div>
-                  <label className={lbl}>Responsável</label>
-                  <select className={input} value={responsavelId} onChange={(e) => setResponsavelId(e.target.value)}>
-                    <option value="">— selecione —</option>
-                    {membros.map((m) => (
-                      <option key={m.id} value={m.id}>{m.nome || m.email}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={lbl}>Meta de contatos</label>
-                  <input className={input} value={meta} onChange={(e) => setMeta(e.target.value)} inputMode="numeric" placeholder="Ex.: 200" />
-                </div>
-                <div>
-                  <label className={lbl}>Prazo</label>
-                  <input className={input} type="date" value={prazo} onChange={(e) => setPrazo(e.target.value)} />
-                </div>
-                <div>
-                  <label className={lbl}>Idioma</label>
-                  <select className={input} value={idioma} onChange={(e) => setIdioma(e.target.value)}>
-                    <option value="pt-BR">Português (BR)</option>
-                    <option value="es">Espanhol</option>
-                    <option value="en">Inglês</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Etapa 1: Público e filtros */}
-          {etapa === 1 && (
-            <div className="space-y-4">
-              <div className={card}>
-                <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
-                  <Users size={16} className="text-indigo-400" /> Empresas
-                </h2>
-                <label className={lbl}>Fonte</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-                  <div className="flex items-center gap-2 p-3 rounded-lg border border-indigo-500/50 bg-indigo-500/10 text-sm text-indigo-200">
-                    <input type="radio" checked readOnly /> Base de leads existente
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 ml-auto">conectada</span>
-                  </div>
-                  <div className="flex items-center gap-2 p-3 rounded-lg border border-[#2a3147] text-sm text-slate-500" title="Integração externa não configurada">
-                    <input type="radio" disabled /> <Lock size={13} /> Google Maps Extractor
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#252b3b] text-slate-500 ml-auto">não configurado</span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><label className={lbl}>Segmento</label><input className={input} value={segmento} onChange={(e) => setSegmento(e.target.value)} placeholder="Ex.: Hotelaria, Laudos" /></div>
-                  <div><label className={lbl}>País</label><input className={input} value={pais} onChange={(e) => setPais(e.target.value)} placeholder="Ex.: Brasil" /></div>
-                  <div><label className={lbl}>Cidades / regiões</label><input className={input} value={cidades} onChange={(e) => setCidades(e.target.value)} placeholder="Ex.: RJ, Niterói" /></div>
-                  <div><label className={lbl}>Limite de contatos</label><input className={input} value={limite} onChange={(e) => setLimite(e.target.value)} inputMode="numeric" placeholder="Ex.: 200" /></div>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-4">
-                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-                    <input type="checkbox" checked={removerDup} onChange={(e) => setRemoverDup(e.target.checked)} className="accent-indigo-500" /> Remover duplicados
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-                    <input type="checkbox" checked={exigirSite} onChange={(e) => setExigirSite(e.target.checked)} className="accent-indigo-500" /> Exigir site ativo
-                  </label>
-                </div>
-                <div className="flex items-start gap-2 text-xs text-slate-500 mt-4 bg-[#0f1117] border border-[#2a3147] rounded-lg p-3">
-                  <Info size={13} className="text-indigo-400 shrink-0 mt-0.5" />
-                  <span>Filtros aplicados pelo motor ao ativar. {baseLeads != null && <>Base atual: <b className="text-slate-300">{baseLeads} leads</b>.</>}</span>
-                </div>
-              </div>
-
-              <div className={card}>
-                <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
-                  <Users size={16} className="text-indigo-400" /> Decisor ideal
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><label className={lbl}>Departamento</label><input className={input} value={departamento} onChange={(e) => setDepartamento(e.target.value)} placeholder="Ex.: Compras, Operações" /></div>
-                  <div><label className={lbl}>Cargos-alvo</label><input className={input} value={cargos} onChange={(e) => setCargos(e.target.value)} placeholder="Ex.: Diretor, Gerente" /></div>
-                  <div><label className={lbl}>Senioridade</label><input className={input} value={senioridade} onChange={(e) => setSenioridade(e.target.value)} placeholder="Ex.: C-level, Gerência" /></div>
-                </div>
-                <div className="flex flex-wrap gap-4 mt-4">
-                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-                    <input type="checkbox" checked={exigirEmail} onChange={(e) => setExigirEmail(e.target.checked)} className="accent-indigo-500" /> Exigir e-mail validado
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-                    <input type="checkbox" checked={exigirTelefone} onChange={(e) => setExigirTelefone(e.target.checked)} className="accent-indigo-500" /> Exigir telefone / WhatsApp
-                  </label>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Etapa 2: Seleção ou criação do workflow/cadência */}
-          {etapa === 2 && (
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4">
-              {/* Seleção de workflow */}
-              <div className={card}>
-                <h2 className="font-semibold text-slate-200 mb-1 flex items-center gap-2">
-                  <Workflow size={16} className="text-indigo-400" /> Configure a cadência
-                </h2>
-                <p className="text-xs text-slate-500 mb-4">Selecione o workflow que executa a cadência desta campanha. O motor de Workflows é a única implementação — nunca duplicamos a lógica.</p>
-
-                {workflows.length === 0 ? (
-                  <div className="text-sm text-slate-500 bg-[#0f1117] border border-[#2a3147] rounded-lg p-4">
-                    Nenhum workflow disponível.{' '}
-                    <Link href="/automacao?tab=workflows" className="text-indigo-300 hover:text-indigo-200">Crie um na aba Workflows</Link> e volte para vincular.
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-64 overflow-auto mb-4">
-                    {workflows.map((w) => (
-                      <label key={w.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${workflowId === w.id ? 'border-indigo-500/60 bg-indigo-500/10' : 'border-[#2a3147] hover:bg-[#0f1117]'}`}>
-                        <input type="radio" name="wf" checked={workflowId === w.id} onChange={() => setWorkflowId(w.id)} />
-                        <Workflow size={15} className="text-indigo-400 shrink-0" />
-                        <span className="text-sm text-slate-200 flex-1 min-w-0 truncate">{w.nome}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#252b3b] text-slate-400 shrink-0">{w.status}</span>
-                        {w.etapas != null && <span className="text-[10px] text-slate-500 shrink-0">{w.etapas} etapas</span>}
-                      </label>
-                    ))}
-                  </div>
-                )}
-
-                {/* Preview dos passos do workflow selecionado */}
-                {workflowId && (
-                  <div className="border-t border-[#2a3147] pt-4 mt-2">
-                    <h3 className="text-xs text-slate-500 uppercase tracking-wide mb-3">Passos da cadência</h3>
-                    {wfCarregando ? (
-                      <div className="flex items-center gap-2 text-xs text-slate-500">
-                        <Loader2 size={13} className="animate-spin" /> Carregando passos...
-                      </div>
-                    ) : wfPassos.length === 0 ? (
-                      <p className="text-xs text-slate-500">Nenhum passo definido neste workflow ainda.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {wfPassos.map((p, i) => (
-                          <div key={i} className="flex items-center gap-3 text-sm text-slate-300">
-                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#252b3b] text-[11px] text-slate-400 shrink-0">{i + 1}</span>
-                            <PassoIcon icon={p.icon} />
-                            <span className="flex-1">{p.label}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {wfNaoPublicado && (
-                  <div className="mt-3 flex items-start gap-2 p-3 rounded-lg bg-amber-400/10 border border-amber-400/20 text-xs text-amber-300">
-                    <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+          <section className={card}>
+            <h2 className="mb-1 font-semibold text-slate-100">Qual é o objetivo?</h2>
+            <p className="mb-5 text-sm text-slate-500">O tipo organiza a campanha; ele não cria métricas nem altera o motor.</p>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {TIPOS_CAMPANHA.map((item) => {
+                const Icone = ICONES_OBJETIVO[item.id]
+                return (
+                  <button key={item.id} type="button" onClick={() => alterarTipo(item.id)} className={`group flex min-h-24 items-start gap-3 rounded-xl border p-4 text-left transition-all ${tipo === item.id ? 'border-indigo-400 bg-gradient-to-br from-indigo-500/20 to-violet-500/10 shadow-[0_0_28px_rgba(99,102,241,.12)]' : 'border-[#2a3147] bg-[#11151f] hover:border-[#46506d] hover:bg-[#151a27]'}`}>
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tipo === item.id ? 'bg-indigo-500 text-white' : 'bg-indigo-500/10 text-indigo-300'}`}><Icone size={19} /></span>
                     <span>
-                      Este workflow está em <strong>{wfSelecionado?.status}</strong> — publique-o antes de avançar.
-                      {' '}A campanha só inscreve leads em workflows publicados.{' '}
-                      <Link href="/automacao?tab=workflows" className="underline hover:text-amber-200">Abrir Workflows</Link>
+                      <span className="block text-sm font-semibold text-slate-100">{item.label}</span>
+                      <span className="mt-1 block text-xs leading-5 text-slate-500">{item.descricao}</span>
                     </span>
-                  </div>
-                )}
+                    {tipo === item.id && <CheckCircle2 size={17} className="ml-auto shrink-0 text-indigo-200" />}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="mt-5 grid gap-4 lg:grid-cols-3">
+              <div>
+                <label className={label}>Nome da campanha</label>
+                <input className={input} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Novidade de agosto" />
               </div>
-
-              {/* Regras de envio (sidebar) */}
-              <div className={`${card} self-start`}>
-                <h3 className="font-semibold text-slate-200 text-sm mb-3">Regras de envio</h3>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs text-slate-400 block mb-1.5">Dias da semana</label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {DIAS_SEMANA.map((d) => (
-                        <button key={d.id} type="button" onClick={() => toggleDia(d.id)}
-                          className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${diasSemana.includes(d.id) ? 'border-indigo-500/60 bg-indigo-500/15 text-indigo-300' : 'border-[#2a3147] text-slate-400 hover:text-slate-200'}`}>
-                          {d.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 block mb-1">Horário de envio</label>
-                    <div className="flex items-center gap-2">
-                      <input type="time" value={horarioInicio} onChange={(e) => setHorarioInicio(e.target.value)}
-                        className="bg-[#0f1117] border border-[#2a3147] rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500" />
-                      <span className="text-xs text-slate-500">–</span>
-                      <input type="time" value={horarioFim} onChange={(e) => setHorarioFim(e.target.value)}
-                        className="bg-[#0f1117] border border-[#2a3147] rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 block mb-1">Limite diário</label>
-                    <input className="w-full bg-[#0f1117] border border-[#2a3147] rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-                      value={limiteDiario} onChange={(e) => setLimiteDiario(e.target.value)} inputMode="numeric" placeholder="Sem limite" />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-400">Parar ao receber resposta</span>
-                    <button type="button" onClick={() => setPararAoResponder(!pararAoResponder)}>
-                      {pararAoResponder
-                        ? <ToggleRight size={22} className="text-indigo-400" />
-                        : <ToggleLeft size={22} className="text-slate-600" />}
-                    </button>
-                  </div>
-                </div>
+              <div>
+                <label className={label}>Responsável pelos retornos</label>
+                <select className={input} value={publico.responsavel_id ?? ''} onChange={(e) => setPublico((atual) => ({ ...atual, responsavel_id: e.target.value || undefined }))}>
+                  <option value="">Não configurado</option>
+                  {membros.map((membro) => <option key={membro.id} value={membro.id}>{nomeMembro(membro)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={label}>Objetivo interno (opcional)</label>
+                <textarea maxLength={200} className={`${input} min-h-[42px] resize-y`} value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Contexto para quem revisar a campanha" />
+                <div className="mt-1 text-right text-[11px] text-slate-600">{descricao.length}/200</div>
               </div>
             </div>
-          )}
+          </section>
 
-          {/* Etapa 3: Agenda, limites e regras */}
-          {etapa === 3 && (
-            <div className={card}>
-              <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
-                <Calendar size={16} className="text-indigo-400" /> Agenda, limites e regras
-              </h2>
-              <div className="space-y-5 max-w-lg">
-                <div>
-                  <label className={lbl}>Dias da semana para envio</label>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {DIAS_SEMANA.map((d) => (
-                      <button key={d.id} type="button" onClick={() => toggleDia(d.id)}
-                        className={`text-sm px-3 py-2 rounded-lg border transition-colors font-medium ${diasSemana.includes(d.id) ? 'border-indigo-500/60 bg-indigo-500/15 text-indigo-300' : 'border-[#2a3147] text-slate-400 hover:text-slate-200'}`}>
-                        {d.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={lbl}>Horário início</label>
-                    <input type="time" value={horarioInicio} onChange={(e) => setHorarioInicio(e.target.value)} className={input} />
-                  </div>
-                  <div>
-                    <label className={lbl}>Horário fim</label>
-                    <input type="time" value={horarioFim} onChange={(e) => setHorarioFim(e.target.value)} className={input} />
-                  </div>
-                </div>
-                <div>
-                  <label className={lbl}>Limite de envios por dia</label>
-                  <input className={input} value={limiteDiario} onChange={(e) => setLimiteDiario(e.target.value)} inputMode="numeric" placeholder="Sem limite (deixe vazio)" />
-                </div>
-                <div className="flex items-center justify-between p-4 rounded-lg bg-[#0f1117] border border-[#2a3147]">
-                  <div>
-                    <div className="text-sm font-medium text-slate-200">Parar ao receber resposta</div>
-                    <div className="text-xs text-slate-500 mt-0.5">Encerra a cadência automaticamente quando o lead responde</div>
-                  </div>
-                  <ToggleBtn on={pararAoResponder} set={setPararAoResponder} />
-                </div>
-              </div>
+          <section className={card}>
+            <h2 className="mb-1 font-semibold text-slate-100">Selecione o público</h2>
+            <p className="mb-4 text-sm text-slate-500">A contagem é recalculada no servidor e respeita bloqueios, duplicidade e automações ativas.</p>
+            <div className="mb-4 grid grid-cols-2 gap-2">
+              {(['filtros', 'manual'] as const).map((modo) => (
+                <button key={modo} type="button" onClick={() => atualizarSelecao({ modo })} className={`rounded-lg border px-3 py-2 text-sm ${publico.selecao?.modo === modo ? 'border-indigo-500 bg-indigo-500/10 text-indigo-200' : 'border-[#2a3147] text-slate-400'}`}>
+                  {modo === 'filtros' ? 'Usar filtros' : 'Seleção manual'}
+                </button>
+              ))}
             </div>
-          )}
-
-          {/* Etapa 4: Revisão e publicação */}
-          {etapa === 4 && (
-            <div className={card}>
-              <h2 className="font-semibold text-slate-200 mb-4 flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-indigo-400" /> Revisão e publicação
-              </h2>
-              <div className="space-y-2 text-sm">
-                <Linha k="Nome" v={nome || '—'} />
-                <Linha k="Tipo · Objetivo" v={`${tipo}${objetivo ? ' · ' + objetivo : ''}`} />
-                <Linha k="Meta / Prazo" v={`${meta || '—'} contatos${prazo ? ' · até ' + prazo : ''}`} />
-                <Linha k="Segmento" v={[segmento, cidades, pais].filter(Boolean).join(' · ') || 'Base existente (sem filtro)'} />
-                <Linha k="Decisores" v={[departamento, cargos, senioridade].filter(Boolean).join(' · ') || 'Qualquer'} />
-                <Linha k="Cadência (workflow)" v={cadenciaNome ?? '— (sem workflow)'} />
-                <Linha k="Horário de envio" v={`${diasSemana.join(', ')} · ${horarioInicio}–${horarioFim}`} />
-                <Linha k="Limite diário" v={limiteDiario || 'Sem limite'} />
-                <Linha k="Parar ao responder" v={pararAoResponder ? 'Sim' : 'Não'} />
-                <Linha k="Público estimado" v={baseLeads != null ? `base de ${baseLeads} leads (recorte final no motor)` : 'não calculável'} />
+            {publico.selecao?.modo === 'manual' ? (
+              <div className="rounded-lg border border-[#2a3147] bg-[#11151f] p-4">
+                <p className="text-sm text-slate-300">{publico.selecao.leadIds?.length ?? 0} contato(s) selecionado(s) na base.</p>
+                <p className="mt-1 text-xs text-slate-500">Para alterar a seleção, volte à Base de Leads e use “Enviar comunicado”.</p>
               </div>
-              {!workflowId && (
-                <div className="text-xs text-amber-400 mt-3 p-3 bg-amber-400/10 rounded-lg border border-amber-400/20">
-                  Sem cadência vinculada: pode salvar rascunho, mas a campanha só ativa com um workflow.
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-lg border border-indigo-500/25 bg-indigo-500/5 p-3">
+                  <div className="text-sm font-medium text-indigo-200">{regraPublico.titulo}</div>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">{regraPublico.descricao}</p>
+                </div>
+                <div>
+                  <label className={label}>Nicho</label>
+                  <select className={`${input} disabled:cursor-not-allowed disabled:opacity-60`} disabled={!nichos.length && !publico.empresas?.segmento} value={publico.empresas?.segmento ?? ''} onChange={(e) => atualizarEmpresas({ segmento: e.target.value || undefined })}>
+                    <option value="">Todos os nichos</option>
+                    {publico.empresas?.segmento && !nichos.includes(publico.empresas.segmento) && (
+                      <option value={publico.empresas.segmento}>{publico.empresas.segmento}</option>
+                    )}
+                    {nichos.map((nicho) => <option key={nicho} value={nicho}>{nicho}</option>)}
+                  </select>
+                  <p className={`mt-1.5 text-xs ${nichos.length ? 'text-slate-600' : 'text-amber-300/80'}`}>{nichos.length ? 'Opções reais do campo Segmento / nicho na Base de Leads.' : 'Filtro indisponível: nenhum contato possui Segmento / nicho cadastrado na Base de Leads.'}</p>
+                </div>
+                {regraPublico.permitirEscolhaStatus && <div>
+                  <label className={label}>Status da prospecção (multisseleção)</label>
+                  <div className="grid gap-2 rounded-lg border border-[#2a3147] bg-[#11151f] p-3 sm:grid-cols-2">
+                    {GRUPOS_STATUS_PUBLICO.map((grupo) => {
+                      const atuais = publico.selecao?.estagios ?? []
+                      const ativo = grupo.estagios.every((estagio) => atuais.includes(estagio))
+                      return <label key={grupo.id} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2.5 text-sm ${ativo ? 'border-indigo-500/70 bg-indigo-500/10 text-indigo-100' : 'border-[#30384e] text-slate-400'}`}>
+                        <input type="checkbox" className="mt-0.5 accent-indigo-500" checked={ativo} onChange={() => {
+                        const estagiosDoGrupo = new Set<string>(grupo.estagios)
+                        const semGrupo = atuais.filter((estagio) => !estagiosDoGrupo.has(estagio))
+                        const proximos = ativo ? semGrupo : [...semGrupo, ...grupo.estagios]
+                        if (proximos.length) atualizarSelecao({ estagios: proximos })
+                      }} />
+                        <span>{grupo.label}</span>
+                      </label>
+                    })}
+                  </div>
+                  <div className="mt-2 rounded-lg border border-[#2a3147] bg-[#151924] px-3 py-2 text-xs leading-5 text-slate-500">
+                    <span className="font-medium text-slate-400">Regra auditável:</span>{' '}
+                    {GRUPOS_STATUS_PUBLICO.filter((grupo) => grupo.estagios.every((estagio) => (publico.selecao?.estagios ?? []).includes(estagio))).map((grupo) => grupo.label).join(', ')}.
+                    <span className="mt-1 block text-[11px] text-slate-600">Estágios persistidos: {(publico.selecao?.estagios ?? []).join(', ')}</span>
+                  </div>
+                </div>}
+                <div>
+                  <label className={label}>Limite de contatos (máx. 2.000)</label>
+                  <input type="number" min={1} max={2000} className={input} value={publico.empresas?.limite ?? ''} onChange={(e) => atualizarEmpresas({ limite: e.target.value ? Number(e.target.value) : undefined })} placeholder="Sem limite adicional" />
+                </div>
+              </div>
+            )}
+
+            <div className="mt-5 border-t border-[#2a3147] pt-4">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Prévia real</span>
+                {carregandoPrevia && <Loader2 size={14} className="animate-spin text-indigo-400" />}
+              </div>
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
+                {contagens.map(([rotulo, valor]) => (
+                  <div key={rotulo} className="rounded-xl border border-[#272e42] bg-[#11151f] p-3">
+                    <div className="text-xl font-semibold text-slate-100">{valor ?? '—'}</div>
+                    <div className="text-[11px] text-slate-500">{rotulo}</div>
+                  </div>
+                ))}
+              </div>
+              {previa?.truncado && <p className="mt-3 text-xs text-amber-300">A prévia atingiu o limite seguro de 2.000 registros.</p>}
+              {previa && (
+                <div className="mt-4 rounded-xl border border-[#2a3147] bg-[#11151f] p-4">
+                  <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-200"><Building2 size={16} className="text-indigo-400" /> Empresas encontradas</div>
+                      <p className="mt-1 text-xs text-slate-500">Selecione as empresas que deseja incluir. O nicho exibido vem da Base de Leads.</p>
+                    </div>
+                    <span className="rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-xs text-indigo-200">{previa.totalEmpresasSelecionadas} de {previa.totalEmpresas} selecionadas</span>
+                  </div>
+                  {previa.empresas.length ? (
+                    <div>
+                      <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <button type="button" onClick={selecionarTodasEmpresas} className="rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-xs font-medium text-indigo-200 hover:bg-indigo-500/15">Selecionar todas</button>
+                        <div className="relative min-w-56 flex-1">
+                          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
+                          <input className={`${input} pl-9`} value={buscaEmpresa} onChange={(e) => { setBuscaEmpresa(e.target.value); setPaginaEmpresas(1) }} placeholder="Pesquisar por empresa ou nicho" />
+                        </div>
+                        <button type="button" onClick={limparSelecaoEmpresas} className="rounded-lg border border-[#30384e] px-3 py-2 text-xs text-slate-400 hover:border-red-500/30 hover:text-red-300">Limpar seleção</button>
+                      </div>
+                      <div className="max-h-80 overflow-auto rounded-xl border border-[#272e42]">
+                        <table className="w-full min-w-[680px] border-collapse text-left">
+                          <thead className="sticky top-0 z-10 bg-[#171c29] text-[11px] uppercase tracking-wide text-slate-500">
+                            <tr><th className="w-12 px-4 py-3">Incluir</th><th className="px-4 py-3">Empresa</th><th className="px-4 py-3">Nicho</th><th className="px-4 py-3 text-right">Contatos</th><th className="px-4 py-3 text-right">Elegíveis</th></tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#272e42]">
+                            {empresasDaPagina.map((empresa) => {
+                              const selecionada = !(publico.selecao?.excluirEmpresas ?? []).includes(empresa.chave)
+                              return (
+                                <tr key={empresa.chave} className={`${selecionada ? 'bg-indigo-500/[.04]' : 'opacity-55'} hover:bg-white/[.03]`}>
+                                  <td className="px-4 py-3"><input type="checkbox" className="h-4 w-4 accent-indigo-500" checked={selecionada} onChange={(e) => selecionarEmpresa(empresa.chave, e.target.checked)} aria-label={`Incluir ${empresa.nome}`} /></td>
+                                  <td className="px-4 py-3 text-sm font-medium text-slate-200">{empresa.nome}</td>
+                                  <td className="px-4 py-3 text-sm text-slate-400">{textoOuNaoConfigurado(empresa.segmento)}</td>
+                                  <td className="px-4 py-3 text-right text-sm text-slate-400">{empresa.contatos}</td>
+                                  <td className="px-4 py-3 text-right text-sm font-medium text-emerald-300">{empresa.elegiveis}</td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                        {!empresasFiltradas.length && <div className="p-6 text-center text-sm text-slate-500">Nenhuma empresa corresponde à busca.</div>}
+                      </div>
+                      {!!empresasFiltradas.length && (
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+                          <span>Mostrando {(paginaEmpresasSegura - 1) * EMPRESAS_POR_PAGINA + 1}–{Math.min(paginaEmpresasSegura * EMPRESAS_POR_PAGINA, empresasFiltradas.length)} de {empresasFiltradas.length} empresas</span>
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => setPaginaEmpresas((atual) => Math.max(1, atual - 1))} disabled={paginaEmpresasSegura === 1} className="rounded-lg border border-[#30384e] px-3 py-1.5 text-slate-400 disabled:opacity-30">Anterior</button>
+                            <span className="min-w-20 text-center">Página {paginaEmpresasSegura} de {totalPaginasEmpresas}</span>
+                            <button type="button" onClick={() => setPaginaEmpresas((atual) => Math.min(totalPaginasEmpresas, atual + 1))} disabled={paginaEmpresasSegura === totalPaginasEmpresas} className="rounded-lg border border-[#30384e] px-3 py-1.5 text-slate-400 disabled:opacity-30">Próxima</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs leading-5 text-slate-500">Nenhuma empresa corresponde ao nicho e à regra de status deste objetivo.</p>
+                  )}
                 </div>
               )}
             </div>
-          )}
+          </section>
+        </div>
+      )}
 
-          {erro && <div className="text-sm text-red-400">{erro}</div>}
+      {etapa === 1 && (
+        <div className="space-y-5">
+          <section className={card}>
+            <h2 className="mb-1 font-semibold text-slate-100">Editor da mensagem</h2>
+            <p className="mb-5 text-sm text-slate-500">Escolha um template real, edite o texto ou importe um HTML exclusivo desta campanha.</p>
+            <div className="mb-4 rounded-lg border border-[#2a3147] bg-[#11151f] p-3">
+              <span className="text-xs text-slate-500">Remetente configurado no workspace</span>
+              <div className="mt-1 flex items-center gap-2 text-sm text-slate-200"><Mail size={15} className="text-indigo-400" /> {textoOuNaoConfigurado(publico.operacao?.remetenteEmail)}</div>
+              {publico.operacao?.remetenteConta && <div className="mt-1 text-xs text-slate-600">Conta: {publico.operacao.remetenteConta}</div>}
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className={label}>Usar template</label>
+                <select className={input} value={mensagemInicial.templateOrigemId ?? ''} onChange={(e) => aplicarTemplate(e.target.value, null)}>
+                  <option value="">Escrever do zero</option>
+                  {templates.map((template) => <option key={template.id} value={template.id}>{template.nome}{template.nicho ? ` · ${template.nicho}` : ''}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={label}>Assunto</label>
+                <input className={input} value={mensagemInicial.assunto ?? ''} onChange={(e) => atualizarMensagem(null, { assunto: e.target.value })} placeholder="Assunto do e-mail" />
+              </div>
+              <div>
+                <label className={label}>Mensagem</label>
+                <textarea className={`${input} min-h-64 resize-y font-mono text-[13px] leading-6`} value={mensagemInicial.corpo ?? ''} onChange={(e) => atualizarMensagem(null, { corpo: e.target.value })} placeholder="Olá {nome}, ..." />
+                <p className="mt-1.5 text-xs text-slate-600">Variáveis existentes: {'{nome}'}, {'{empresa}'}, {'{segmento}'}, {'{cidade}'}, {'{responsavel_comercial}'}, {'{data_validade}'} e {'{nome_servico}'}.</p>
+              </div>
+              <div>
+                <label className={label}>Link complementar (opcional)</label>
+                <input type="url" className={input} value={mensagemInicial.link ?? ''} onChange={(e) => atualizarMensagem(null, { link: e.target.value })} placeholder="https://..." />
+              </div>
+              <HtmlEmailEditor
+                html={mensagemInicial.html}
+                previewHtml={htmlMensagemInicial}
+                onChange={(html) => atualizarMensagem(null, { html })}
+                onErro={setErro}
+              />
+            </div>
+          </section>
 
-          {/* Navegação */}
-          <div className="flex items-center justify-between">
-            <button onClick={() => setEtapa((e) => Math.max(0, e - 1) as Etapa)} disabled={etapa === 0}
-              className="text-sm px-4 py-2 rounded-lg text-slate-300 hover:bg-[#0f1117] disabled:opacity-30 inline-flex items-center gap-1">
-              <ArrowLeft size={14} /> Voltar
+          <section className={card}>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-slate-100">Prévia da mensagem</h2>
+                <p className="text-xs text-slate-500">Conteúdo que será materializado no template da campanha.</p>
+              </div>
+              <FileText size={18} className="text-indigo-400" />
+            </div>
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-800 shadow-xl">
+              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                <div><strong>De:</strong> {textoOuNaoConfigurado(publico.operacao?.remetenteEmail)}</div>
+                <div className="mt-1"><strong>Assunto:</strong> {textoOuNaoConfigurado(mensagemInicial.assunto)}</div>
+              </div>
+              <iframe title="Prévia da mensagem ao cliente" sandbox="" srcDoc={documentoPreviewHtml(htmlMensagemInicial)} className="h-96 w-full bg-white" />
+            </div>
+            <button type="button" disabled title="O envio de teste exige uma autorização explícita separada." className="mt-4 inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-[#30384e] px-4 py-2.5 text-sm text-slate-600">
+              <Send size={15} /> Enviar teste — não configurado
             </button>
-            {etapa < 4 && (
-              <button onClick={() => setEtapa((e) => Math.min(4, e + 1) as Etapa)} disabled={!podeAvancar}
-                className="text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-500 disabled:opacity-40 inline-flex items-center gap-1">
-                Avançar <ArrowRight size={14} />
-              </button>
+          </section>
+        </div>
+      )}
+
+      {etapa === 2 && (
+        <div className="space-y-5">
+          <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]">
+            <section className={card}>
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-slate-100">Cadência de acompanhamento</h2>
+                <p className="mt-1 text-sm text-slate-500">Os intervalos viram esperas persistentes no workflow versionado.</p>
+              </div>
+              <button type="button" onClick={adicionarFollowup} disabled={followups.length >= 4} className="rounded-lg border border-indigo-500/40 px-3 py-2 text-xs text-indigo-300 hover:bg-indigo-500/10 disabled:opacity-40">Adicionar follow-up</button>
+            </div>
+            {!followups.length && <div className="rounded-lg border border-dashed border-[#30384e] p-6 text-center text-sm text-slate-500">Nenhum follow-up configurado. A campanha terá somente a mensagem inicial.</div>}
+            <div className="space-y-4">
+              {followups.map((followup, indice) => (
+                <div key={indice} className="rounded-xl border border-[#30384e] bg-[#11151f] p-4">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-200"><Clock3 size={15} className="text-indigo-400" /> Follow-up {indice + 1}</div>
+                    <button type="button" onClick={() => removerFollowup(indice)} className="rounded p-1.5 text-slate-500 hover:bg-red-500/10 hover:text-red-300" aria-label={`Remover follow-up ${indice + 1}`}><Trash2 size={15} /></button>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-[130px_1fr]">
+                    <div>
+                      <label className={label}>Enviar no dia</label>
+                      <input type="number" min={1} className={input} value={followup.diasApos ?? ''} onChange={(e) => atualizarMensagem(indice, { diasApos: Number(e.target.value) } as Partial<FollowupCampanha>)} />
+                    </div>
+                    <div>
+                      <label className={label}>Template</label>
+                      <select className={input} value={followup.templateOrigemId ?? ''} onChange={(e) => aplicarTemplate(e.target.value, indice)}>
+                        <option value="">Escrever do zero</option>
+                        {templates.map((template) => <option key={template.id} value={template.id}>{template.nome}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <label className={label}>Assunto</label>
+                    <input className={input} value={followup.assunto ?? ''} onChange={(e) => atualizarMensagem(indice, { assunto: e.target.value })} />
+                  </div>
+                  <div className="mt-3">
+                    <label className={label}>Mensagem</label>
+                    <textarea className={`${input} min-h-32 resize-y`} value={followup.corpo ?? ''} onChange={(e) => atualizarMensagem(indice, { corpo: e.target.value })} />
+                  </div>
+                  <div className="mt-3">
+                    <label className={label}>Link complementar (opcional)</label>
+                    <input type="url" className={input} value={followup.link ?? ''} onChange={(e) => atualizarMensagem(indice, { link: e.target.value })} placeholder="https://..." />
+                  </div>
+                  <div className="mt-4">
+                    <HtmlEmailEditor
+                      html={followup.html}
+                      previewHtml={montarEmailCampanhaHtml(followup.corpo?.trim() || 'Não configurado', { responsavelNome: nomeMembro(responsavel) }, followup.html)}
+                      onChange={(html) => atualizarMensagem(indice, { html })}
+                      onErro={setErro}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            </section>
+
+            <section className={card}>
+              <h2 className="mb-1 font-semibold text-slate-100">Janela operacional</h2>
+              <p className="mb-4 text-sm text-slate-500">A preferência fica registrada para conferência. O processamento continua seguindo o cron existente.</p>
+              <div className="mb-4 flex flex-wrap gap-2">
+                {DIAS.map((dia) => {
+                  const ativo = publico.agenda?.diasSemana?.includes(dia.id) ?? false
+                  return <button key={dia.id} type="button" onClick={() => atualizarAgenda({ diasSemana: ativo ? publico.agenda?.diasSemana?.filter((id) => id !== dia.id) : [...(publico.agenda?.diasSemana ?? []), dia.id] })} className={`rounded-lg border px-3 py-2 text-xs ${ativo ? 'border-indigo-500 bg-indigo-500/10 text-indigo-200' : 'border-[#30384e] text-slate-500'}`}>{dia.label}</button>
+                })}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className={label}>Início</label><input type="time" className={input} value={publico.agenda?.horarioInicio ?? '09:00'} onChange={(e) => atualizarAgenda({ horarioInicio: e.target.value })} /></div>
+                <div><label className={label}>Fim</label><input type="time" className={input} value={publico.agenda?.horarioFim ?? '18:00'} onChange={(e) => atualizarAgenda({ horarioFim: e.target.value })} /></div>
+              </div>
+            </section>
+          </div>
+
+          <section className={card}>
+            <div className="mb-5">
+              <h2 className="mb-1 font-semibold text-slate-100">Quando houver resposta</h2>
+              <p className="text-sm text-slate-500">A resposta interrompe a abordagem. Com e-mail configurado, o responsável recebe a notificação real descrita abaixo.</p>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4">
+                <div className="mb-3 flex items-center gap-2 text-sm font-medium text-emerald-300"><ShieldCheck size={17} /> Ações automáticas</div>
+                <ul className="space-y-2 text-sm leading-6 text-slate-300">
+                  <li className="flex gap-2"><Check size={15} className="mt-1 shrink-0 text-emerald-400" /> Parar a cadência desta campanha</li>
+                  <li className="flex gap-2"><Check size={15} className="mt-1 shrink-0 text-emerald-400" /> Cancelar outros workflows ativos do contato</li>
+                  <li className="flex gap-2"><Check size={15} className="mt-1 shrink-0 text-emerald-400" /> Registrar a resposta no histórico</li>
+                </ul>
+              </div>
+              <div className="rounded-xl border border-[#30384e] bg-[#11151f] p-4">
+                <div className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">Responsável pelo retorno</div>
+                <div className="text-sm font-medium text-slate-200">{nomeMembro(responsavel)}</div>
+                <div className="mt-1 break-all text-xs text-slate-500">{textoOuNaoConfigurado(responsavel?.email)}</div>
+                <p className="mt-4 text-xs leading-5 text-slate-500">{responsavel?.email ? 'A campanha prioriza este responsável quando encaminha a oportunidade.' : 'Sem e-mail neste perfil, o motor mantém os fallbacks existentes.'}</p>
+              </div>
+              <div className="rounded-xl border border-indigo-500/25 bg-indigo-500/5 p-4">
+                <div className="mb-3 flex items-center gap-2 text-sm font-medium text-indigo-200"><Mail size={16} /> E-mail ao responsável</div>
+                <div className="text-xs text-slate-500">Tipo</div>
+                <div className="mt-1 text-sm text-slate-200">Modelo da campanha, editável e persistido</div>
+                <div className="mt-3 text-xs text-slate-500">Assunto</div>
+                <div className="mt-1 break-words text-sm text-slate-300">{textoOuNaoConfigurado(resposta?.emailAssunto)}</div>
+                <p className="mt-3 text-xs leading-5 text-slate-500">O modelo sugerido identifica o objetivo da campanha; assunto e conteúdo podem ser alterados abaixo.</p>
+              </div>
+            </div>
+            <div className="mt-4 rounded-xl border border-[#30384e] bg-[#11151f] p-4">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-medium text-slate-200">Modelo do e-mail de resposta</h3>
+                  <p className="mt-1 text-xs text-slate-500">Sugestão pré-preenchida conforme o objetivo. O conteúdo não fica travado.</p>
+                </div>
+                <button type="button" onClick={() => {
+                  const modelo = modeloEmailRespostaCampanha(tipo)
+                  atualizarResposta({ emailAssunto: modelo.assunto, emailCorpo: modelo.corpo })
+                }} className="rounded-lg border border-[#30384e] px-3 py-2 text-xs text-slate-400 hover:text-slate-200">Restaurar modelo sugerido</button>
+              </div>
+              <div>
+                <label className={label}>Assunto enviado ao responsável</label>
+                <input className={input} value={resposta?.emailAssunto ?? ''} onChange={(e) => atualizarResposta({ emailAssunto: e.target.value })} />
+              </div>
+              <div className="mt-3">
+                <label className={label}>Conteúdo enviado ao responsável</label>
+                <textarea className={`${input} min-h-56 resize-y font-mono text-[13px] leading-6`} value={resposta?.emailCorpo ?? ''} onChange={(e) => atualizarResposta({ emailCorpo: e.target.value })} />
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-600">Variáveis disponíveis: {VARIAVEIS_EMAIL_RESPOSTA.join(', ')}.</p>
+              <div className="mt-4">
+                <HtmlEmailEditor
+                  html={resposta?.emailHtml}
+                  previewHtml={htmlResposta}
+                  onChange={(emailHtml) => atualizarResposta({ emailHtml })}
+                  onErro={setErro}
+                />
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <div className="rounded-lg border border-[#2a3147] p-3 text-sm text-slate-500">Tarefa automática: <span className="text-slate-400">Não configurado</span></div>
+              <div className="rounded-lg border border-[#2a3147] p-3 text-sm text-slate-500">Notificação a administradores: <span className="text-slate-400">Não configurado</span></div>
+              <div className="rounded-lg border border-[#2a3147] p-3 text-sm text-slate-500">Sugestão de resposta: <span className="text-slate-400">Não configurado</span></div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {etapa === 3 && (
+        <div className="space-y-5">
+          <section className={card}>
+            <h2 className="mb-1 font-semibold text-slate-100">Resumo em linguagem simples</h2>
+            <p className="mb-5 text-sm text-slate-500">Revise exatamente o que está configurado antes de ativar.</p>
+            <div className="rounded-xl border border-indigo-500/25 bg-indigo-500/5 p-5 text-sm leading-7 text-slate-300">
+              Esta campanha de <strong className="text-slate-100">{labelTipoCampanha(tipo).toLowerCase()}</strong> enviará
+              {' '}<strong className="text-slate-100">{textoOuNaoConfigurado(mensagemInicial.assunto)}</strong> para
+              {' '}<strong className="text-slate-100">{previa?.elegiveis ?? 'um número não calculado de'} contato(s) elegível(is)</strong>, usando
+              {' '}<strong className="text-slate-100">{textoOuNaoConfigurado(publico.operacao?.remetenteEmail)}</strong>.
+              A cadência será: <strong className="text-slate-100">{resumoCadencia}</strong>.
+              Se alguém responder, a cadência será interrompida e o retorno será encaminhado a
+              {' '}<strong className="text-slate-100">{nomeMembro(responsavel)}</strong>.
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {[
+                ['Público', previa ? `${previa.elegiveis} elegíveis de ${previa.totalSelecionado} selecionados` : 'Não configurado'],
+                ['Remetente', textoOuNaoConfigurado(publico.operacao?.remetenteEmail)],
+                ['Responsável', nomeMembro(responsavel)],
+                ['Mensagem', textoOuNaoConfigurado(mensagemInicial.assunto)],
+                ['Cadência', resumoCadencia],
+                ['Regra de resposta', 'Parar cadência e encaminhar ao responsável'],
+                ['Status', campanha?.status ?? 'rascunho'],
+                ['Próxima ação', 'Publicar em modo ensaio'],
+              ].map(([titulo, valor]) => (
+                <div key={titulo} className="rounded-lg border border-[#2a3147] bg-[#11151f] p-3">
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-slate-600">{titulo}</div>
+                  <div className="mt-1 text-sm text-slate-300">{valor}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className={card}>
+            <div className="mb-4">
+              <h2 className="font-semibold text-slate-100">Resumo do público</h2>
+              <p className="mt-1 text-sm text-slate-500">Visão consolidada somente com dados calculados na prévia atual.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+              {[
+                ['Contatos selecionados', previa?.totalSelecionado],
+                ['Empresas incluídas', previa?.totalEmpresasSelecionadas],
+                ['Contatos elegíveis', previa?.elegiveis],
+                ['Duplicados removidos', previa?.duplicados],
+                ['E-mails sem validade', previa?.emailsAusentesOuInvalidos],
+                ['Bloqueados', previa?.bloqueados],
+              ].map(([rotulo, valor]) => (
+                <div key={rotulo} className="rounded-xl border border-[#2a3147] bg-[#11151f] p-4">
+                  <div className="text-2xl font-semibold text-slate-100">{valor ?? '—'}</div>
+                  <div className="mt-1 text-xs leading-5 text-slate-500">{rotulo}</div>
+                </div>
+              ))}
+            </div>
+            {!!previa?.empresas.length && (
+              <div className="mt-4 rounded-xl border border-[#2a3147] bg-[#11151f] p-4">
+                <div className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">Empresas incluídas</div>
+                <div className="flex flex-wrap gap-2">
+                  {previa.empresas.filter((empresa) => empresa.selecionada).slice(0, 8).map((empresa) => (
+                    <span key={empresa.chave} className="rounded-full border border-indigo-500/25 bg-indigo-500/10 px-3 py-1.5 text-xs text-indigo-100">{empresa.nome} · {textoOuNaoConfigurado(empresa.segmento)}</span>
+                  ))}
+                  {previa.totalEmpresasSelecionadas > 8 && <span className="px-2 py-1.5 text-xs text-slate-500">+ {previa.totalEmpresasSelecionadas - 8} empresa(s)</span>}
+                </div>
+              </div>
             )}
-          </div>
-        </div>
+          </section>
 
-        {/* Sidebar: Resumo da campanha */}
-        <div className="space-y-4 lg:sticky lg:top-6 self-start">
-          <div className={card}>
-            <h3 className="font-semibold text-slate-200 text-sm mb-3">Resumo da campanha</h3>
-            <div className="space-y-2 text-xs">
-              <Mini k="Nome" v={nome || '—'} />
-              <Mini k="Tipo" v={tipo} />
-              <Mini k="Objetivo" v={objetivo || '—'} />
-              <Mini k="Segmento" v={segmento || 'Base existente'} />
-              <Mini k="Cadência" v={cadenciaNome ?? '—'} />
-              {wfSelecionado && <Mini k="Gatilho" v={wfSelecionado.gatilho_tipo ? (acharBlocoDef(wfSelecionado.gatilho_tipo)?.label ?? wfSelecionado.gatilho_tipo) : 'Não definido'} />}
-              <Mini k="Envio" v={diasSemana.length > 0 ? `${diasSemana.join(', ')} ${horarioInicio}–${horarioFim}` : 'Sem agenda'} />
-            </div>
-          </div>
-          <div className={card}>
-            <h3 className="font-semibold text-slate-200 text-sm mb-3">Estimativa de uso</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-[#0f1117] border border-[#2a3147] px-3 py-2.5">
-                <div className="text-[10px] uppercase tracking-wide text-slate-500">Base atual</div>
-                <div className="text-lg font-bold text-slate-100">{baseLeads ?? '—'}</div>
-              </div>
-              <div className="rounded-lg bg-[#0f1117] border border-[#2a3147] px-3 py-2.5">
-                <div className="text-[10px] uppercase tracking-wide text-slate-500">Limite</div>
-                <div className="text-lg font-bold text-slate-100">{limite || '—'}</div>
-              </div>
-            </div>
-            <p className="text-[11px] text-slate-600 mt-3">O consumo real depende do recorte que o motor aplicar na ativação.</p>
-          </div>
+          <section className={`${card} self-start`}>
+            <div className="mb-4 flex items-center gap-2 text-emerald-300"><ShieldCheck size={19} /><span className="font-medium">Ativação segura</span></div>
+            <ul className="space-y-2 text-sm leading-6 text-slate-400">
+              <li>• O público será recalculado no servidor.</li>
+              <li>• O workflow ganhará uma versão imutável.</li>
+              <li>• A campanha permanecerá em <strong className="text-slate-300">dry-run</strong>.</li>
+              <li>• Nenhuma execução será criada por esta publicação.</li>
+            </ul>
+            <button type="button" onClick={solicitarAtivacao} disabled={!!salvando || carregandoPrevia || carregandoOpcoes} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
+              {salvando === 'ativar' ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Publicar em modo ensaio
+            </button>
+          </section>
         </div>
+      )}
+
+      <div className="mt-6 flex items-center justify-between border-t border-[#242a3a] pt-5">
+        <button type="button" onClick={() => setEtapa((atual) => Math.max(0, atual - 1))} disabled={etapa === 0} className="inline-flex items-center gap-2 rounded-lg border border-[#30384e] px-4 py-2 text-sm text-slate-400 hover:text-slate-200 disabled:opacity-30"><ArrowLeft size={15} /> Voltar</button>
+        {etapa < PASSOS.length - 1 && <button type="button" onClick={() => { setErro(null); setEtapa((atual) => Math.min(PASSOS.length - 1, atual + 1)) }} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">Continuar <ArrowRight size={15} /></button>}
       </div>
-    </div>
-  );
-}
 
-function Linha({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex items-start gap-3 border-b border-[#2a3147] pb-2">
-      <span className="text-slate-500 w-44 shrink-0">{k}</span>
-      <span className="text-slate-200">{v}</span>
+      {confirmando && previa && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="confirmar-campanha">
+          <div className="w-full max-w-md rounded-xl border border-[#30384e] bg-[#1a1f2e] p-6 shadow-2xl">
+            <div className="mb-3 flex items-center gap-2 text-amber-300"><AlertTriangle size={20} /><h2 id="confirmar-campanha" className="font-semibold">Confirme o público</h2></div>
+            <p className="text-sm leading-6 text-slate-400">O servidor calculou <strong className="text-slate-200">{previa.elegiveis} contatos elegíveis</strong>. Digite essa quantidade para confirmar a publicação em modo ensaio.</p>
+            <input autoFocus inputMode="numeric" className={`${input} mt-4`} value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} placeholder={String(previa.elegiveis)} />
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirmando(false)} className="rounded-lg border border-[#30384e] px-4 py-2 text-sm text-slate-400">Cancelar</button>
+              <button type="button" onClick={() => void ativar(previa.elegiveis)} disabled={confirmacao !== String(previa.elegiveis) || !!salvando} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40">{salvando === 'ativar' && <Loader2 size={14} className="animate-spin" />} Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
-  );
-}
-function Mini({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex items-start gap-2">
-      <span className="text-slate-500 w-20 shrink-0">{k}</span>
-      <span className="text-slate-300 truncate">{v}</span>
-    </div>
-  );
+  )
 }

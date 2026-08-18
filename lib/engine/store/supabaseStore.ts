@@ -11,7 +11,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { getEngineConfig, OWNER_ENGINE } from '../config'
 import { ESTAGIOS_EM_CADENCIA, dominioDoLead } from '../templates'
-import type { Lead, NovaInteracao, TipoInteracaoEngine, UsuarioBasico } from '../types'
+import type { ContextoCampanhaResposta, Lead, NovaInteracao, TipoInteracaoEngine, UsuarioBasico } from '../types'
 import type { Store, TemplateEmail } from './store'
 
 export class SupabaseStore implements Store {
@@ -198,9 +198,79 @@ export class SupabaseStore implements Store {
     return (data as UsuarioBasico) ?? null
   }
 
+  async buscarResponsavelCampanhaAtiva(leadId: string): Promise<UsuarioBasico | null> {
+    return (await this.buscarContextoCampanhaAtiva(leadId))?.responsavel ?? null
+  }
+
+  async buscarContextoCampanhaAtiva(leadId: string): Promise<ContextoCampanhaResposta | null> {
+    const { data: execucao, error: execError } = await this.db
+      .from('workflow_execucoes')
+      .select('campanha_id')
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('lead_id', leadId)
+      .in('status', ['em_andamento', 'aguardando'])
+      .not('campanha_id', 'is', null)
+      .order('iniciado_em', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (execError) throw execError
+    const campanhaId = (execucao as { campanha_id?: string | null } | null)?.campanha_id
+    if (!campanhaId) return null
+
+    const { data: campanha, error: campanhaError } = await this.db
+      .from('campanhas')
+      .select('id, nome, tipo, publico')
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('id', campanhaId)
+      .eq('status', 'ativa')
+      .maybeSingle()
+    if (campanhaError) throw campanhaError
+    if (!campanha) return null
+    const campanhaRow = campanha as { id: string; nome: string; tipo: string | null; publico?: Record<string, unknown> }
+    const publico = campanhaRow.publico
+    const responsavelId = typeof publico?.responsavel_id === 'string' ? publico.responsavel_id : null
+    let responsavel: UsuarioBasico | null = null
+    if (responsavelId) {
+      const { data: perfil, error: perfilError } = await this.db
+        .from('perfis')
+        .select('id, nome')
+        .eq('organizacao_id', this.organizacaoId)
+        .eq('id', responsavelId)
+        .maybeSingle()
+      if (perfilError) throw perfilError
+      if (perfil) {
+        const { data: auth, error: authError } = await this.db.auth.admin.getUserById(responsavelId)
+        if (authError) throw authError
+        if (auth.user?.email) {
+          responsavel = {
+            id: responsavelId,
+            nome: (perfil as { nome?: string | null }).nome?.trim() || auth.user.email,
+            email: auth.user.email,
+          }
+        }
+      }
+    }
+    const operacao = publico?.operacao && typeof publico.operacao === 'object'
+      ? publico.operacao as Record<string, unknown>
+      : {}
+    const resposta = operacao.resposta && typeof operacao.resposta === 'object'
+      ? operacao.resposta as Record<string, unknown>
+      : {}
+    return {
+      id: campanhaRow.id,
+      nome: campanhaRow.nome,
+      tipo: campanhaRow.tipo,
+      responsavel,
+      notificarResponsavel: resposta.notificarResponsavel !== false,
+      emailAssunto: typeof resposta.emailAssunto === 'string' ? resposta.emailAssunto : null,
+      emailCorpo: typeof resposta.emailCorpo === 'string' ? resposta.emailCorpo : null,
+      emailHtml: typeof resposta.emailHtml === 'string' ? resposta.emailHtml : null,
+    }
+  }
+
   async cancelarExecucoesWorkflow(leadId: string): Promise<void> {
     // Cancela todas as execuções ativas (em_andamento/aguardando) do lead.
-    // Chamado quando um bounce SMTP é detectado.
+    // Chamado quando um bounce SMTP ou uma resposta real é detectada.
     const { error } = await this.db
       .from('workflow_execucoes')
       .update({ status: 'cancelado' })

@@ -27,6 +27,51 @@ export interface PublicoAgenda {
   pararAoResponder?: boolean;
 }
 
+export interface PublicoSelecao {
+  modo?: 'filtros' | 'manual';
+  leadIds?: string[];
+  excluirLeadIds?: string[];
+  excluirEmpresas?: string[];
+  estagios?: string[];
+  // Critério persistido e auditável aplicado pelo servidor. `clientes` deriva
+  // vínculos reais (serviço vigente, oportunidade ganha ou estágio Ganho);
+  // `renovacao` exige serviço recorrente vigente.
+  criterio?: 'estagios' | 'base' | 'clientes' | 'renovacao';
+}
+
+export interface MensagemCampanha {
+  assunto?: string;
+  corpo?: string;
+  html?: string;
+  link?: string;
+  templateOrigemId?: string;
+  templateId?: string;
+  templateTipo?: string;
+}
+
+export interface FollowupCampanha extends MensagemCampanha {
+  diasApos?: number;
+}
+
+export interface OperacaoCampanha {
+  remetenteConta?: string;
+  remetenteEmail?: string;
+  mensagemInicial?: MensagemCampanha;
+  followups?: FollowupCampanha[];
+  resposta?: {
+    pararCadencia?: boolean;
+    criarTarefa?: boolean;
+    prazoHoras?: number;
+    notificarResponsavel?: boolean;
+    notificarAdministradores?: boolean;
+    prepararSugestao?: boolean;
+    emailAssunto?: string;
+    emailCorpo?: string;
+    emailHtml?: string;
+  };
+  workflowGerenciadoId?: string;
+}
+
 export interface Publico {
   objetivo?: string;
   responsavel?: string;    // legado — preferir responsavel_id
@@ -36,6 +81,8 @@ export interface Publico {
   empresas?: PublicoEmpresas;
   decisores?: PublicoDecisores;
   agenda?: PublicoAgenda;
+  selecao?: PublicoSelecao;
+  operacao?: OperacaoCampanha;
 }
 
 export interface Campanha {

@@ -87,7 +87,11 @@ export async function atualizarCampanha(admin: SupabaseClient, org: string, id: 
   if (typeof b.nome === 'string' && b.nome.trim()) patch.nome = b.nome.trim()
   if ('descricao' in b) patch.descricao = typeof b.descricao === 'string' ? b.descricao : null
   if ('workflow_id' in b) patch.workflow_id = b.workflow_id || null
-  if ('meta_leads' in b) patch.meta_leads = Number.isFinite(Number(b.meta_leads)) ? Number(b.meta_leads) : null
+  if ('meta_leads' in b) {
+    patch.meta_leads = b.meta_leads == null || b.meta_leads === ''
+      ? null
+      : Number.isFinite(Number(b.meta_leads)) ? Number(b.meta_leads) : null
+  }
   if (b.publico && typeof b.publico === 'object') patch.publico = b.publico
   if (typeof b.dry_run === 'boolean') patch.dry_run = b.dry_run
 

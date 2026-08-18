@@ -3,6 +3,8 @@
 import { NextResponse } from 'next/server'
 import { resolverAcesso, exigirPermissao } from '@/lib/rbac/servidor'
 import { listarCampanhas, criarCampanha } from '@/lib/campanhas/repository'
+import { aplicarRegraPublicoPorTipo, normalizarPublicoCampanha } from '@/lib/campanhas/configuracaoGuiada'
+import { materializarCampanhaGuiada } from '@/lib/campanhas/materializarServidor'
 
 export const runtime = 'nodejs'
 
@@ -30,15 +32,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ erro: 'Nome é obrigatório' }, { status: 400 })
   }
   try {
+    const tipo = typeof b.tipo === 'string' ? b.tipo : null
+    const publico = aplicarRegraPublicoPorTipo(normalizarPublicoCampanha(b.publico), tipo)
     const nova = await criarCampanha(admin, org, {
       nome: b.nome.trim(),
       descricao: typeof b.descricao === 'string' ? b.descricao : null,
-      tipo: typeof b.tipo === 'string' ? b.tipo : null,
+      tipo,
       workflow_id: b.workflow_id || null,
-      publico: b.publico && typeof b.publico === 'object' ? b.publico : {},
-      meta_leads: Number.isFinite(Number(b.meta_leads)) ? Number(b.meta_leads) : null,
+      publico: publico as Record<string, unknown>,
+      meta_leads: b.meta_leads == null || b.meta_leads === ''
+        ? null
+        : Number.isFinite(Number(b.meta_leads)) ? Number(b.meta_leads) : null,
     })
-    return NextResponse.json({ ok: true, id: nova.id })
+    const materializada = await materializarCampanhaGuiada(admin, org, nova.id, b.nome.trim(), publico)
+    return NextResponse.json({ ok: true, id: nova.id, workflow_id: materializada.workflowId })
   } catch (e) {
     return NextResponse.json({ erro: e instanceof Error ? e.message : 'Erro' }, { status: 400 })
   }

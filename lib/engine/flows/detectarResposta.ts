@@ -14,7 +14,7 @@ import { calcularScore, horasEntre } from '../scoring'
 import type { EmailProvider } from '../email/provider'
 import type { Store } from '../store/store'
 import type { Queue } from '../queue'
-import type { MensagemRecebida, Lead } from '../types'
+import type { ContextoCampanhaResposta, MensagemRecebida, Lead, UsuarioBasico } from '../types'
 
 // Heurística de auto-resposta: além da dica do provedor (msg.automatica),
 // reconhece os padrões clássicos de férias/ausência/devolução.
@@ -121,6 +121,25 @@ export async function detectarResposta(
     }
 
     // 4) Resposta real → PAUSAR a cadência na hora e registrar.
+    // Resolve o responsável da campanha antes de cancelar as execuções que
+    // mantêm esse vínculo. Falha nessa resolução não pode perder a resposta.
+    let responsavelCampanha: UsuarioBasico | null = null
+    let contextoCampanha: ContextoCampanhaResposta | null = null
+    try {
+      if (store.buscarContextoCampanhaAtiva) {
+        contextoCampanha = await store.buscarContextoCampanhaAtiva(lead.id)
+        responsavelCampanha = contextoCampanha?.responsavel ?? null
+      } else {
+        responsavelCampanha = store.buscarResponsavelCampanhaAtiva
+          ? await store.buscarResponsavelCampanhaAtiva(lead.id)
+          : null
+      }
+    } catch (e) {
+      log.aviso('Não foi possível resolver o responsável da campanha; usando o responsável do lead.', {
+        leadId: lead.id,
+        erro: e instanceof Error ? e.message : String(e),
+      })
+    }
     // Score dinâmico (item 2.8): respondeu + bônus por velocidade (tempo entre
     // o último contato enviado e esta resposta).
     const horas = horasEntre(lead.ultimo_contato, msg.em)
@@ -130,6 +149,9 @@ export async function detectarResposta(
       proxima_acao_data: null,
       score: calcularScore({ respondeu: true, horasAteResposta: horas }),
     })
+    // O estágio tira o lead da cadência legada; o cancelamento explícito faz o
+    // mesmo para workflows persistentes, inclusive campanhas guiadas.
+    await store.cancelarExecucoesWorkflow(lead.id)
     await store.registrarInteracao({
       lead_id: lead.id,
       tipo: 'resposta',
@@ -145,7 +167,7 @@ export async function detectarResposta(
     respostas++
 
     // 5) Enfileirar o Fluxo 3 (direcionar ao closer).
-    fila.enfileirar('direcionar_closer', { leadId: lead.id, textoResposta: msg.corpo })
+    fila.enfileirar('direcionar_closer', { leadId: lead.id, textoResposta: msg.corpo, responsavelCampanha, contextoCampanha })
   }
 
   return { respostas, ignoradas, contatosAlternativos, bounces }

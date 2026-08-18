@@ -5,15 +5,24 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ChevronRight, Loader2, PencilLine, Play, Pause, CheckCircle2, Building2, Users,
-  MessageSquare, BarChart3, ClipboardList, Workflow, TrendingUp, Info, Target, AlertTriangle,
+  MessageSquare, BarChart3, ClipboardList, Workflow, TrendingUp, Info, Target, AlertTriangle, Activity,
 } from 'lucide-react';
 import { type Campanha, type Publico, STATUS_BADGE, STATUS_LABEL, fmtData, resumoPublico } from './tiposCampanha';
+import {
+  NAO_CONFIGURADO,
+  formatarCadenciaOperacional,
+  formatarMensagensOperacionais,
+  formatarPublicoOperacional,
+  formatarRegraResposta,
+  formatarStatusOperacional,
+  proximaAcaoOperacional,
+  type ContextoResumoOperacional,
+} from '@/lib/campanhas/resumoOperacional';
 
 // Detalhe de campanha com abas internas. Visão geral/Empresas/Decisores/Mensagens
 // mostram o que REALMENTE persiste (colunas + publico jsonb + workflow vinculado).
-// Resultados tem a estrutura do mockup, mas como não há vínculo campanha↔resultados
-// (campanha_id em oportunidades/execuções — fora do escopo desta fase), cada
-// métrica atribuída aparece como "não calculável". NUNCA um valor inventado.
+// Resultados mantém "não calculável" enquanto não houver agregação confiável de
+// execuções, respostas e oportunidades por campanha. NUNCA estima um valor.
 
 type Aba = 'geral' | 'empresas' | 'decisores' | 'mensagens' | 'resultados';
 const ABAS: { id: Aba; label: string; Icon: typeof Building2 }[] = [
@@ -25,7 +34,7 @@ const ABAS: { id: Aba; label: string; Icon: typeof Building2 }[] = [
 ];
 
 const ACOES: Record<string, { para: string; label: string; Icon: typeof Play }[]> = {
-  rascunho: [{ para: 'ativa', label: 'Ativar', Icon: Play }],
+  rascunho: [],
   ativa: [{ para: 'pausada', label: 'Pausar', Icon: Pause }, { para: 'concluida', label: 'Concluir', Icon: CheckCircle2 }],
   pausada: [{ para: 'ativa', label: 'Retomar', Icon: Play }, { para: 'concluida', label: 'Concluir', Icon: CheckCircle2 }],
   concluida: [],
@@ -37,24 +46,24 @@ const NC = <span className="text-slate-500">não calculável</span>;
 export default function CampanhaDetalhe({ id }: { id: string }) {
   const router = useRouter();
   const [c, setC] = useState<Campanha | null>(null);
-  const [workflowNome, setWorkflowNome] = useState<string | null>(null);
+  const [contextoResumo, setContextoResumo] = useState<ContextoResumoOperacional>({ remetente: null, responsavel: null, workflow: null });
+  const [previaPublico, setPreviaPublico] = useState<{ totalSelecionado: number; elegiveis: number } | null>(null);
   const [estado, setEstado] = useState<'carregando' | 'ok' | 'erro'>('carregando');
   const [aba, setAba] = useState<Aba>('geral');
   const [agindo, setAgindo] = useState(false);
   const [modalDryRun, setModalDryRun] = useState(false);
   const [confirmacaoTexto, setConfirmacaoTexto] = useState('');
+  const [erroAcao, setErroAcao] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     try {
       const r = await fetch(`/api/campanhas/${id}`);
       if (!r.ok) { setEstado('erro'); return; }
       const d = await r.json();
-      setC(d.campanha); setEstado('ok');
-      if (d.campanha?.workflow_id) {
-        const rw = await fetch('/api/workflows');
-        const dw = rw.ok ? await rw.json() : { workflows: [] };
-        setWorkflowNome((dw.workflows ?? []).find((w: { id: string; nome: string }) => w.id === d.campanha.workflow_id)?.nome ?? null);
-      }
+      setC(d.campanha);
+      setContextoResumo(d.resumoOperacional ?? { remetente: null, responsavel: null, workflow: null });
+      setPreviaPublico(d.previaPublico ?? null);
+      setEstado('ok');
     } catch { setEstado('erro'); }
   }, [id]);
 
@@ -71,15 +80,23 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
   async function ativarEnvioReal() {
     if (confirmacaoTexto !== 'CONFIRMAR') return;
     setAgindo(true);
+    setErroAcao(null);
     try {
-      await fetch(`/api/campanhas/${id}`, {
-        method: 'PATCH',
+      const resposta = await fetch(`/api/campanhas/${id}/enrollar`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dry_run: false }),
+        body: JSON.stringify({ confirmarQuantidade: previaPublico?.elegiveis }),
       });
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível ativar o envio real.');
       setModalDryRun(false);
       setConfirmacaoTexto('');
       await carregar();
+      if (dados.falhas > 0) {
+        setErroAcao(`${dados.falhas} contato(s) não puderam ser inscritos; revise as execuções antes de continuar.`);
+      }
+    } catch (e) {
+      setErroAcao(e instanceof Error ? e.message : 'Não foi possível ativar o envio real.');
     } finally { setAgindo(false); }
   }
 
@@ -96,6 +113,14 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
   const dec = pub.decisores ?? {};
 
   const emEnsaio = c.dry_run !== false;
+  const publicoOperacional = previaPublico
+    ? `${previaPublico.elegiveis} elegíveis de ${previaPublico.totalSelecionado} selecionados — ${formatarPublicoOperacional(c.publico)}`
+    : formatarPublicoOperacional(c.publico);
+  const mensagensOperacionais = formatarMensagensOperacionais(contextoResumo.workflow?.definicao ?? null, pub.operacao);
+  const cadenciaOperacional = formatarCadenciaOperacional(contextoResumo.workflow, pub.agenda, pub.operacao);
+  const regraResposta = formatarRegraResposta(pub.operacao?.resposta?.pararCadencia ?? pub.agenda?.pararAoResponder);
+  const statusOperacional = formatarStatusOperacional(c.status, c.dry_run);
+  const proximaAcao = proximaAcaoOperacional(c.status, c.dry_run, c.workflow_id);
 
   return (
     <div className="p-6 max-w-[100rem] mx-auto space-y-5">
@@ -104,19 +129,28 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
         <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
           <div className="flex items-center gap-2 text-sm text-amber-300">
             <AlertTriangle size={15} className="shrink-0" />
-            <span><b>Modo ensaio ativo</b> — nenhum e-mail real está sendo enviado. Os leads estão sendo processados, mas o envio é simulado.</span>
+            <span><b>Modo ensaio ativo</b> — nenhum e-mail real está sendo enviado e nenhuma execução real é criada por esta revisão.</span>
           </div>
-          <button
-            onClick={() => { setModalDryRun(true); setConfirmacaoTexto(''); }}
-            className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 font-semibold whitespace-nowrap transition-colors"
-          >
-            Ativar envio real
-          </button>
+          {c.status === 'ativa' && (
+            <button
+              onClick={() => { setModalDryRun(true); setConfirmacaoTexto(''); setErroAcao(null); }}
+              disabled={!previaPublico?.elegiveis}
+              className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 font-semibold whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Ativar envio real
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex items-center gap-2 rounded-xl border border-green-500/25 bg-green-500/10 px-4 py-3 text-sm text-green-300">
           <CheckCircle2 size={15} className="shrink-0" />
-          <span><b>Envio real ativo</b> — os e-mails estão sendo enviados para os leads reais.</span>
+          <span><b>Envio real ativo</b> — o cron pode enviar e-mails aos contatos inscritos desta campanha.</span>
+        </div>
+      )}
+
+      {erroAcao && (
+        <div className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {erroAcao}
         </div>
       )}
 
@@ -129,7 +163,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
               <h2 className="text-lg font-bold">Ativar envio real</h2>
             </div>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Esta ação desativa o modo ensaio. A partir daí, <b>e-mails reais serão enviados</b> para os {(c.meta_leads ?? 0) > 0 ? `~${c.meta_leads} leads` : 'leads'} desta campanha.<br /><br />
+              Esta ação recalcula o público, desativa o modo ensaio e inscreve <b>{previaPublico?.elegiveis ?? 'um número não calculado de'} contatos elegíveis</b> no workflow. A partir daí, e-mails reais poderão ser enviados pelo cron existente.<br /><br />
               Para confirmar, digite exatamente <code className="bg-red-500/20 text-red-300 px-1 rounded">CONFIRMAR</code> no campo abaixo.
             </p>
             <input
@@ -182,7 +216,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
           {c.status === 'rascunho' && (
             <Link href={`/automacao/campanhas/${c.id}/editar`}
               className="text-sm px-3 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-500 inline-flex items-center gap-1">
-              <PencilLine size={14} /> Editar campanha
+              <PencilLine size={14} /> Revisar e publicar
             </Link>
           )}
         </div>
@@ -199,27 +233,51 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
       </div>
 
       {aba === 'geral' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="space-y-5">
           <div className={card}>
-            <h3 className="font-semibold text-slate-200 text-sm mb-3">Dados</h3>
-            <div className="space-y-2 text-sm">
-              <Linha k="Tipo" v={c.tipo ?? '—'} />
-              <Linha k="Objetivo" v={pub.objetivo ?? c.descricao ?? '—'} />
-              <Linha k="Responsável" v={pub.responsavel ?? '—'} />
-              <Linha k="Idioma" v={pub.idioma ?? '—'} />
-              <Linha k="Meta de leads" v={c.meta_leads != null ? String(c.meta_leads) : '—'} />
-              <Linha k="Prazo" v={pub.prazo ? fmtData(pub.prazo) : '—'} />
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h3 className="font-semibold text-slate-200 text-sm flex items-center gap-2">
+                  <Activity size={15} className="text-indigo-400" /> Resumo operacional
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">Leitura da configuração real atualmente vinculada à campanha.</p>
+              </div>
+              <span className="text-[10px] uppercase tracking-wide text-slate-500 border border-[#2a3147] rounded-full px-2 py-1">Somente leitura</span>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+              <Linha k="Público" v={publicoOperacional} />
+              <Linha k="Remetente" v={contextoResumo.remetente ?? NAO_CONFIGURADO} />
+              <Linha k="Responsável" v={contextoResumo.responsavel ?? NAO_CONFIGURADO} />
+              <Linha k="Mensagens" v={mensagensOperacionais} />
+              <Linha k="Cadência" v={cadenciaOperacional} />
+              <Linha k="Regra de resposta" v={regraResposta} />
+              <Linha k="Status" v={statusOperacional} />
+              <Linha k="Próxima ação" v={proximaAcao} />
             </div>
           </div>
-          <div className={card}>
-            <h3 className="font-semibold text-slate-200 text-sm mb-3">Ciclo</h3>
-            <div className="space-y-2 text-sm">
-              <Linha k="Status" v={STATUS_LABEL[c.status] ?? c.status} />
-              <Linha k="Público" v={resumoPublico(c.publico)} />
-              <Linha k="Cadência" v={workflowNome ?? (c.workflow_id ? 'workflow vinculado' : '— (sem workflow)')} />
-              <Linha k="Criada em" v={fmtData(c.criado_em)} />
-              <Linha k="Iniciada em" v={fmtData(c.iniciada_em)} />
-              <Linha k="Concluída em" v={fmtData(c.concluida_em)} />
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className={card}>
+              <h3 className="font-semibold text-slate-200 text-sm mb-3">Dados</h3>
+              <div className="space-y-2 text-sm">
+                <Linha k="Tipo" v={c.tipo ?? '—'} />
+                <Linha k="Objetivo" v={pub.objetivo ?? c.descricao ?? '—'} />
+                <Linha k="Responsável" v={contextoResumo.responsavel ?? '—'} />
+                <Linha k="Idioma" v={pub.idioma ?? '—'} />
+                <Linha k="Meta de leads" v={c.meta_leads != null ? String(c.meta_leads) : '—'} />
+                <Linha k="Prazo" v={pub.prazo ? fmtData(pub.prazo) : '—'} />
+              </div>
+            </div>
+            <div className={card}>
+              <h3 className="font-semibold text-slate-200 text-sm mb-3">Ciclo</h3>
+              <div className="space-y-2 text-sm">
+                <Linha k="Status" v={STATUS_LABEL[c.status] ?? c.status} />
+                <Linha k="Público" v={resumoPublico(c.publico)} />
+                <Linha k="Cadência" v={contextoResumo.workflow?.nome ?? (c.workflow_id ? 'workflow vinculado' : '— (sem workflow)')} />
+                <Linha k="Criada em" v={fmtData(c.criado_em)} />
+                <Linha k="Iniciada em" v={fmtData(c.iniciada_em)} />
+                <Linha k="Concluída em" v={fmtData(c.concluida_em)} />
+              </div>
             </div>
           </div>
         </div>
@@ -239,7 +297,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
           </div>
           <div className="flex items-start gap-2 text-xs text-slate-500 mt-4 bg-[#0f1117] border border-[#2a3147] rounded-lg p-3">
             <Info size={13} className="text-indigo-400 shrink-0 mt-0.5" />
-            <span>As empresas efetivas são resolvidas pelo motor (Workflows) sobre a base ao ativar. A lista materializada por campanha depende do vínculo campanha↔leads (fora do escopo desta fase).</span>
+            <span>O público efetivo é recalculado no servidor ao ativar e exclui contatos bloqueados, duplicados ou incompatíveis com outra automação.</span>
           </div>
         </div>
       )}
@@ -263,7 +321,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
           <h3 className="font-semibold text-slate-200 text-sm mb-3 flex items-center gap-2"><Workflow size={15} className="text-indigo-400" /> Cadência de mensagens</h3>
           {c.workflow_id ? (
             <div className="flex items-center justify-between p-3 rounded-lg border border-[#2a3147] bg-[#0f1117]">
-              <span className="text-sm text-slate-200 inline-flex items-center gap-2"><Workflow size={15} className="text-indigo-400" /> {workflowNome ?? 'Workflow vinculado'}</span>
+              <span className="text-sm text-slate-200 inline-flex items-center gap-2"><Workflow size={15} className="text-indigo-400" /> {contextoResumo.workflow?.nome ?? 'Workflow vinculado'}</span>
               <Link href={`/workflows/${c.workflow_id}`} className="text-xs text-indigo-300 hover:text-indigo-200">Abrir no builder →</Link>
             </div>
           ) : (
@@ -271,7 +329,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
               Nenhuma cadência vinculada. Edite a campanha e escolha um workflow na etapa Cadência.
             </div>
           )}
-          <p className="text-xs text-slate-600 mt-3">As mensagens por etapa vivem no workflow (motor reusado). A telemetria por mensagem depende do vínculo campanha↔execuções (fora do escopo desta fase).</p>
+          <p className="text-xs text-slate-600 mt-3">As mensagens editadas na campanha são materializadas em templates reais e congeladas na versão publicada do workflow.</p>
         </div>
       )}
 
@@ -279,7 +337,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
         <div className="space-y-5">
           <div className="flex items-start gap-2 text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/25 rounded-lg p-3">
             <Info size={14} className="shrink-0 mt-0.5" />
-            <span><b>Resultados por campanha ainda não são calculáveis.</b> A atribuição exige ligar cada oportunidade/execução à campanha (coluna <code>campanha_id</code> — migration fora do escopo desta fase). Até lá, nenhum número é estimado: os campos abaixo mostram &quot;não calculável&quot;.</span>
+            <span><b>Resultados agregados por campanha ainda não são calculáveis nesta tela.</b> As execuções já registram a campanha de origem, mas não existe agregação confiável de entregas, respostas e oportunidades. Até lá, nenhum número é estimado.</span>
           </div>
 
           {/* 6 mini KPIs */}

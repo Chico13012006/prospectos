@@ -14,6 +14,7 @@ import { GmailProvider, lerCredenciaisGmail } from '@/lib/engine/email/gmailProv
 import { log } from '@/lib/engine/logger'
 import type { Motor } from '@/lib/engine'
 import type { Lead } from '@/lib/engine/types'
+import { montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha'
 import { avaliarOperador, type Operador } from './operadores'
 
 export interface AmbienteWorkflow {
@@ -206,19 +207,57 @@ export class AmbienteSupabase implements AmbienteWorkflow {
 
     // Gate por campanha: independente do MODO_ENSAIO global.
     // dry_run=true (padrão) bloqueia o envio mesmo com MODO_ENSAIO=false em prod.
+    let campanhaPublico: Record<string, unknown> | null = null
     if (campanhaId) {
-      const { data: camp } = await this.db
+      const { data: camp, error: campanhaError } = await this.db
         .from('campanhas')
-        .select('dry_run')
+        .select('dry_run, publico')
         .eq('id', campanhaId)
         .eq('organizacao_id', this.organizacaoId)
         .maybeSingle()
+      if (campanhaError) throw campanhaError
+      campanhaPublico = (camp as { publico?: Record<string, unknown> | null } | null)?.publico ?? null
       if ((camp as { dry_run?: boolean } | null)?.dry_run === true)
         return { enviado: false, assunto }
     }
 
+    // A assinatura usa primeiro o responsável escolhido na campanha e preserva
+    // o responsável do lead como fallback para fluxos legados/renovação.
+    let responsavelNome: string | null = null
+    if (campanhaPublico) {
+      const responsavelId = typeof campanhaPublico.responsavel_id === 'string' ? campanhaPublico.responsavel_id : null
+      if (responsavelId) {
+        const { data: perfil, error: perfilError } = await this.db
+          .from('perfis')
+          .select('nome')
+          .eq('id', responsavelId)
+          .eq('organizacao_id', this.organizacaoId)
+          .maybeSingle()
+        if (perfilError) throw perfilError
+        responsavelNome = (perfil as { nome?: string | null } | null)?.nome?.trim() || null
+      }
+    }
+    if (!responsavelNome && lead.responsavel_id) {
+      responsavelNome = (await this.motor.store.buscarUsuario(lead.responsavel_id))?.nome?.trim() || null
+    }
+    const operacao = campanhaPublico?.operacao && typeof campanhaPublico.operacao === 'object'
+      ? campanhaPublico.operacao as Record<string, unknown>
+      : null
+    const inicial = operacao?.mensagemInicial && typeof operacao.mensagemInicial === 'object'
+      ? operacao.mensagemInicial as Record<string, unknown>
+      : null
+    const followups = Array.isArray(operacao?.followups)
+      ? operacao.followups.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item))
+      : []
+    const mensagemConfigurada = [inicial, ...followups]
+      .find((mensagem) => mensagem?.templateTipo === templateTipo)
+    const htmlPersonalizado = typeof mensagemConfigurada?.html === 'string'
+      ? preencher(mensagemConfigurada.html, lead, extras)
+      : undefined
+    const html = montarEmailCampanhaHtml(corpo, { responsavelNome, nomeServico }, htmlPersonalizado)
+
     // Envio real: usa a conta da org (emailProvider) se configurada; senão a padrão.
-    await emailProvider.enviar(lead.contato_email, assunto, corpo)
+    await emailProvider.enviar(lead.contato_email, assunto, corpo, html)
     await this.motor.store.registrarInteracao({
       lead_id: leadId,
       tipo: 'nota',

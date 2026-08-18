@@ -1,7 +1,7 @@
 // Interface do "banco de dados" do motor. O resto do sistema só conhece esta
 // interface, nunca o Supabase diretamente — por isso dá para testar contra um
 // MemoryStore sem tocar na rede.
-import type { Lead, NovaInteracao, TipoInteracaoEngine, UsuarioBasico } from '../types'
+import type { ContextoCampanhaResposta, Lead, NovaInteracao, TipoInteracaoEngine, UsuarioBasico } from '../types'
 
 // Template de e-mail selecionável pelo motor (subconjunto da tabela `templates`).
 // `id` identifica a VARIANTE (A/B testing, item 6) — gravado na interação do envio.
@@ -36,10 +36,14 @@ export interface Store {
   leadsEsgotadosSemResposta(): Promise<Lead[]>
   // Dados do responsável/closer do lead (para notificação do Fluxo 3).
   buscarUsuario(id: string): Promise<UsuarioBasico | null>
+  // Responsável configurado na campanha ativa mais recente do lead, quando há.
+  buscarResponsavelCampanhaAtiva?(leadId: string): Promise<UsuarioBasico | null>
+  // Contexto e modelo de notificação persistidos na campanha ativa.
+  buscarContextoCampanhaAtiva?(leadId: string): Promise<ContextoCampanhaResposta | null>
   // TODAS as variantes de e-mail ATIVAS por (nicho, tipo). nicho=null busca o
   // GENÉRICO. A seleção da variante (A/B) e o fallback ficam em mensagem.ts.
   buscarTemplateEmail(nicho: string | null, tipo: string): Promise<TemplateEmail[]>
-  // Cancela todas as workflow_execucoes ativas (em_andamento/aguardando) do lead.
-  // Chamado quando um bounce SMTP é detectado — impede futuros envios do workflow.
+  // Cancela todas as workflow_execucoes ativas (em_andamento/aguardando) do lead
+  // quando há bounce OU resposta real, impedindo novos passos persistentes.
   cancelarExecucoesWorkflow(leadId: string): Promise<void>
 }

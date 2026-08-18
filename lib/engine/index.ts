@@ -129,6 +129,30 @@ export async function cadenciaDiaria(motor: Motor, opts?: { forcar?: boolean }) 
   return { pulado: false as const, ...resp, ...fu, jobsComErro: escaninho.length }
 }
 
+// Resolve o provedor de e-mail de ENTRADA (IMAP) para uma org.
+// O workflow envia via email_conta_key (ex: 'LAUDO'); bounces e respostas
+// chegam nessa mesma conta. detectarResposta precisa ler ela, não a genérica.
+async function resolverEmailProviderOrg(orgId: string): Promise<EmailProvider> {
+  try {
+    const db = createSupabaseAdminClient()
+    const { data } = await db
+      .from('organizacoes')
+      .select('configuracoes')
+      .eq('id', orgId)
+      .maybeSingle()
+    const cfg = data?.configuracoes as Record<string, unknown> | null
+    const nomenc = cfg?.nomenclaturas as Record<string, string> | undefined
+    const emailKey = nomenc?.email_conta_key
+    if (emailKey) {
+      const cred = lerCredenciaisGmail(emailKey)
+      if (cred && !engineConfig.modoEnsaio) return new GmailProvider(cred)
+    }
+  } catch {
+    // sem break — cai no padrão abaixo
+  }
+  return escolherEmailProvider('followup')
+}
+
 // Runner multi-tenant do cron: roda a cadência diária para CADA organização
 // ativa, cada uma com seu motor escopado. Um erro numa org não derruba as
 // outras. É o alvo natural dos endpoints/crons (que não têm auth.uid()).
@@ -137,7 +161,8 @@ export async function cadenciaTodasOrgs(opts?: { forcar?: boolean }) {
   const porOrg: Record<string, unknown> = {}
   for (const org of orgs) {
     try {
-      const motor = criarMotor(org)
+      const emailProvider = await resolverEmailProviderOrg(org)
+      const motor = criarMotor(org, { email: emailProvider })
       porOrg[org] = await cadenciaDiaria(motor, opts)
     } catch (e) {
       log.erro('Cadência falhou para uma organização', {

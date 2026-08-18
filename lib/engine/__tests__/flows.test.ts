@@ -172,6 +172,7 @@ describe('Fluxo 2 — detectarResposta', () => {
       proxima_acao_data: ONTEM, // estaria elegível para follow-up
     })
     const store = new MemoryStore([lead])
+    const cancelarWorkflows = vi.spyOn(store, 'cancelarExecucoesWorkflow')
     // Antes: elegível.
     expect(await store.leadsParaFollowup()).toHaveLength(1)
     email.injetar(msg({ de: 'ana@acme.com.br' }))
@@ -180,6 +181,7 @@ describe('Fluxo 2 — detectarResposta', () => {
     expect((await store.buscarLead(lead.id))!.estagio).toBe('interessado')
     expect(await store.leadsParaFollowup()).toHaveLength(0)
     expect(await store.contarInteracoes(lead.id, 'resposta')).toBe(1)
+    expect(cancelarWorkflows).toHaveBeenCalledWith(lead.id)
   })
 
   it('não casa com lead de outro owner (n8n)', async () => {
@@ -192,6 +194,19 @@ describe('Fluxo 2 — detectarResposta', () => {
 })
 
 describe('Fluxo 3 — direcionarCloser', () => {
+  it('prioriza o responsável configurado na campanha ativa', async () => {
+    const lead = makeLead({ estagio: 'interessado', responsavel_id: 'responsavel-do-lead' })
+    const store = new MemoryStore([lead], [{ id: 'responsavel-do-lead', nome: 'Responsável antigo', email: 'antigo@empresa.com' }])
+    const email = new SimulatedProvider()
+    const r = await direcionarCloser(store, email, {
+      leadId: lead.id,
+      textoResposta: 'Tenho interesse.',
+      responsavelCampanha: { id: 'perfil-campanha', nome: 'Dona da campanha', email: 'campanha@empresa.com' },
+    })
+    expect(r.closer).toBe('campanha@empresa.com')
+    expect(email.enviados[0].para).toBe('campanha@empresa.com')
+  })
+
   it('notifica o responsável com contexto completo e marca com_closer', async () => {
     const closer = { id: 'u1', nome: 'João Closer', email: 'joao@inovacode.com.br' }
     const lead = makeLead({
@@ -211,6 +226,35 @@ describe('Fluxo 3 — direcionarCloser', () => {
     expect(email.enviados[0].corpo).toContain('rastreamento de EPIs')
     expect(email.enviados[0].corpo).toContain('Quero saber mais.')
     expect((await store.buscarLead(lead.id))!.proxima_acao).toBe('com_closer')
+  })
+
+  it('materializa o modelo editável da campanha com o objetivo e a resposta reais', async () => {
+    const responsavel = { id: 'u1', nome: 'Maria', email: 'maria@empresa.com' }
+    const lead = makeLead({ responsavel_id: 'u1', empresa: 'Acme', contato_nome: 'Ana', segmento: '' })
+    const store = new MemoryStore([lead], [responsavel])
+    const email = new SimulatedProvider()
+
+    await direcionarCloser(store, email, {
+      leadId: lead.id,
+      textoResposta: 'Quero renovar.',
+      responsavelCampanha: responsavel,
+      contextoCampanha: {
+        id: 'camp-1',
+        nome: 'Renovação 2026',
+        tipo: 'renovacao',
+        responsavel,
+        notificarResponsavel: true,
+        emailAssunto: 'Resposta de {empresa} — {tipo_campanha}',
+        emailCorpo: '{campanha}\n{contato}\n{nicho}\n{resposta}\n{responsavel}',
+        emailHtml: '<p><strong>{empresa}</strong>: {resposta}</p>',
+      },
+    })
+
+    expect(email.enviados[0].assunto).toBe('Resposta de Acme — Comunicar renovação')
+    expect(email.enviados[0].corpo).toContain('Renovação 2026')
+    expect(email.enviados[0].corpo).toContain('Quero renovar.')
+    expect(email.enviados[0].corpo).toContain('Maria')
+    expect(email.enviados[0].html).toContain('<strong>Acme</strong>: Quero renovar.')
   })
 
   it('usa o fallback CLOSER_EMAIL quando o lead não tem responsável', async () => {

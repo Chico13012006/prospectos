@@ -10,11 +10,48 @@ import { getEngineConfig } from '../config'
 import { log } from '../logger'
 import type { EmailProvider } from '../email/provider'
 import type { Store } from '../store/store'
+import type { ContextoCampanhaResposta, Lead, UsuarioBasico } from '../types'
+import { labelTipoCampanha } from '@/lib/campanhas/configuracaoGuiada'
+import { montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha'
+
+export interface PayloadDirecionarCloser {
+  leadId: string
+  textoResposta: string
+  responsavelCampanha?: UsuarioBasico | null
+  contextoCampanha?: ContextoCampanhaResposta | null
+}
+
+function materializarModeloResposta(modelo: string, dados: Record<string, string>): string {
+  return Object.entries(dados).reduce(
+    (texto, [chave, valor]) => texto.replaceAll(`{${chave}}`, valor),
+    modelo,
+  )
+}
+
+function dadosModeloResposta(
+  lead: Lead,
+  payload: PayloadDirecionarCloser,
+  responsavelNome: string,
+): Record<string, string> {
+  return {
+    empresa: lead.empresa?.trim() || 'Não configurado',
+    contato: lead.contato_nome?.trim() || 'Não configurado',
+    email_contato: lead.contato_email?.trim() || 'Não configurado',
+    nicho: lead.segmento?.trim() || 'Não configurado',
+    score: Number.isFinite(lead.score) ? String(lead.score) : 'Não configurado',
+    resposta: payload.textoResposta.trim() || 'Não configurado',
+    campanha: payload.contextoCampanha?.nome?.trim() || 'Não configurado',
+    tipo_campanha: payload.contextoCampanha?.tipo
+      ? labelTipoCampanha(payload.contextoCampanha.tipo)
+      : 'Não configurado',
+    responsavel: responsavelNome || 'Não configurado',
+  }
+}
 
 export async function direcionarCloser(
   store: Store,
   email: EmailProvider,
-  payload: { leadId: string; textoResposta: string },
+  payload: PayloadDirecionarCloser,
 ): Promise<{ ok: boolean; closer?: string }> {
   const lead = await store.buscarLead(payload.leadId)
   if (!lead) {
@@ -25,7 +62,10 @@ export async function direcionarCloser(
   // Closer = responsável do lead; fallback configurado (tela ou CLOSER_EMAIL).
   let closerEmail = (await getEngineConfig(store.organizacaoId)).closerEmailFallback
   let closerNome = 'Closer'
-  if (lead.responsavel_id) {
+  if (payload.responsavelCampanha?.email) {
+    closerEmail = payload.responsavelCampanha.email
+    closerNome = payload.responsavelCampanha.nome
+  } else if (lead.responsavel_id) {
     const u = await store.buscarUsuario(lead.responsavel_id)
     if (u?.email) {
       closerEmail = u.email
@@ -43,20 +83,31 @@ export async function direcionarCloser(
     'Resposta do lead:',
     `  "${payload.textoResposta.trim()}"`,
   ].join('\n')
+  const dadosModelo = dadosModeloResposta(lead, payload, closerNome)
+  const assunto = payload.contextoCampanha?.emailAssunto?.trim()
+    ? materializarModeloResposta(payload.contextoCampanha.emailAssunto, dadosModelo)
+    : `[ProspectOS] Lead respondeu: ${lead.empresa}`
+  const corpoNotificacao = payload.contextoCampanha?.emailCorpo?.trim()
+    ? materializarModeloResposta(payload.contextoCampanha.emailCorpo, dadosModelo)
+    : aviso
+  const htmlPersonalizado = payload.contextoCampanha?.emailHtml?.trim()
+    ? materializarModeloResposta(payload.contextoCampanha.emailHtml, dadosModelo)
+    : undefined
+  const htmlNotificacao = montarEmailCampanhaHtml(corpoNotificacao, {}, htmlPersonalizado)
 
   if (!closerEmail) {
     log.aviso('Sem e-mail de closer (lead sem responsável e CLOSER_EMAIL vazio). Registrando mesmo assim.', {
       leadId: lead.id,
     })
-  } else {
-    await email.enviar(closerEmail, `[ProspectOS] Lead respondeu: ${lead.empresa}`, aviso)
+  } else if (payload.contextoCampanha?.notificarResponsavel !== false) {
+    await email.enviar(closerEmail, assunto, corpoNotificacao, htmlNotificacao)
   }
 
   await store.registrarInteracao({
     lead_id: lead.id,
     tipo: 'nota',
     canal: 'sistema',
-    descricao: `Encaminhado ao closer (${closerNome} <${closerEmail || 'sem e-mail'}>).\n\n${aviso}`,
+    descricao: `Encaminhado ao closer (${closerNome} <${closerEmail || 'sem e-mail'}>).\nAssunto: ${assunto}\n\n${corpoNotificacao}`,
     origem_acao: 'ia',
     responsavel_id: lead.responsavel_id ?? null,
   })

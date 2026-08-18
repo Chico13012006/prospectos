@@ -3,7 +3,7 @@
 import { engineConfig, OWNER_ENGINE } from '../config'
 import { ESTAGIOS_EM_CADENCIA, dominioDoLead } from '../templates'
 import { SEED_TEMPLATES } from '../templates-seed'
-import type { Lead, NovaInteracao, TipoInteracaoEngine, UsuarioBasico } from '../types'
+import type { ContextoCampanhaResposta, Lead, NovaInteracao, TipoInteracaoEngine, UsuarioBasico } from '../types'
 import type { Store, TemplateEmail } from './store'
 
 interface InteracaoMem extends NovaInteracao {
@@ -114,8 +114,16 @@ export class MemoryStore implements Store {
     return this.usuarios.find((u) => u.id === id) ?? null
   }
 
+  async buscarResponsavelCampanhaAtiva(_leadId: string): Promise<UsuarioBasico | null> {
+    return null
+  }
+
+  async buscarContextoCampanhaAtiva(_leadId: string): Promise<ContextoCampanhaResposta | null> {
+    return null
+  }
+
   // MemoryStore não rastreia workflow_execucoes — no-op satisfatório para testes
-  // que só verificam leads.bounced e elegibilidade de follow-up.
+  // que verificam a chamada e a elegibilidade de follow-up.
   async cancelarExecucoesWorkflow(_leadId: string): Promise<void> {}
 
   // Lê do mesmo seed que popula a tabela `templates` (mantém os testes offline).

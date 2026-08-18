@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Database, Plus, FileSpreadsheet } from 'lucide-react';
+import Link from 'next/link';
+import { Database, Plus, FileSpreadsheet, Send } from 'lucide-react';
 import { formatDate, dash } from '@/lib/utils';
 import { labelEstagio, corEstagio } from '@/lib/pipeline-stages';
 import { getTodosLeads, getPipelineFiltrosOpcoes, type BaseLeadsFiltros } from '@/lib/api';
@@ -54,6 +55,7 @@ export default function BaseLeadsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [modal, setModal] = useState<null | 'novo' | 'importar'>(null);
+  const [selecionadosCampanha, setSelecionadosCampanha] = useState<Set<string>>(() => new Set());
   // Ordenação da tabela (item 2.8): clique no cabeçalho "Score" ordena por score.
   const [ordenarPor, setOrdenarPor] = useState<{ campo: 'score'; asc: boolean } | null>(null);
 
@@ -124,6 +126,30 @@ export default function BaseLeadsPage() {
 
   useEffect(() => { carregar(); }, [carregar, reloadKey]);
 
+  const todosDaPaginaSelecionados = data.length > 0 && data.every((lead) => selecionadosCampanha.has(lead.id));
+  const hrefComunicado = `/automacao/campanhas/nova?tipo=novidade_clientes&leads=${encodeURIComponent([...selecionadosCampanha].join(','))}`;
+
+  const alternarSelecao = useCallback((id: string) => {
+    setSelecionadosCampanha((atuais) => {
+      const proximos = new Set(atuais);
+      if (proximos.has(id)) proximos.delete(id);
+      else proximos.add(id);
+      return proximos;
+    });
+  }, []);
+
+  const alternarPagina = useCallback(() => {
+    setSelecionadosCampanha((atuais) => {
+      const proximos = new Set(atuais);
+      const marcar = !data.every((lead) => proximos.has(lead.id));
+      for (const lead of data) {
+        if (marcar) proximos.add(lead.id);
+        else proximos.delete(lead.id);
+      }
+      return proximos;
+    });
+  }, [data]);
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
@@ -136,6 +162,14 @@ export default function BaseLeadsPage() {
         </div>
         <div className="shrink-0 flex items-center gap-3">
           <div className="flex gap-2">
+            {selecionadosCampanha.size > 0 && (
+              <Link
+                href={hrefComunicado}
+                className="flex items-center gap-2 rounded-lg border border-indigo-500/50 bg-indigo-500/10 px-3 py-2 text-sm font-medium text-indigo-200 hover:bg-indigo-500/20"
+              >
+                <Send size={14} /> Enviar comunicado ({selecionadosCampanha.size})
+              </Link>
+            )}
             <button
               onClick={() => setModal('importar')}
               className="flex items-center gap-2 text-sm text-slate-300 border border-[#2a3147] px-3 py-2 rounded-lg hover:bg-[#0f1117]"
@@ -182,6 +216,15 @@ export default function BaseLeadsPage() {
           <table className="w-full text-sm border-separate border-spacing-0">
             <thead className="sticky top-0 z-10">
               <tr className="text-left text-xs uppercase tracking-wide text-slate-500 bg-[var(--bg-base)]">
+                <th className="w-10 border-b border-[var(--border)] px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={todosDaPaginaSelecionados}
+                    onChange={alternarPagina}
+                    aria-label="Selecionar todos os leads desta página"
+                    className="h-4 w-4 accent-indigo-500"
+                  />
+                </th>
                 {camposUI.find(c => c.chave === 'empresa')?.visivel !== false && (
                   <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Empresa</th>
                 )}
@@ -214,7 +257,7 @@ export default function BaseLeadsPage() {
             </thead>
             <tbody>
               {data.length === 0 ? (
-                <EstadoTabela colSpan={9} loading={loading} />
+                <EstadoTabela colSpan={10} loading={loading} />
               ) : (
                 data.map(lead => {
                   const responsavel = lead.usuarios?.nome ?? lead.responsavel_nome ?? null;
@@ -230,6 +273,16 @@ export default function BaseLeadsPage() {
                       aria-label={`Abrir ${lead.empresa ?? 'lead'}`}
                       className={`cursor-pointer transition-colors focus-ring ${selecionado ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--bg-card)]'}`}
                     >
+                      <td className="w-10 border-b border-[var(--border-subtle)] px-3 py-2.5">
+                        <input
+                          type="checkbox"
+                          checked={selecionadosCampanha.has(lead.id)}
+                          onChange={() => alternarSelecao(lead.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Selecionar ${lead.empresa ?? lead.contato_nome ?? 'lead'} para comunicado`}
+                          className="h-4 w-4 accent-indigo-500"
+                        />
+                      </td>
                       {camposUI.find(c => c.chave === 'empresa')?.visivel !== false && (
                         <td className={`px-3 py-2.5 border-b border-[var(--border-subtle)] font-medium text-slate-100 max-w-56 truncate ${selecionado ? 'border-l-2 border-l-[var(--accent)]' : 'border-l-2 border-l-transparent'}`}>{dash(lead.empresa)}</td>
                       )}
