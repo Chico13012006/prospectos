@@ -152,13 +152,17 @@ export default function CampanhaWizardPage({
   const [nichos, setNichos] = useState<string[]>([])
   const [membros, setMembros] = useState<Membro[]>([])
   const [carregandoOpcoes, setCarregandoOpcoes] = useState(true)
+  const [testeEmailDisponivel, setTesteEmailDisponivel] = useState(false)
   const [previa, setPrevia] = useState<PreviaPublico | null>(null)
   const [carregandoPrevia, setCarregandoPrevia] = useState(false)
-  const [salvando, setSalvando] = useState<'rascunho' | 'ativar' | false>(false)
+  const [salvando, setSalvando] = useState<'rascunho' | 'ativar' | 'iniciar' | false>(false)
   const [erro, setErro] = useState<string | null>(null)
   const [salvo, setSalvo] = useState(false)
   const [confirmando, setConfirmando] = useState(false)
+  const [modoConfirmacao, setModoConfirmacao] = useState<'ensaio' | 'real'>('ensaio')
   const [confirmacao, setConfirmacao] = useState('')
+  const [estadoTesteEmail, setEstadoTesteEmail] = useState<'ocioso' | 'confirmando' | 'enviando' | 'enviado'>('ocioso')
+  const [destinatarioTeste, setDestinatarioTeste] = useState('')
   const [buscaEmpresa, setBuscaEmpresa] = useState('')
   const [paginaEmpresas, setPaginaEmpresas] = useState(1)
 
@@ -205,6 +209,7 @@ export default function CampanhaWizardPage({
       if (!ativo) return
       setTemplates(opcoes.templates ?? [])
       setNichos(opcoes.nichos ?? [])
+      setTesteEmailDisponivel(opcoes.testeEmailDisponivel === true)
       setMembros((equipe.membros ?? []).filter((m: Membro) => m.nome || m.email))
       setPublico((atual) => ({
         ...atual,
@@ -314,6 +319,10 @@ export default function CampanhaWizardPage({
   }
 
   function atualizarMensagem(indice: number | null, patch: Partial<MensagemCampanha>) {
+    if (indice == null && estadoTesteEmail === 'enviado') {
+      setEstadoTesteEmail('ocioso')
+      setDestinatarioTeste('')
+    }
     setPublico((atual) => {
       const op = atual.operacao ?? {}
       if (indice == null) {
@@ -451,6 +460,52 @@ export default function CampanhaWizardPage({
     }
   }
 
+  async function iniciarReal(confirmarQuantidade: number) {
+    setSalvando('iniciar')
+    setErro(null)
+    try {
+      const id = await persistir()
+      const res = await fetch(`/api/campanhas/${id}/iniciar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmarQuantidade }),
+      })
+      const dados = await res.json()
+      if (!res.ok) throw new Error(dados.erro || 'Não foi possível iniciar a campanha.')
+      router.push(`/automacao/campanhas/${id}`)
+      router.refresh()
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao iniciar a campanha.')
+      setConfirmando(false)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  async function enviarTesteEmail() {
+    setEstadoTesteEmail('enviando')
+    setErro(null)
+    try {
+      const res = await fetch('/api/campanhas/teste-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assunto: mensagemInicial.assunto,
+          corpo: mensagemInicial.corpo,
+          html: mensagemInicial.html,
+          responsavelNome: responsavel ? nomeMembro(responsavel) : undefined,
+        }),
+      })
+      const dados = await res.json()
+      if (!res.ok) throw new Error(dados.erro || 'Não foi possível enviar o teste.')
+      setDestinatarioTeste(dados.destinatario ?? publico.operacao?.remetenteEmail ?? '')
+      setEstadoTesteEmail('enviado')
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao enviar o teste.')
+      setEstadoTesteEmail('ocioso')
+    }
+  }
+
   function solicitarAtivacao() {
     const erros = validarCampanhaGuiada(bodyCampanha().publico)
     const quantidade = previa?.elegiveis ?? 0
@@ -461,10 +516,24 @@ export default function CampanhaWizardPage({
     }
     if (quantidade > LIMITE_CONFIRMACAO_CAMPANHA) {
       setConfirmacao('')
+      setModoConfirmacao('ensaio')
       setConfirmando(true)
       return
     }
     void ativar()
+  }
+
+  function solicitarInicioReal() {
+    const erros = validarCampanhaGuiada(bodyCampanha().publico)
+    const quantidade = previa?.elegiveis ?? 0
+    if (!quantidade) erros.push('O público precisa ter ao menos um contato elegível.')
+    if (erros.length) {
+      setErro(erros.join(' '))
+      return
+    }
+    setConfirmacao('')
+    setModoConfirmacao('real')
+    setConfirmando(true)
   }
 
   const contagens = useMemo(() => [
@@ -571,7 +640,7 @@ export default function CampanhaWizardPage({
             {publico.selecao?.modo === 'manual' ? (
               <div className="rounded-lg border border-[#2a3147] bg-[#11151f] p-4">
                 <p className="text-sm text-slate-300">{publico.selecao.leadIds?.length ?? 0} contato(s) selecionado(s) na base.</p>
-                <p className="mt-1 text-xs text-slate-500">Para alterar a seleção, volte à Base de Leads e use “Enviar comunicado”.</p>
+                <p className="mt-1 text-xs text-slate-500">Para alterar a seleção, volte à Base de Leads e selecione novamente os contatos.</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -751,9 +820,38 @@ export default function CampanhaWizardPage({
               </div>
               <iframe title="Prévia da mensagem ao cliente" sandbox="" srcDoc={documentoPreviewHtml(htmlMensagemInicial)} className="h-96 w-full bg-white" />
             </div>
-            <button type="button" disabled title="O envio de teste exige uma autorização explícita separada." className="mt-4 inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-[#30384e] px-4 py-2.5 text-sm text-slate-600">
-              <Send size={15} /> Enviar teste — não configurado
+            <button
+              type="button"
+              onClick={() => setEstadoTesteEmail('confirmando')}
+              disabled={
+                carregandoOpcoes
+                || estadoTesteEmail === 'enviando'
+                || !testeEmailDisponivel
+                || !publico.operacao?.remetenteEmail
+                || !mensagemInicial.assunto?.trim()
+                || !mensagemInicial.corpo?.trim()
+                || !responsavel
+              }
+              title={!publico.operacao?.remetenteEmail
+                ? 'Configure uma conta remetente no workspace.'
+                : !testeEmailDisponivel
+                  ? 'O motor está em modo ensaio; o Gmail real permanece bloqueado.'
+                : !responsavel
+                  ? 'Defina o responsável pelos retornos.'
+                  : 'Envia somente para a própria conta remetente.'}
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-indigo-500/40 px-4 py-2.5 text-sm text-indigo-300 hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:border-[#30384e] disabled:text-slate-600"
+            >
+              {estadoTesteEmail === 'enviando' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+              Enviar teste para {textoOuNaoConfigurado(publico.operacao?.remetenteEmail)}
             </button>
+            {estadoTesteEmail === 'enviado' && (
+              <p role="status" className="mt-3 flex items-center justify-center gap-2 text-sm text-emerald-300">
+                <Check size={15} /> Teste enviado para {destinatarioTeste}
+              </p>
+            )}
+            {!carregandoOpcoes && publico.operacao?.remetenteEmail && !testeEmailDisponivel && (
+              <p className="mt-3 text-center text-xs text-amber-300">Envio indisponível enquanto o motor estiver em modo ensaio.</p>
+            )}
           </section>
         </div>
       )}
@@ -922,7 +1020,7 @@ export default function CampanhaWizardPage({
                 ['Cadência', resumoCadencia],
                 ['Regra de resposta', 'Parar cadência e encaminhar ao responsável'],
                 ['Status', campanha?.status ?? 'rascunho'],
-                ['Próxima ação', 'Publicar em modo ensaio'],
+                ['Próxima ação', tipo === 'prospeccao' ? 'Iniciar prospecção' : 'Iniciar campanha'],
               ].map(([titulo, valor]) => (
                 <div key={titulo} className="rounded-lg border border-[#2a3147] bg-[#11151f] p-3">
                   <div className="text-[11px] font-medium uppercase tracking-wide text-slate-600">{titulo}</div>
@@ -970,11 +1068,14 @@ export default function CampanhaWizardPage({
             <ul className="space-y-2 text-sm leading-6 text-slate-400">
               <li>• O público será recalculado no servidor.</li>
               <li>• O workflow ganhará uma versão imutável.</li>
-              <li>• A campanha permanecerá em <strong className="text-slate-300">dry-run</strong>.</li>
-              <li>• Nenhuma execução será criada por esta publicação.</li>
+              <li>• As inscrições serão criadas somente para os contatos elegíveis confirmados.</li>
+              <li>• Os envios serão processados pelo motor existente, respeitando agenda, bloqueios e idempotência.</li>
             </ul>
-            <button type="button" onClick={solicitarAtivacao} disabled={!!salvando || carregandoPrevia || carregandoOpcoes} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
-              {salvando === 'ativar' ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Publicar em modo ensaio
+            <button type="button" onClick={solicitarInicioReal} disabled={!!salvando || carregandoPrevia || carregandoOpcoes} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
+              {salvando === 'iniciar' ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} {tipo === 'prospeccao' ? 'Iniciar prospecção' : 'Iniciar campanha'}
+            </button>
+            <button type="button" onClick={solicitarAtivacao} disabled={!!salvando || carregandoPrevia || carregandoOpcoes} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#30384e] px-4 py-2.5 text-sm text-slate-400 hover:border-indigo-500/50 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50">
+              {salvando === 'ativar' && <Loader2 size={15} className="animate-spin" />} Publicar somente em modo ensaio
             </button>
           </section>
         </div>
@@ -988,12 +1089,55 @@ export default function CampanhaWizardPage({
       {confirmando && previa && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="confirmar-campanha">
           <div className="w-full max-w-md rounded-xl border border-[#30384e] bg-[#1a1f2e] p-6 shadow-2xl">
-            <div className="mb-3 flex items-center gap-2 text-amber-300"><AlertTriangle size={20} /><h2 id="confirmar-campanha" className="font-semibold">Confirme o público</h2></div>
-            <p className="text-sm leading-6 text-slate-400">O servidor calculou <strong className="text-slate-200">{previa.elegiveis} contatos elegíveis</strong>. Digite essa quantidade para confirmar a publicação em modo ensaio.</p>
+            <div className="mb-3 flex items-center gap-2 text-amber-300">
+              <AlertTriangle size={20} />
+              <h2 id="confirmar-campanha" className="font-semibold">
+                {modoConfirmacao === 'real'
+                  ? (tipo === 'prospeccao' ? 'Iniciar prospecção' : 'Iniciar campanha')
+                  : 'Publicar em modo ensaio'}
+              </h2>
+            </div>
+            <p className="text-sm leading-6 text-slate-400">
+              O servidor calculou <strong className="text-slate-200">{previa.elegiveis} contatos elegíveis</strong>.{' '}
+              {modoConfirmacao === 'real'
+                ? 'Ao confirmar, o workflow será publicado e as inscrições serão criadas para processamento pelo motor de cadência. Digite essa quantidade para iniciar.'
+                : 'Digite essa quantidade para confirmar a publicação sem criar inscrições.'}
+            </p>
             <input autoFocus inputMode="numeric" className={`${input} mt-4`} value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} placeholder={String(previa.elegiveis)} />
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setConfirmando(false)} className="rounded-lg border border-[#30384e] px-4 py-2 text-sm text-slate-400">Cancelar</button>
-              <button type="button" onClick={() => void ativar(previa.elegiveis)} disabled={confirmacao !== String(previa.elegiveis) || !!salvando} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40">{salvando === 'ativar' && <Loader2 size={14} className="animate-spin" />} Confirmar</button>
+              <button
+                type="button"
+                onClick={() => modoConfirmacao === 'real' ? void iniciarReal(previa.elegiveis) : void ativar(previa.elegiveis)}
+                disabled={confirmacao !== String(previa.elegiveis) || !!salvando}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+              >
+                {(salvando === 'ativar' || salvando === 'iniciar') && <Loader2 size={14} className="animate-spin" />}
+                {modoConfirmacao === 'real' ? 'Iniciar' : 'Publicar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {estadoTesteEmail === 'confirmando' && testeEmailDisponivel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="confirmar-teste-email">
+          <div className="w-full max-w-md rounded-xl border border-[#30384e] bg-[#1a1f2e] p-6 shadow-2xl">
+            <div className="mb-3 flex items-center gap-2 text-indigo-300">
+              <Mail size={20} />
+              <h2 id="confirmar-teste-email" className="font-semibold">Enviar um teste agora?</h2>
+            </div>
+            <p className="text-sm leading-6 text-slate-400">
+              A prévia será enviada por <strong className="text-slate-200">{publico.operacao?.remetenteEmail}</strong> para esse mesmo endereço, com o prefixo <strong className="text-slate-200">[TESTE]</strong> no assunto.
+            </p>
+            <div className="mt-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs leading-5 text-emerald-200">
+              Este teste não salva a campanha, não inscreve leads e não inicia a cadência.
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setEstadoTesteEmail('ocioso')} className="rounded-lg border border-[#30384e] px-4 py-2 text-sm text-slate-400">Cancelar</button>
+              <button type="button" onClick={() => void enviarTesteEmail()} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">
+                <Send size={14} /> Enviar teste
+              </button>
             </div>
           </div>
         </div>

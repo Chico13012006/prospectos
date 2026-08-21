@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { Database, Plus, FileSpreadsheet, Send } from 'lucide-react';
+import { Database, Plus, FileSpreadsheet, Megaphone, Rocket } from 'lucide-react';
 import { formatDate, dash } from '@/lib/utils';
 import { labelEstagio, corEstagio } from '@/lib/pipeline-stages';
 import { getTodosLeads, getPipelineFiltrosOpcoes, type BaseLeadsFiltros } from '@/lib/api';
@@ -127,6 +127,7 @@ export default function BaseLeadsPage() {
   useEffect(() => { carregar(); }, [carregar, reloadKey]);
 
   const todosDaPaginaSelecionados = data.length > 0 && data.every((lead) => selecionadosCampanha.has(lead.id));
+  const hrefProspeccao = `/automacao/campanhas/nova?tipo=prospeccao&leads=${encodeURIComponent([...selecionadosCampanha].join(','))}`;
   const hrefComunicado = `/automacao/campanhas/nova?tipo=novidade_clientes&leads=${encodeURIComponent([...selecionadosCampanha].join(','))}`;
 
   const alternarSelecao = useCallback((id: string) => {
@@ -163,12 +164,20 @@ export default function BaseLeadsPage() {
         <div className="shrink-0 flex items-center gap-3">
           <div className="flex gap-2">
             {selecionadosCampanha.size > 0 && (
-              <Link
-                href={hrefComunicado}
-                className="flex items-center gap-2 rounded-lg border border-indigo-500/50 bg-indigo-500/10 px-3 py-2 text-sm font-medium text-indigo-200 hover:bg-indigo-500/20"
-              >
-                <Send size={14} /> Enviar comunicado ({selecionadosCampanha.size})
-              </Link>
+              <>
+                <Link
+                  href={hrefProspeccao}
+                  className="flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+                >
+                  <Rocket size={14} /> Iniciar prospecção ({selecionadosCampanha.size})
+                </Link>
+                <Link
+                  href={hrefComunicado}
+                  className="flex items-center gap-2 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-sm font-medium text-indigo-200 hover:bg-indigo-500/20"
+                >
+                  <Megaphone size={14} /> Enviar novidade
+                </Link>
+              </>
             )}
             <button
               onClick={() => setModal('importar')}
@@ -279,7 +288,7 @@ export default function BaseLeadsPage() {
                           checked={selecionadosCampanha.has(lead.id)}
                           onChange={() => alternarSelecao(lead.id)}
                           onClick={(e) => e.stopPropagation()}
-                          aria-label={`Selecionar ${lead.empresa ?? lead.contato_nome ?? 'lead'} para comunicado`}
+                          aria-label={`Selecionar ${lead.empresa ?? lead.contato_nome ?? 'lead'} para campanha`}
                           className="h-4 w-4 accent-indigo-500"
                         />
                       </td>

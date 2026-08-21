@@ -157,3 +157,22 @@ export async function inscreverCampanhaReal(
     falhas,
   }
 }
+
+// Jornada direta do wizard: publica uma versão imutável ainda protegida por
+// dry-run e, somente depois dessa validação, desativa o ensaio e cria as
+// execuções da seleção confirmada. Se o enrollment falhar, a ativação anterior
+// permanece segura em dry-run; nenhum envio é executado dentro desta requisição.
+export async function iniciarCampanhaReal(
+  admin: SupabaseClient,
+  org: string,
+  campanhaId: string,
+  autorId: string,
+  confirmarQuantidade?: number,
+): Promise<ResultadoEnrollmentReal> {
+  if (!Number.isInteger(confirmarQuantidade) || (confirmarQuantidade ?? 0) <= 0) {
+    throw new Error('Confirme explicitamente a quantidade atual de contatos elegíveis.')
+  }
+
+  await ativarCampanhaGuiada(admin, org, campanhaId, autorId, confirmarQuantidade)
+  return inscreverCampanhaReal(admin, org, campanhaId, confirmarQuantidade)
+}

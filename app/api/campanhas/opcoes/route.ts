@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { resolverAcesso } from '@/lib/rbac/servidor'
 import { buscarRemetenteCampanha } from '@/lib/campanhas/opcoesServidor'
+import { engineConfig } from '@/lib/engine/config'
 
 export const runtime = 'nodejs'
 
@@ -42,7 +43,12 @@ export async function GET() {
       }
     }
     const nichos = [...nichosPorChave.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'))
-    return NextResponse.json({ remetente, templates: templates ?? [], nichos })
+    return NextResponse.json({
+      remetente,
+      templates: templates ?? [],
+      nichos,
+      testeEmailDisponivel: !!remetente && !engineConfig.modoEnsaio,
+    })
   } catch (e) {
     return NextResponse.json({ erro: e instanceof Error ? e.message : 'Erro' }, { status: 400 })
   }
