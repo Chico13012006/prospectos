@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { montarEmailCampanhaHtml, sanitizarHtmlEmail } from '../emailCampanha'
+import { extrairTextoHtmlEmail, montarEmailCampanhaHtml, sanitizarHtmlEmail } from '../emailCampanha'
 
 describe('HTML da mensagem de campanha', () => {
   it('preserva o texto, escapa conteúdo e identifica o responsável no final', () => {
@@ -12,6 +12,7 @@ describe('HTML da mensagem de campanha', () => {
     expect(html).toContain('Atenciosamente,')
     expect(html).toContain('Francisco &amp; Equipe')
     expect(html).toContain('InovaCode')
+    expect(html).toContain('style="width:100%;max-width:640px')
     expect(html.indexOf('Atenciosamente,')).toBeGreaterThan(html.indexOf('Tudo bem?'))
   })
 
@@ -32,5 +33,19 @@ describe('HTML da mensagem de campanha', () => {
     expect(html).not.toContain('onerror')
     expect(html).not.toContain('onclick')
     expect(html).toContain('href="https://empresa.com"')
+  })
+
+  it('gera texto alternativo legível sem CSS ou conteúdo removido', () => {
+    const texto = extrairTextoHtmlEmail(`
+      <style>.titulo { color: red; }</style>
+      <script>alert('não')</script>
+      <h1>Olá &amp; bem-vindo</h1>
+      <p>Primeira linha<br>Segunda linha</p>
+      <ul><li>Item um</li><li>Item dois</li></ul>
+    `)
+
+    expect(texto).toBe('Olá & bem-vindo\n\nPrimeira linha\nSegunda linha\n\n• Item um\n\n• Item dois')
+    expect(texto).not.toContain('color: red')
+    expect(texto).not.toContain('alert')
   })
 })

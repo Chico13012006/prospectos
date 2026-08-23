@@ -261,6 +261,31 @@ export default function CampanhaWizardPage({
     setPublico((atual) => ({ ...atual, empresas: { ...atual.empresas, ...patch } }))
   }
 
+  function validarAvancoPublico(): string | null {
+    if (carregandoPrevia) return 'Aguarde o recálculo do público antes de continuar.'
+    if (!previa) return 'Não foi possível validar o público desta campanha.'
+    if (previa.elegiveis > 0) return null
+    if (previa.totalSelecionado > 0 && previa.incompativeis >= previa.totalSelecionado) {
+      return `${previa.totalSelecionado} contato(s) foram selecionados, mas todos já estão em uma automação ativa ou ainda estão vinculados a outro motor.`
+    }
+    if (previa.totalSelecionado > 0) {
+      return `${previa.totalSelecionado} contato(s) foram selecionados, mas nenhum está elegível. Confira e-mail, bloqueios, duplicidade e automações ativas.`
+    }
+    return 'Selecione um público que tenha ao menos um contato elegível.'
+  }
+
+  function irParaEtapa(destino: number) {
+    if (destino > etapa && etapa === 0) {
+      const erroPublico = validarAvancoPublico()
+      if (erroPublico) {
+        setErro(erroPublico)
+        return
+      }
+    }
+    setErro(null)
+    setEtapa(Math.max(0, Math.min(PASSOS.length - 1, destino)))
+  }
+
   function atualizarSelecao(patch: Partial<NonNullable<Publico['selecao']>>) {
     setPublico((atual) => ({ ...atual, selecao: { ...atual.selecao, ...patch } }))
   }
@@ -543,7 +568,7 @@ export default function CampanhaWizardPage({
     ['Duplicados', previa?.duplicados],
     ['Bloqueados', previa?.bloqueados],
     ['Sem responsável', previa?.semResponsavel],
-    ['Em outra automação', previa?.incompativeis],
+    ['Incompatíveis', previa?.incompativeis],
   ] as const, [previa])
 
   const resumoCadencia = followups.length
@@ -568,7 +593,7 @@ export default function CampanhaWizardPage({
 
       <div className="mb-7 grid grid-cols-2 gap-2 lg:grid-cols-4">
         {PASSOS.map(({ titulo, label: texto, Icon }, indice) => (
-          <button key={titulo} type="button" onClick={() => setEtapa(indice)} className={`flex min-w-0 items-center gap-2 rounded-xl border p-3 text-left transition-colors ${etapa === indice ? 'border-indigo-500/70 bg-indigo-500/10 text-indigo-200' : indice < etapa ? 'border-emerald-500/25 bg-emerald-500/5 text-slate-300' : 'border-[#2a3147] bg-[#151924] text-slate-500'}`}>
+          <button key={titulo} type="button" onClick={() => irParaEtapa(indice)} className={`flex min-w-0 items-center gap-2 rounded-xl border p-3 text-left transition-colors ${etapa === indice ? 'border-indigo-500/70 bg-indigo-500/10 text-indigo-200' : indice < etapa ? 'border-emerald-500/25 bg-emerald-500/5 text-slate-300' : 'border-[#2a3147] bg-[#151924] text-slate-500'}`}>
             <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${indice < etapa ? 'bg-emerald-500 text-white' : etapa === indice ? 'bg-indigo-500 text-white' : 'bg-[#252b3c]'}`}>
               {indice < etapa ? <Check size={14} /> : indice + 1}
             </span>
@@ -703,6 +728,16 @@ export default function CampanhaWizardPage({
                 ))}
               </div>
               {previa?.truncado && <p className="mt-3 text-xs text-amber-300">A prévia atingiu o limite seguro de 2.000 registros.</p>}
+              {!!previa?.incompativeis && (
+                <div className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-200">
+                  <strong>{previa.incompativeis} contato(s) incompatíveis:</strong> possuem execução ativa em outra automação ou ainda estão vinculados a outro motor. Eles permanecem visíveis para auditoria, mas não podem receber esta campanha.
+                </div>
+              )}
+              {previa && previa.totalSelecionado > 0 && previa.elegiveis === 0 && (
+                <div className="mt-3 rounded-lg border border-red-500/25 bg-red-500/5 px-3 py-2 text-xs leading-5 text-red-200">
+                  A seleção atual não possui contatos elegíveis. O avanço será bloqueado até que exista ao menos um destinatário válido.
+                </div>
+              )}
               {previa && (
                 <div className="mt-4 rounded-xl border border-[#2a3147] bg-[#11151f] p-4">
                   <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -799,7 +834,12 @@ export default function CampanhaWizardPage({
               <HtmlEmailEditor
                 html={mensagemInicial.html}
                 previewHtml={htmlMensagemInicial}
-                onChange={(html) => atualizarMensagem(null, { html })}
+                titulo="HTML do e-mail enviado ao cliente"
+                descricao="Carregue um arquivo HTML/TXT, arraste-o para esta área ou cole o código. A prévia abaixo usa exatamente a versão sanitizada."
+                onChange={(html, textoAlternativo) => atualizarMensagem(null, {
+                  html,
+                  ...(!mensagemInicial.corpo?.trim() && textoAlternativo ? { corpo: textoAlternativo } : {}),
+                })}
                 onErro={setErro}
               />
             </div>
@@ -818,7 +858,13 @@ export default function CampanhaWizardPage({
                 <div><strong>De:</strong> {textoOuNaoConfigurado(publico.operacao?.remetenteEmail)}</div>
                 <div className="mt-1"><strong>Assunto:</strong> {textoOuNaoConfigurado(mensagemInicial.assunto)}</div>
               </div>
-              <iframe title="Prévia da mensagem ao cliente" sandbox="" srcDoc={documentoPreviewHtml(htmlMensagemInicial)} className="h-96 w-full bg-white" />
+              <iframe
+                title="Prévia da mensagem ao cliente"
+                sandbox=""
+                srcDoc={documentoPreviewHtml(htmlMensagemInicial)}
+                className="w-full bg-white"
+                style={{ height: '36rem' }}
+              />
             </div>
             <button
               type="button"
@@ -904,7 +950,11 @@ export default function CampanhaWizardPage({
                     <HtmlEmailEditor
                       html={followup.html}
                       previewHtml={montarEmailCampanhaHtml(followup.corpo?.trim() || 'Não configurado', { responsavelNome: nomeMembro(responsavel) }, followup.html)}
-                      onChange={(html) => atualizarMensagem(indice, { html })}
+                      titulo={`HTML do follow-up ${indice + 1}`}
+                      onChange={(html, textoAlternativo) => atualizarMensagem(indice, {
+                        html,
+                        ...(!followup.corpo?.trim() && textoAlternativo ? { corpo: textoAlternativo } : {}),
+                      })}
                       onErro={setErro}
                     />
                   </div>
@@ -982,7 +1032,12 @@ export default function CampanhaWizardPage({
                 <HtmlEmailEditor
                   html={resposta?.emailHtml}
                   previewHtml={htmlResposta}
-                  onChange={(emailHtml) => atualizarResposta({ emailHtml })}
+                  titulo="HTML do e-mail de retorno ao responsável"
+                  descricao="Este conteúdo será usado somente na notificação enviada ao responsável quando o lead responder. Você pode carregar um arquivo ou colar o código."
+                  onChange={(emailHtml, textoAlternativo) => atualizarResposta({
+                    emailHtml,
+                    ...(!resposta?.emailCorpo?.trim() && textoAlternativo ? { emailCorpo: textoAlternativo } : {}),
+                  })}
                   onErro={setErro}
                 />
               </div>
@@ -1082,8 +1137,8 @@ export default function CampanhaWizardPage({
       )}
 
       <div className="mt-6 flex items-center justify-between border-t border-[#242a3a] pt-5">
-        <button type="button" onClick={() => setEtapa((atual) => Math.max(0, atual - 1))} disabled={etapa === 0} className="inline-flex items-center gap-2 rounded-lg border border-[#30384e] px-4 py-2 text-sm text-slate-400 hover:text-slate-200 disabled:opacity-30"><ArrowLeft size={15} /> Voltar</button>
-        {etapa < PASSOS.length - 1 && <button type="button" onClick={() => { setErro(null); setEtapa((atual) => Math.min(PASSOS.length - 1, atual + 1)) }} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">Continuar <ArrowRight size={15} /></button>}
+        <button type="button" onClick={() => irParaEtapa(etapa - 1)} disabled={etapa === 0} className="inline-flex items-center gap-2 rounded-lg border border-[#30384e] px-4 py-2 text-sm text-slate-400 hover:text-slate-200 disabled:opacity-30"><ArrowLeft size={15} /> Voltar</button>
+        {etapa < PASSOS.length - 1 && <button type="button" onClick={() => irParaEtapa(etapa + 1)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">Continuar <ArrowRight size={15} /></button>}
       </div>
 
       {confirmando && previa && (

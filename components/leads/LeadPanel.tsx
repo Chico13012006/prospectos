@@ -4,12 +4,13 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   X, Star, ExternalLink, Mail, Phone,
   MessageSquare, Bot, User, ArrowRight, CheckCircle,
-  FileText, Bell, Loader2, Clock, Plus, Sparkles, Repeat, Copy, Maximize2, Check, Settings,
+  FileText, Bell, Loader2, Clock, Plus, Sparkles, Repeat, Copy, Maximize2, Check, Settings, PencilLine,
 } from 'lucide-react';
 import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatDate, formatDateTime } from '@/lib/utils';
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
 import EmpresaDecisoresCard from '@/components/leads/EmpresaDecisoresCard';
 import ServicosLaudosCard from '@/components/leads/ServicosLaudosCard';
+import EditarLeadModal from '@/components/leads/EditarLeadModal';
 import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
 import { getLeadById, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao, updateLead, gerarInsightLead, gerarMensagemLead } from '@/lib/api';
 import type { InsightComercialLead, MensagemPreview } from '@/lib/api';
@@ -223,6 +224,7 @@ export default function LeadPanel({
   const [mensagemLoading, setMensagemLoading] = useState(false);
   const [mensagemErro, setMensagemErro] = useState<string | null>(null);
   const [mensagemCopiada, setMensagemCopiada] = useState(false);
+  const [editandoDados, setEditandoDados] = useState(false);
   // Aba Conversa: mensagens expandidas (corpo completo). Reset ao trocar de lead.
   const [msgsExpandidas, setMsgsExpandidas] = useState<Set<string>>(new Set());
   const toggleExpandir = (id: string) => setMsgsExpandidas(s => {
@@ -265,6 +267,7 @@ export default function LeadPanel({
     setMensagemErro(null);
     setMensagemLoading(false);
     setMensagemCopiada(false);
+    setEditandoDados(false);
     setMsgsExpandidas(new Set());
     setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' });
     if (selectedId) {
@@ -1054,6 +1057,16 @@ export default function LeadPanel({
 
             return (
               <div className="px-5 py-4 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-slate-500">Dados usados na Base de Leads e nas personalizações.</span>
+                  <button
+                    type="button"
+                    onClick={() => setEditandoDados(true)}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20"
+                  >
+                    <PencilLine size={12} /> Editar informações
+                  </button>
+                </div>
                 <div>
                   <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-2">Dados do contato</span>
                   <div className="space-y-1.5 text-sm">{render(contato)}</div>
@@ -1368,6 +1381,17 @@ export default function LeadPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {editandoDados && selectedLead && (
+        <EditarLeadModal
+          lead={selectedLead}
+          onClose={() => setEditandoDados(false)}
+          onSaved={(leadAtualizado) => {
+            setSelectedLead(leadAtualizado)
+            onChanged?.()
+          }}
+        />
       )}
 
       {/* Modal — preview da próxima mensagem da cadência (botão "Gerar mensagem") */}

@@ -67,6 +67,38 @@ export function sanitizarHtmlEmail(valor: string): string {
   return html
 }
 
+// Gera o fallback em texto puro exigido pelos clientes de e-mail e pelo motor.
+// A extração parte do HTML já sanitizado para nunca transformar conteúdo
+// removido (scripts, formulários etc.) em texto visível para o destinatário.
+export function extrairTextoHtmlEmail(valor: string): string {
+  const decodificarEntidade = (_entidade: string, decimal?: string, hexadecimal?: string): string => {
+    const codigo = Number.parseInt(decimal ?? hexadecimal ?? '', hexadecimal ? 16 : 10)
+    return Number.isInteger(codigo) && codigo > 0 && codigo <= 0x10ffff
+      ? String.fromCodePoint(codigo)
+      : ''
+  }
+
+  return sanitizarHtmlEmail(valor)
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')
+    .replace(/<(?:br|hr)\b[^>]*>/gi, '\n')
+    .replace(/<li\b[^>]*>/gi, '\n• ')
+    .replace(/<\/(?:p|div|h[1-6]|li|tr|blockquote|pre)\s*>/gi, '\n')
+    .replace(/<\/(?:td|th)\s*>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;|&apos;/gi, "'")
+    .replace(/&#(\d+);|&#x([0-9a-f]+);/gi, decodificarEntidade)
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 export function documentoPreviewHtml(html: string): string {
   const csp = "default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'; font-src data:;"
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0">${sanitizarHtmlEmail(html)}</body></html>`
@@ -97,7 +129,7 @@ export function montarEmailCampanhaHtml(
 <body style="margin:0;padding:0;background-color:#f4f5f7;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:24px 0;">
     <tr><td align="center">
-      <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="width:640px;max-width:640px;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:12px;font-family:Arial,Helvetica,sans-serif;">
+      <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="width:100%;max-width:640px;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:12px;font-family:Arial,Helvetica,sans-serif;">
         <tr><td style="padding:28px;color:#1e293b;font-size:14px;line-height:1.7;overflow-wrap:anywhere;">
           ${conteudo}
           ${assinatura}
