@@ -2,10 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   ChevronRight, Loader2, PencilLine, Play, Pause, CheckCircle2, Building2, Users,
-  MessageSquare, BarChart3, ClipboardList, Workflow, TrendingUp, Info, Target, AlertTriangle, Activity,
+  MessageSquare, BarChart3, ClipboardList, Workflow, TrendingUp, Info, Target, AlertTriangle, Activity, CalendarDays,
 } from 'lucide-react';
 import { type Campanha, type Publico, STATUS_BADGE, STATUS_LABEL, fmtData, resumoPublico } from './tiposCampanha';
 import {
@@ -18,6 +17,8 @@ import {
   proximaAcaoOperacional,
   type ContextoResumoOperacional,
 } from '@/lib/campanhas/resumoOperacional';
+import { DIAS_CAMPANHA, normalizarDiasCampanha, type DiaCampanha } from '@/lib/campanhas/agenda';
+import { campanhaEhDisparoUnico } from '@/lib/campanhas/configuracaoGuiada';
 
 // Detalhe de campanha com abas internas. Visão geral/Empresas/Decisores/Mensagens
 // mostram o que REALMENTE persiste (colunas + publico jsonb + workflow vinculado).
@@ -44,7 +45,6 @@ const card = 'bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-5';
 const NC = <span className="text-slate-500">não calculável</span>;
 
 export default function CampanhaDetalhe({ id }: { id: string }) {
-  const router = useRouter();
   const [c, setC] = useState<Campanha | null>(null);
   const [contextoResumo, setContextoResumo] = useState<ContextoResumoOperacional>({ remetente: null, responsavel: null, workflow: null });
   const [previaPublico, setPreviaPublico] = useState<{ totalSelecionado: number; elegiveis: number } | null>(null);
@@ -52,6 +52,10 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
   const [aba, setAba] = useState<Aba>('geral');
   const [agindo, setAgindo] = useState(false);
   const [modalDryRun, setModalDryRun] = useState(false);
+  const [modalAgenda, setModalAgenda] = useState(false);
+  const [diasAgenda, setDiasAgenda] = useState<DiaCampanha[]>([]);
+  const [salvandoAgenda, setSalvandoAgenda] = useState(false);
+  const [erroAgenda, setErroAgenda] = useState<string | null>(null);
   const [confirmacaoTexto, setConfirmacaoTexto] = useState('');
   const [erroAcao, setErroAcao] = useState<string | null>(null);
 
@@ -100,6 +104,42 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
     } finally { setAgindo(false); }
   }
 
+  function abrirAgenda() {
+    setDiasAgenda(normalizarDiasCampanha(c?.publico?.agenda?.diasSemana));
+    setErroAgenda(null);
+    setModalAgenda(true);
+  }
+
+  function alternarDiaAgenda(dia: DiaCampanha) {
+    setDiasAgenda((atuais) => atuais.includes(dia)
+      ? atuais.filter((item) => item !== dia)
+      : DIAS_CAMPANHA.map((item) => item.id).filter((item) => [...atuais, dia].includes(item)));
+  }
+
+  async function salvarAgenda() {
+    if (!diasAgenda.length) {
+      setErroAgenda('Escolha ao menos um dia de execução.');
+      return;
+    }
+    setSalvandoAgenda(true);
+    setErroAgenda(null);
+    try {
+      const resposta = await fetch(`/api/campanhas/${id}/agenda`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ diasSemana: diasAgenda }),
+      });
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível atualizar a agenda.');
+      await carregar();
+      setModalAgenda(false);
+    } catch (e) {
+      setErroAgenda(e instanceof Error ? e.message : 'Não foi possível atualizar a agenda.');
+    } finally {
+      setSalvandoAgenda(false);
+    }
+  }
+
   if (estado === 'carregando') return <div className="flex items-center justify-center gap-2 py-24 text-slate-500"><Loader2 size={18} className="animate-spin" /> Carregando campanha…</div>;
   if (estado === 'erro' || !c) return (
     <div className="p-6">
@@ -111,16 +151,31 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
   const pub: Publico = c.publico ?? {};
   const emp = pub.empresas ?? {};
   const dec = pub.decisores ?? {};
+  const disparoUnico = campanhaEhDisparoUnico(c.tipo) || pub.operacao?.modoEnvio === 'disparo_unico';
 
   const emEnsaio = c.dry_run !== false;
   const publicoOperacional = previaPublico
     ? `${previaPublico.elegiveis} elegíveis de ${previaPublico.totalSelecionado} selecionados — ${formatarPublicoOperacional(c.publico)}`
     : formatarPublicoOperacional(c.publico);
   const mensagensOperacionais = formatarMensagensOperacionais(contextoResumo.workflow?.definicao ?? null, pub.operacao);
-  const cadenciaOperacional = formatarCadenciaOperacional(contextoResumo.workflow, pub.agenda, pub.operacao);
-  const regraResposta = formatarRegraResposta(pub.operacao?.resposta?.pararCadencia ?? pub.agenda?.pararAoResponder);
+  const cadenciaOperacional = disparoUnico
+    ? 'Disparo único — somente a mensagem inicial'
+    : formatarCadenciaOperacional(contextoResumo.workflow, pub.agenda, pub.operacao);
+  const regraResposta = disparoUnico
+    ? 'Encaminhar resposta ao responsável'
+    : formatarRegraResposta(pub.operacao?.resposta?.pararCadencia ?? pub.agenda?.pararAoResponder);
   const statusOperacional = formatarStatusOperacional(c.status, c.dry_run);
-  const proximaAcao = proximaAcaoOperacional(c.status, c.dry_run, c.workflow_id);
+  const proximaAcao = disparoUnico
+    ? c.status === 'rascunho'
+      ? 'Revisar e disparar comunicação'
+      : c.status === 'ativa' && c.dry_run !== false
+        ? 'Confirmar disparo real'
+        : c.status === 'ativa'
+          ? 'Aguardar processamento do disparo'
+          : c.status === 'pausada'
+            ? 'Retomar disparo'
+            : 'Nenhuma ação pendente'
+    : proximaAcaoOperacional(c.status, c.dry_run, c.workflow_id);
 
   return (
     <div className="p-6 max-w-[100rem] mx-auto space-y-5">
@@ -142,9 +197,21 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
           )}
         </div>
       ) : (
-        <div className="flex items-center gap-2 rounded-xl border border-green-500/25 bg-green-500/10 px-4 py-3 text-sm text-green-300">
-          <CheckCircle2 size={15} className="shrink-0" />
-          <span><b>Envio real ativo</b> — o cron pode enviar e-mails aos contatos inscritos desta campanha.</span>
+        <div className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${c.status === 'ativa' ? 'border-green-500/25 bg-green-500/10 text-green-300' : 'border-slate-500/25 bg-slate-500/10 text-slate-300'}`}>
+          {c.status === 'ativa' ? <CheckCircle2 size={15} className="shrink-0" /> : <Info size={15} className="shrink-0" />}
+          {c.status === 'ativa' ? (
+            disparoUnico
+              ? <span><b>Disparo em processamento</b> — somente o público confirmado receberá esta mensagem; não há recorrência.</span>
+              : <span><b>Envio real ativo</b> — o próximo ciclo pode avançar os contatos inscritos se hoje estiver na agenda.</span>
+          ) : c.status === 'pausada' ? (
+            <span><b>Campanha pausada</b> — as execuções estão preservadas, mas nenhuma ação será processada até a retomada.</span>
+          ) : c.status === 'concluida' ? (
+            disparoUnico
+              ? <span><b>Disparo concluído</b> — o público confirmado já saiu da fila ativa e não existe recorrência.</span>
+              : <span><b>Campanha concluída</b> — novos contatos não serão inscritos; execuções já iniciadas ainda podem terminar.</span>
+          ) : (
+            <span><b>Envio real configurado</b> — publique a campanha para iniciar o processamento.</span>
+          )}
         </div>
       )}
 
@@ -194,6 +261,72 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
         </div>
       )}
 
+      {/* Edição restrita de campanha ativa: somente os próximos dias de execução. */}
+      {modalAgenda && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg space-y-5 rounded-2xl border border-indigo-500/30 bg-[#1a1f2e] p-7 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <span className="rounded-lg bg-indigo-500/15 p-2 text-indigo-300"><CalendarDays size={20} /></span>
+              <div>
+                <h2 className="text-lg font-bold text-slate-100">Editar dias de execução</h2>
+                <p className="mt-1 text-sm leading-relaxed text-slate-400">
+                  A mesma campanha continuará ativa, com o mesmo público, mensagens e versão publicada. A alteração vale para os próximos ciclos do processador.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-semibold text-slate-300">Dias permitidos</label>
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+                {DIAS_CAMPANHA.map((dia) => {
+                  const selecionado = diasAgenda.includes(dia.id);
+                  return (
+                    <button
+                      key={dia.id}
+                      type="button"
+                      onClick={() => alternarDiaAgenda(dia.id)}
+                      aria-pressed={selecionado}
+                      className={`rounded-lg border px-2 py-2.5 text-xs font-semibold transition-colors ${selecionado ? 'border-indigo-500 bg-indigo-500/15 text-indigo-200' : 'border-[#30384e] text-slate-500 hover:text-slate-300'}`}
+                    >
+                      {dia.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-amber-300/90">
+                Salvar não dispara e-mails imediatamente. O processamento acontece no próximo ciclo diário configurado no servidor.
+              </p>
+            </div>
+
+            {erroAgenda && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-xs text-red-300">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" /> {erroAgenda}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setModalAgenda(false)}
+                disabled={salvandoAgenda}
+                className="flex-1 rounded-lg border border-[#2a3147] px-4 py-2.5 text-sm text-slate-300 transition-colors hover:bg-[#0f1117] disabled:opacity-40"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={salvarAgenda}
+                disabled={salvandoAgenda || !diasAgenda.length}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {salvandoAgenda ? <Loader2 size={14} className="animate-spin" /> : <CalendarDays size={14} />}
+                Salvar agenda
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Cabeçalho */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -207,6 +340,16 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {!disparoUnico && (c.status === 'ativa' || c.status === 'pausada') && (
+            <button
+              type="button"
+              onClick={abrirAgenda}
+              disabled={agindo}
+              className="inline-flex items-center gap-1 rounded-lg border border-indigo-500/40 px-3 py-2 text-sm font-semibold text-indigo-200 hover:bg-indigo-500/10 disabled:opacity-40"
+            >
+              <CalendarDays size={14} /> Editar agenda
+            </button>
+          )}
           {(ACOES[c.status] ?? []).map(({ para, label, Icon }) => (
             <button key={para} onClick={() => transicionar(para)} disabled={agindo}
               className="text-sm px-3 py-2 rounded-lg border border-[#2a3147] text-slate-200 hover:bg-[#0f1117] disabled:opacity-40 inline-flex items-center gap-1">
@@ -249,7 +392,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
               <Linha k="Remetente" v={contextoResumo.remetente ?? NAO_CONFIGURADO} />
               <Linha k="Responsável" v={contextoResumo.responsavel ?? NAO_CONFIGURADO} />
               <Linha k="Mensagens" v={mensagensOperacionais} />
-              <Linha k="Cadência" v={cadenciaOperacional} />
+              <Linha k={disparoUnico ? 'Envio' : 'Cadência'} v={cadenciaOperacional} />
               <Linha k="Regra de resposta" v={regraResposta} />
               <Linha k="Status" v={statusOperacional} />
               <Linha k="Próxima ação" v={proximaAcao} />
@@ -318,7 +461,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
 
       {aba === 'mensagens' && (
         <div className={card}>
-          <h3 className="font-semibold text-slate-200 text-sm mb-3 flex items-center gap-2"><Workflow size={15} className="text-indigo-400" /> Cadência de mensagens</h3>
+          <h3 className="font-semibold text-slate-200 text-sm mb-3 flex items-center gap-2"><Workflow size={15} className="text-indigo-400" /> {disparoUnico ? 'Mensagem do disparo' : 'Cadência de mensagens'}</h3>
           {c.workflow_id ? (
             <div className="flex items-center justify-between p-3 rounded-lg border border-[#2a3147] bg-[#0f1117]">
               <span className="text-sm text-slate-200 inline-flex items-center gap-2"><Workflow size={15} className="text-indigo-400" /> {contextoResumo.workflow?.nome ?? 'Workflow vinculado'}</span>
@@ -326,7 +469,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
             </div>
           ) : (
             <div className="text-sm text-slate-500 bg-[#0f1117] border border-[#2a3147] rounded-lg p-4">
-              Nenhuma cadência vinculada. Edite a campanha e escolha um workflow na etapa Cadência.
+              {disparoUnico ? 'Nenhuma mensagem materializada para este disparo.' : 'Nenhuma cadência vinculada. Edite a campanha e escolha um workflow na etapa Cadência.'}
             </div>
           )}
           <p className="text-xs text-slate-600 mt-3">As mensagens editadas na campanha são materializadas em templates reais e congeladas na versão publicada do workflow.</p>

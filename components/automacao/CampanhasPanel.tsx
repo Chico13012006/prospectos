@@ -6,9 +6,11 @@ import { useRouter } from 'next/navigation';
 import {
   Plus, Play, Pause, CheckCircle2, Megaphone, Users, MessageSquare, Coins,
   Search, FileSpreadsheet, PencilLine, ArrowRight, Activity, Info,
+  CalendarDays,
 } from 'lucide-react';
 import ImportarLeadsModal from '@/components/leads/ImportarLeadsModal';
 import { type Campanha, STATUS_BADGE, STATUS_LABEL, resumoPublico } from './tiposCampanha';
+import { campanhaEhDisparoUnico } from '@/lib/campanhas/configuracaoGuiada';
 
 // Painel principal da aba Campanhas (mockup 01): KPIs, filtros, tabela densa,
 // "Próximas ações" e "Desempenho recente". Dado REAL de /api/campanhas. Métricas
@@ -188,6 +190,12 @@ export default function CampanhasPanel() {
                         <Link href={`/automacao/campanhas/${c.id}/editar`} onClick={(e) => e.stopPropagation()}
                           className="text-xs px-2 py-1.5 rounded-lg bg-[#252b3b] text-slate-200 hover:bg-[#2f3750] inline-flex items-center gap-1">
                           <PencilLine size={12} /> Editar
+                        </Link>
+                      )}
+                      {!campanhaEhDisparoUnico(c.tipo) && (c.status === 'ativa' || c.status === 'pausada') && (
+                        <Link href={`/automacao/campanhas/${c.id}`} onClick={(e) => e.stopPropagation()}
+                          className="text-xs px-2 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20 inline-flex items-center gap-1">
+                          <CalendarDays size={12} /> Editar agenda
                         </Link>
                       )}
                       {(ACOES[c.status] ?? []).map(({ para, label, Icon }) => (

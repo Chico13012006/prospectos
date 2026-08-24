@@ -106,7 +106,7 @@ describe('início real de campanha guiada', () => {
       .mockResolvedValueOnce(previa(['lead-1', 'lead-2']))
       .mockResolvedValueOnce(previa(['lead-1', 'lead-2']))
     mocks.inscreverLeadManual
-      .mockResolvedValueOnce({ jaInscrito: false })
+      .mockResolvedValueOnce({ jaInscrito: false, execucaoId: 'execucao-1' })
       .mockResolvedValueOnce({ jaInscrito: true })
 
     const resultado = await iniciarCampanhaReal(admin, 'org-a', 'campanha-1', 'usuario-1', 2)
@@ -119,6 +119,7 @@ describe('início real de campanha guiada', () => {
       inscritos: 1,
       ja_inscritos: 1,
       falhas: 0,
+      execucoes_criadas: ['execucao-1'],
     })
     expect(mocks.publicar).toHaveBeenCalledWith(expect.anything(), 'workflow-1', 'usuario-1')
     expect(mocks.inscreverLeadManual).toHaveBeenNthCalledWith(1, expect.anything(), 'workflow-1', 'lead-1', 'campanha-1')

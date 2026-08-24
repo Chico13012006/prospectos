@@ -30,6 +30,7 @@ interface ResultadoEnrollmentReal {
   inscritos: number
   ja_inscritos: number
   falhas: number
+  execucoes_criadas: string[]
 }
 
 export async function ativarCampanhaGuiada(
@@ -132,11 +133,15 @@ export async function inscreverCampanhaReal(
   let inscritos = 0
   let jaInscritos = 0
   let falhas = 0
+  const execucoesCriadas: string[] = []
   for (const leadId of previa.idsElegiveis) {
     try {
       const resultado = await inscreverLeadManual(store, workflow.id, leadId, campanhaId)
       if (resultado.jaInscrito) jaInscritos += 1
-      else inscritos += 1
+      else {
+        inscritos += 1
+        if (resultado.execucaoId) execucoesCriadas.push(resultado.execucaoId)
+      }
     } catch {
       falhas += 1
     }
@@ -155,6 +160,7 @@ export async function inscreverCampanhaReal(
     inscritos,
     ja_inscritos: jaInscritos,
     falhas,
+    execucoes_criadas: execucoesCriadas,
   }
 }
 

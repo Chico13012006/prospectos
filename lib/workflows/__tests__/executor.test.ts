@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest'
 import { MemoryWorkflowStore } from '../store/memoryStore'
 import { criarWorkflow, publicar } from '../versionamento'
 import { registrarBlocosPadrao } from '../blocos'
-import { processarTudo, processarEnrollment, processarExecucao, inscreverLeadManual } from '../executor'
+import { processarTudo, processarEnrollment, processarExecucao, processarExecucoesCampanha, inscreverLeadManual } from '../executor'
 import type { AmbienteWorkflow } from '../ambiente'
 import { avaliarOperador, type Operador } from '../operadores'
 import type { DefinicaoWorkflow } from '../types'
@@ -14,12 +14,20 @@ import type { DefinicaoWorkflow } from '../types'
 class AmbienteFake implements AmbienteWorkflow {
   organizacaoId = 'org-test'
   simular = false
+  controleCampanha: { status: string; diasSemana: unknown; disparoUnico: boolean } | null = {
+    status: 'ativa',
+    diasSemana: ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'],
+    disparoUnico: false,
+  }
   alvos: string[] = []
   respondeu = new Set<string>()
   emails: { leadId: string; template: string }[] = []
   tarefas: { leadId: string; titulo: string; responsavelId?: string | null }[] = []
   campos: Record<string, Record<string, unknown>> = {} // leadId -> { campo: valor }
   escritas: { leadId: string; campo: string; valor: unknown }[] = []
+  async buscarControleExecucaoCampanha() { return this.controleCampanha }
+  campanhasSincronizadas: string[] = []
+  async sincronizarConclusaoCampanha(campanhaId: string) { this.campanhasSincronizadas.push(campanhaId) }
   async selecionarLeadsComCampoVencendo() { return this.alvos }
   async selecionarLeadsPorCampo(campo: string, operador: string, valor: unknown) {
     return Object.entries(this.campos)
@@ -371,6 +379,69 @@ describe('executor de workflows', () => {
       nome: 'W', definicao: { gatilho: { tipo: 'manual', config: {} }, condicoes: [], acoes: [{ tipo: 'criar_tarefa', config: {} }] },
     })
     await expect(inscreverLeadManual(store, wf.id, 'l1')).rejects.toThrow(/publicado/)
+  })
+
+  it('campanha ativa usa a agenda atual sem recriar nem duplicar a execução', async () => {
+    const store = new MemoryWorkflowStore(); const amb = new AmbienteFake()
+    const wfId = await publicarWorkflow(store, {
+      gatilho: { tipo: 'manual', config: {} },
+      condicoes: [],
+      acoes: [{ tipo: 'enviar_email', config: { template: 'primeiro_contato' } }],
+    })
+    const inscricao = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1')
+    expect(inscricao.jaInscrito).toBe(false)
+
+    const domingo = '2026-08-23T15:00:00.000Z'
+    amb.controleCampanha = { status: 'ativa', diasSemana: ['seg'], disparoUnico: false }
+    await processarExecucao(store, registro, amb, inscricao.execucaoId!, domingo)
+    expect(amb.emails).toHaveLength(0)
+
+    // A edição ativa troca apenas a agenda; a mesma execução passa no novo dia.
+    amb.controleCampanha = { status: 'ativa', diasSemana: ['dom'], disparoUnico: false }
+    await processarExecucao(store, registro, amb, inscricao.execucaoId!, domingo)
+    expect(amb.emails).toEqual([{ leadId: 'lead-1', template: 'primeiro_contato' }])
+    expect(await store.existeExecucaoParaLead(wfId, 'lead-1')).toBe(true)
+  })
+
+  it('campanha pausada ou indisponível bloqueia efeitos de execução já inscrita', async () => {
+    const store = new MemoryWorkflowStore(); const amb = new AmbienteFake()
+    const wfId = await publicarWorkflow(store, {
+      gatilho: { tipo: 'manual', config: {} },
+      condicoes: [],
+      acoes: [{ tipo: 'enviar_email', config: { template: 'primeiro_contato' } }],
+    })
+    const inscricao = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1')
+
+    amb.controleCampanha = { status: 'pausada', diasSemana: ['dom'], disparoUnico: false }
+    await processarExecucao(store, registro, amb, inscricao.execucaoId!, '2026-08-23T15:00:00.000Z')
+    amb.controleCampanha = null
+    await processarExecucao(store, registro, amb, inscricao.execucaoId!, '2026-08-23T15:00:00.000Z')
+    expect(amb.emails).toHaveLength(0)
+  })
+
+  it('disparo único ignora agenda semanal e processa somente as execuções informadas', async () => {
+    const store = new MemoryWorkflowStore(); const amb = new AmbienteFake()
+    const wfId = await publicarWorkflow(store, {
+      gatilho: { tipo: 'manual', config: {} },
+      condicoes: [],
+      acoes: [{ tipo: 'enviar_email', config: { template: 'comunicado' } }],
+    })
+    const primeira = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1')
+    await inscreverLeadManual(store, wfId, 'lead-2', 'campanha-2')
+    amb.controleCampanha = { status: 'ativa', diasSemana: ['seg'], disparoUnico: true }
+
+    const processadas = await processarExecucoesCampanha(
+      store,
+      registro,
+      amb,
+      'campanha-1',
+      [primeira.execucaoId!],
+      '2026-08-23T15:00:00.000Z',
+    )
+
+    expect(processadas).toBe(1)
+    expect(amb.emails).toEqual([{ leadId: 'lead-1', template: 'comunicado' }])
+    expect(amb.campanhasSincronizadas).toEqual(['campanha-1'])
   })
 
   it('criar_tarefa passa o responsavel_id escolhido para o ambiente', async () => {

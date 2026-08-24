@@ -15,12 +15,24 @@ import { log } from '@/lib/engine/logger'
 import type { Motor } from '@/lib/engine'
 import type { Lead } from '@/lib/engine/types'
 import { montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha'
+import {
+  buscarControleExecucaoCampanha,
+  type ControleExecucaoCampanha,
+} from '@/lib/campanhas/controleExecucaoServidor'
+import { concluirDisparoUnicoSeFinalizado } from '@/lib/campanhas/conclusaoDisparoServidor'
 import { avaliarOperador, type Operador } from './operadores'
 
 export interface AmbienteWorkflow {
   readonly organizacaoId: string
   // Em simulação (Fase 5), ações de saída não têm efeito real — só logam.
   readonly simular: boolean
+  // Gate da campanha que originou uma execução. A leitura é sempre escopada à
+  // organização do ambiente; campanha ausente/cross-tenant devolve null e não
+  // pode liberar ações externas.
+  buscarControleExecucaoCampanha(campanhaId: string): Promise<ControleExecucaoCampanha | null>
+  // Comunicação/renovação deixam de ficar ativas assim que todas as execuções
+  // do público confirmado chegam a um estado terminal.
+  sincronizarConclusaoCampanha(campanhaId: string): Promise<void>
   // Gatilho 'campo_data_vence': leads cujo `campo` (data) vence em até `dias`.
   selecionarLeadsComCampoVencendo(campo: string, dias: number): Promise<string[]>
   // Gatilho 'campo_igual' (Fase 4.6): leads cujo `campo` satisfaz `operador` vs
@@ -99,6 +111,14 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     this.motor = criarMotorReal(organizacaoId)
   }
   readonly simular: boolean
+
+  async buscarControleExecucaoCampanha(campanhaId: string): Promise<ControleExecucaoCampanha | null> {
+    return buscarControleExecucaoCampanha(this.db, this.organizacaoId, campanhaId)
+  }
+
+  async sincronizarConclusaoCampanha(campanhaId: string): Promise<void> {
+    await concluirDisparoUnicoSeFinalizado(this.db, this.organizacaoId, campanhaId)
+  }
 
   async selecionarLeadsComCampoVencendo(campo: string, dias: number): Promise<string[]> {
     if (!CAMPOS_DATA_PERMITIDOS.has(campo)) throw new Error(`Campo de data não permitido no gatilho: '${campo}'`)

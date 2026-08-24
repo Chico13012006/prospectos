@@ -13,6 +13,10 @@ import { avaliarOperador, type Operador } from '../operadores'
 class AmbienteFake implements AmbienteWorkflow {
   organizacaoId = 'org-test'
   simular = false
+  async buscarControleExecucaoCampanha() {
+    return { status: 'ativa', diasSemana: ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'], disparoUnico: false }
+  }
+  async sincronizarConclusaoCampanha() {}
   alvos: string[] = []
   respondeu = new Set<string>()
   emails: { leadId: string; template: string }[] = []

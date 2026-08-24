@@ -24,10 +24,17 @@ import {
   Trash2,
   Users,
 } from 'lucide-react'
-import type { Campanha, FollowupCampanha, MensagemCampanha, Publico } from './tiposCampanha'
+import {
+  mensagemCampanhaVazia,
+  type Campanha,
+  type FollowupCampanha,
+  type MensagemCampanha,
+  type Publico,
+} from './tiposCampanha'
 import HtmlEmailEditor from './HtmlEmailEditor'
 import {
   aplicarRegraPublicoPorTipo,
+  campanhaEhDisparoUnico,
   GRUPOS_STATUS_PUBLICO,
   labelTipoCampanha,
   LIMITE_CONFIRMACAO_CAMPANHA,
@@ -118,7 +125,7 @@ function nomeMembro(membro: Membro | undefined) {
 }
 
 function mensagemVazia(): MensagemCampanha {
-  return { assunto: '', corpo: '', link: '' }
+  return mensagemCampanhaVazia()
 }
 
 export default function CampanhaWizardPage({
@@ -169,6 +176,7 @@ export default function CampanhaWizardPage({
   const responsavel = membros.find((membro) => membro.id === publico.responsavel_id)
   const mensagemInicial = publico.operacao?.mensagemInicial ?? mensagemVazia()
   const followups = publico.operacao?.followups ?? []
+  const disparoUnico = campanhaEhDisparoUnico(tipo)
   const regraPublico = regraPublicoCampanha(tipo)
   const resposta = publico.operacao?.resposta
   const htmlMensagemInicial = montarEmailCampanhaHtml(
@@ -365,7 +373,7 @@ export default function CampanhaWizardPage({
   function aplicarTemplate(templateId: string, indice: number | null) {
     const template = templates.find((item) => item.id === templateId)
     if (!template) {
-      atualizarMensagem(indice, { templateOrigemId: undefined })
+      atualizarMensagem(indice, mensagemCampanhaVazia())
       return
     }
     atualizarMensagem(indice, {
@@ -571,7 +579,9 @@ export default function CampanhaWizardPage({
     ['Incompatíveis', previa?.incompativeis],
   ] as const, [previa])
 
-  const resumoCadencia = followups.length
+  const resumoCadencia = disparoUnico
+    ? 'Disparo único — somente a mensagem inicial'
+    : followups.length
     ? `Mensagem inicial + ${followups.length} follow-up${followups.length > 1 ? 's' : ''} (${followups.map((f) => `dia ${f.diasApos}`).join(', ')})`
     : 'Somente a mensagem inicial'
 
@@ -592,8 +602,11 @@ export default function CampanhaWizardPage({
       </div>
 
       <div className="mb-7 grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {PASSOS.map(({ titulo, label: texto, Icon }, indice) => (
-          <button key={titulo} type="button" onClick={() => irParaEtapa(indice)} className={`flex min-w-0 items-center gap-2 rounded-xl border p-3 text-left transition-colors ${etapa === indice ? 'border-indigo-500/70 bg-indigo-500/10 text-indigo-200' : indice < etapa ? 'border-emerald-500/25 bg-emerald-500/5 text-slate-300' : 'border-[#2a3147] bg-[#151924] text-slate-500'}`}>
+        {PASSOS.map((passo, indice) => {
+          const { titulo, label: texto, Icon } = disparoUnico && indice === 2
+            ? { titulo: 'Disparo', label: 'Envio único', Icon: Send }
+            : passo
+          return <button key={titulo} type="button" onClick={() => irParaEtapa(indice)} className={`flex min-w-0 items-center gap-2 rounded-xl border p-3 text-left transition-colors ${etapa === indice ? 'border-indigo-500/70 bg-indigo-500/10 text-indigo-200' : indice < etapa ? 'border-emerald-500/25 bg-emerald-500/5 text-slate-300' : 'border-[#2a3147] bg-[#151924] text-slate-500'}`}>
             <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${indice < etapa ? 'bg-emerald-500 text-white' : etapa === indice ? 'bg-indigo-500 text-white' : 'bg-[#252b3c]'}`}>
               {indice < etapa ? <Check size={14} /> : indice + 1}
             </span>
@@ -603,7 +616,7 @@ export default function CampanhaWizardPage({
             </span>
             <Icon size={15} className="ml-auto hidden lg:block" />
           </button>
-        ))}
+        })}
       </div>
 
       {erro && (
@@ -904,6 +917,19 @@ export default function CampanhaWizardPage({
 
       {etapa === 2 && (
         <div className="space-y-5">
+          {disparoUnico ? (
+            <section className={card}>
+              <div className="flex items-start gap-3">
+                <span className="rounded-xl bg-indigo-500/15 p-2.5 text-indigo-300"><Send size={20} /></span>
+                <div>
+                  <h2 className="font-semibold text-slate-100">Disparo único</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">
+                    Esta comunicação enviará somente a mensagem inicial ao público confirmado. Não há agenda semanal nem follow-ups, e a campanha será concluída quando o processamento desse público terminar.
+                  </p>
+                </div>
+              </div>
+            </section>
+          ) : (
           <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]">
             <section className={card}>
             <div className="mb-5 flex items-start justify-between gap-3">
@@ -978,17 +1004,18 @@ export default function CampanhaWizardPage({
               </div>
             </section>
           </div>
+          )}
 
           <section className={card}>
             <div className="mb-5">
               <h2 className="mb-1 font-semibold text-slate-100">Quando houver resposta</h2>
-              <p className="text-sm text-slate-500">A resposta interrompe a abordagem. Com e-mail configurado, o responsável recebe a notificação real descrita abaixo.</p>
+              <p className="text-sm text-slate-500">{disparoUnico ? 'A resposta será registrada e encaminhada ao responsável configurado.' : 'A resposta interrompe a abordagem.'} Com e-mail configurado, o responsável recebe a notificação real descrita abaixo.</p>
             </div>
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4">
                 <div className="mb-3 flex items-center gap-2 text-sm font-medium text-emerald-300"><ShieldCheck size={17} /> Ações automáticas</div>
                 <ul className="space-y-2 text-sm leading-6 text-slate-300">
-                  <li className="flex gap-2"><Check size={15} className="mt-1 shrink-0 text-emerald-400" /> Parar a cadência desta campanha</li>
+                  <li className="flex gap-2"><Check size={15} className="mt-1 shrink-0 text-emerald-400" /> {disparoUnico ? 'Não criar novos envios desta comunicação' : 'Parar a cadência desta campanha'}</li>
                   <li className="flex gap-2"><Check size={15} className="mt-1 shrink-0 text-emerald-400" /> Cancelar outros workflows ativos do contato</li>
                   <li className="flex gap-2"><Check size={15} className="mt-1 shrink-0 text-emerald-400" /> Registrar a resposta no histórico</li>
                 </ul>
@@ -1061,8 +1088,12 @@ export default function CampanhaWizardPage({
               {' '}<strong className="text-slate-100">{textoOuNaoConfigurado(mensagemInicial.assunto)}</strong> para
               {' '}<strong className="text-slate-100">{previa?.elegiveis ?? 'um número não calculado de'} contato(s) elegível(is)</strong>, usando
               {' '}<strong className="text-slate-100">{textoOuNaoConfigurado(publico.operacao?.remetenteEmail)}</strong>.
-              A cadência será: <strong className="text-slate-100">{resumoCadencia}</strong>.
-              Se alguém responder, a cadência será interrompida e o retorno será encaminhado a
+              {disparoUnico ? (
+                <> Este é um <strong className="text-slate-100">disparo único</strong>, sem agenda recorrente ou follow-up.</>
+              ) : (
+                <> A cadência será: <strong className="text-slate-100">{resumoCadencia}</strong>.</>
+              )}
+              {' '}Se alguém responder, o retorno será encaminhado a
               {' '}<strong className="text-slate-100">{nomeMembro(responsavel)}</strong>.
             </div>
 
@@ -1072,10 +1103,10 @@ export default function CampanhaWizardPage({
                 ['Remetente', textoOuNaoConfigurado(publico.operacao?.remetenteEmail)],
                 ['Responsável', nomeMembro(responsavel)],
                 ['Mensagem', textoOuNaoConfigurado(mensagemInicial.assunto)],
-                ['Cadência', resumoCadencia],
-                ['Regra de resposta', 'Parar cadência e encaminhar ao responsável'],
+                [disparoUnico ? 'Envio' : 'Cadência', resumoCadencia],
+                ['Regra de resposta', disparoUnico ? 'Encaminhar ao responsável' : 'Parar cadência e encaminhar ao responsável'],
                 ['Status', campanha?.status ?? 'rascunho'],
-                ['Próxima ação', tipo === 'prospeccao' ? 'Iniciar prospecção' : 'Iniciar campanha'],
+                ['Próxima ação', disparoUnico ? 'Disparar comunicação' : tipo === 'prospeccao' ? 'Iniciar prospecção' : 'Iniciar campanha'],
               ].map(([titulo, valor]) => (
                 <div key={titulo} className="rounded-lg border border-[#2a3147] bg-[#11151f] p-3">
                   <div className="text-[11px] font-medium uppercase tracking-wide text-slate-600">{titulo}</div>
@@ -1124,10 +1155,10 @@ export default function CampanhaWizardPage({
               <li>• O público será recalculado no servidor.</li>
               <li>• O workflow ganhará uma versão imutável.</li>
               <li>• As inscrições serão criadas somente para os contatos elegíveis confirmados.</li>
-              <li>• Os envios serão processados pelo motor existente, respeitando agenda, bloqueios e idempotência.</li>
+              <li>• O processamento respeita bloqueios e idempotência{disparoUnico ? '; esta comunicação não cria recorrência.' : ', além da agenda configurada.'}</li>
             </ul>
             <button type="button" onClick={solicitarInicioReal} disabled={!!salvando || carregandoPrevia || carregandoOpcoes} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
-              {salvando === 'iniciar' ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} {tipo === 'prospeccao' ? 'Iniciar prospecção' : 'Iniciar campanha'}
+              {salvando === 'iniciar' ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} {disparoUnico ? 'Disparar comunicação' : tipo === 'prospeccao' ? 'Iniciar prospecção' : 'Iniciar campanha'}
             </button>
             <button type="button" onClick={solicitarAtivacao} disabled={!!salvando || carregandoPrevia || carregandoOpcoes} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#30384e] px-4 py-2.5 text-sm text-slate-400 hover:border-indigo-500/50 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50">
               {salvando === 'ativar' && <Loader2 size={15} className="animate-spin" />} Publicar somente em modo ensaio
@@ -1148,14 +1179,16 @@ export default function CampanhaWizardPage({
               <AlertTriangle size={20} />
               <h2 id="confirmar-campanha" className="font-semibold">
                 {modoConfirmacao === 'real'
-                  ? (tipo === 'prospeccao' ? 'Iniciar prospecção' : 'Iniciar campanha')
+                  ? (disparoUnico ? 'Disparar comunicação' : tipo === 'prospeccao' ? 'Iniciar prospecção' : 'Iniciar campanha')
                   : 'Publicar em modo ensaio'}
               </h2>
             </div>
             <p className="text-sm leading-6 text-slate-400">
               O servidor calculou <strong className="text-slate-200">{previa.elegiveis} contatos elegíveis</strong>.{' '}
               {modoConfirmacao === 'real'
-                ? 'Ao confirmar, o workflow será publicado e as inscrições serão criadas para processamento pelo motor de cadência. Digite essa quantidade para iniciar.'
+                ? disparoUnico
+                  ? 'Ao confirmar, uma única execução será criada para cada contato elegível, sem agenda recorrente ou follow-up. Digite essa quantidade para disparar.'
+                  : 'Ao confirmar, o workflow será publicado e as inscrições serão criadas para processamento pelo motor de cadência. Digite essa quantidade para iniciar.'
                 : 'Digite essa quantidade para confirmar a publicação sem criar inscrições.'}
             </p>
             <input autoFocus inputMode="numeric" className={`${input} mt-4`} value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} placeholder={String(previa.elegiveis)} />
@@ -1168,7 +1201,7 @@ export default function CampanhaWizardPage({
                 className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
               >
                 {(salvando === 'ativar' || salvando === 'iniciar') && <Loader2 size={14} className="animate-spin" />}
-                {modoConfirmacao === 'real' ? 'Iniciar' : 'Publicar'}
+                {modoConfirmacao === 'real' ? (disparoUnico ? 'Disparar' : 'Iniciar') : 'Publicar'}
               </button>
             </div>
           </div>

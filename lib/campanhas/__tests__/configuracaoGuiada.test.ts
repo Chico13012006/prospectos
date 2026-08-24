@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   aplicarRegraPublicoPorTipo,
+  campanhaEhDisparoUnico,
   corpoComLink,
   montarDefinicaoCampanha,
   modeloEmailRespostaCampanha,
@@ -52,6 +53,26 @@ describe('configuração guiada de campanha', () => {
       },
     }), 'novidade_clientes')
     expect(validarCampanhaGuiada(completa)).toEqual([])
+  })
+
+  it('trata comunicação e renovação como disparos únicos impostos pelo servidor', () => {
+    for (const tipo of ['novidade_clientes', 'renovacao']) {
+      const publico = aplicarRegraPublicoPorTipo(normalizarPublicoCampanha({
+        agenda: { diasSemana: [] },
+        operacao: {
+          mensagemInicial: { assunto: 'Comunicado', corpo: 'Corpo', templateTipo: 'campanha_x_m1' },
+          followups: [{ diasApos: 3, assunto: 'FUP indevido', corpo: 'Corpo', templateTipo: 'campanha_x_m2' }],
+        },
+      }), tipo)
+
+      expect(campanhaEhDisparoUnico(tipo)).toBe(true)
+      expect(publico.operacao?.modoEnvio).toBe('disparo_unico')
+      expect(publico.operacao?.followups).toBeUndefined()
+      expect(montarDefinicaoCampanha(publico).acoes).toEqual([
+        { id: 'email-0', tipo: 'enviar_email', config: { template: 'campanha_x_m1' } },
+      ])
+      expect(validarCampanhaGuiada(publico)).not.toContain('Escolha ao menos um dia de envio.')
+    }
   })
 
   it('materializa uma sequência determinística de e-mails e esperas incrementais', () => {

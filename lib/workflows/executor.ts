@@ -16,6 +16,7 @@ import type { WorkflowStore } from './store/store'
 import type { CtxExec, RegistroWorkflows } from './registro'
 import type { AmbienteWorkflow } from './ambiente'
 import type { DefinicaoWorkflow } from './types'
+import { agendaPermiteProcessar } from '@/lib/campanhas/agenda'
 
 function ctxDe(
   store: WorkflowStore,
@@ -61,6 +62,20 @@ export async function processarExecucao(
     store.registrarEvento({ execucao_id: ex.id, tipo, detalhe: detalhe ?? null })
 
   try {
+    // Execuções originadas por campanha obedecem o ciclo de vida e os dias da
+    // agenda ATUAL da campanha. Isso permite ajustar uma campanha ativa sem
+    // trocar a versão imutável do workflow nem recriar/duplicar execuções.
+    // Pausada ou ausente = falha segura, sem avançar passo nem disparar efeito.
+    // Concluída = não inscreve novos leads (gate no enrollment), mas deixa
+    // execuções já existentes terminarem — "concluir" encerra novas entradas,
+    // não corta cadências em andamento.
+    if (ex.campanha_id) {
+      const controle = await ambiente.buscarControleExecucaoCampanha(ex.campanha_id)
+      if (!controle || controle.status === 'pausada') return
+      if (controle.status !== 'ativa' && controle.status !== 'concluida') return
+      if (!controle.disparoUnico && !agendaPermiteProcessar(controle.diasSemana, agoraISO)) return
+    }
+
     const def = await definicaoDaExecucao(store, ex.versao_id)
 
     // Gate de condições — só na primeira passada (passo_atual === 0), antes de
@@ -199,5 +214,30 @@ export async function processarTudo(
   const inscritos = await processarEnrollment(store, registro, ambiente)
   const pendentes = await store.execucoesPendentes(agoraISO)
   for (const ex of pendentes) await processarExecucao(store, registro, ambiente, ex.id, agoraISO)
+  for (const campanhaId of new Set(pendentes.map((ex) => ex.campanha_id).filter((id): id is string => !!id))) {
+    await ambiente.sincronizarConclusaoCampanha(campanhaId)
+  }
   return { inscritos, processadas: pendentes.length }
+}
+
+// Processa somente as execuções recém-criadas por uma campanha confirmada. É o
+// caminho usado pelo wizard para não disparar o poll global de outras campanhas
+// ou organizações depois de uma ativação.
+export async function processarExecucoesCampanha(
+  store: WorkflowStore,
+  registro: RegistroWorkflows,
+  ambiente: AmbienteWorkflow,
+  campanhaId: string,
+  execucaoIds: string[],
+  agoraISO: string = new Date().toISOString(),
+): Promise<number> {
+  let processadas = 0
+  for (const execucaoId of [...new Set(execucaoIds)]) {
+    const execucao = await store.buscarExecucao(execucaoId)
+    if (!execucao || execucao.campanha_id !== campanhaId) continue
+    await processarExecucao(store, registro, ambiente, execucaoId, agoraISO)
+    processadas += 1
+  }
+  await ambiente.sincronizarConclusaoCampanha(campanhaId)
+  return processadas
 }

@@ -15,6 +15,12 @@ export const TIPOS_CAMPANHA = [
 
 export type TipoCampanhaGuiada = (typeof TIPOS_CAMPANHA)[number]['id']
 
+const TIPOS_DISPARO_UNICO = new Set<string>(['novidade_clientes', 'renovacao'])
+
+export function campanhaEhDisparoUnico(tipo: string | null | undefined): boolean {
+  return TIPOS_DISPARO_UNICO.has(tipo ?? '')
+}
+
 export const GRUPOS_STATUS_PUBLICO = [
   { id: 'primeiro_contato', label: 'Primeiro contato', estagios: ['primeiro_contato'] },
   { id: 'aguardando_resposta', label: 'Aguardando resposta', estagios: ['aguardando_resposta'] },
@@ -100,6 +106,7 @@ export function regraPublicoCampanha(tipo: string | null | undefined) {
 // impede que um payload manipulado inclua prospecção/FUP numa renovação.
 export function aplicarRegraPublicoPorTipo(publico: Publico, tipo: string | null | undefined): Publico {
   const regra = regraPublicoCampanha(tipo)
+  const disparoUnico = campanhaEhDisparoUnico(tipo)
   const atuais = publico.selecao?.estagios ?? []
   const permitidos = atuais.filter((estagio) => regra.estagios.includes(estagio))
   const estagios = regra.criterio === 'estagios'
@@ -118,6 +125,10 @@ export function aplicarRegraPublicoPorTipo(publico: Publico, tipo: string | null
     selecao: { ...publico.selecao, estagios: estagios ? [...estagios] : undefined, criterio: regra.criterio },
     operacao: {
       ...publico.operacao,
+      modoEnvio: disparoUnico ? 'disparo_unico' : 'cadencia',
+      // Comunicação e renovação materializam somente a mensagem inicial. A
+      // regra é imposta no servidor para um payload manipulado não criar FUP.
+      followups: disparoUnico ? undefined : publico.operacao?.followups,
       resposta: {
         ...publico.operacao?.resposta,
         emailAssunto: publico.operacao?.resposta?.emailAssunto?.trim() || modeloResposta.assunto,
@@ -235,6 +246,7 @@ export function normalizarPublicoCampanha(raw: unknown): Publico {
         : 'estagios',
     },
     operacao: {
+      modoEnvio: operacaoRaw.modoEnvio === 'disparo_unico' ? 'disparo_unico' : 'cadencia',
       remetenteConta: texto(operacaoRaw.remetenteConta),
       remetenteEmail: texto(operacaoRaw.remetenteEmail),
       mensagemInicial: normalizarMensagem(operacaoRaw.mensagemInicial),
@@ -303,7 +315,9 @@ export function validarCampanhaGuiada(publico: Publico): string[] {
   if (publico.selecao?.modo === 'manual' && !publico.selecao.leadIds?.length) {
     erros.push('Selecione ao menos um contato.')
   }
-  if (!publico.agenda?.diasSemana?.length) erros.push('Escolha ao menos um dia de envio.')
+  if (op?.modoEnvio !== 'disparo_unico' && !publico.agenda?.diasSemana?.length) {
+    erros.push('Escolha ao menos um dia de envio.')
+  }
   return erros
 }
 
@@ -318,7 +332,9 @@ export function montarDefinicaoCampanha(publico: Publico): DefinicaoWorkflow {
   // workflow quando assunto, corpo e template já estiverem completos.
   const mensagens: MensagemCampanha[] = [
     op.mensagemInicial,
-    ...(op.followups ?? []).filter((mensagem) => !!mensagem.templateTipo),
+    ...(op.modoEnvio === 'disparo_unico'
+      ? []
+      : (op.followups ?? []).filter((mensagem) => !!mensagem.templateTipo)),
   ]
 
   const acoes: DefinicaoWorkflow['acoes'] = []

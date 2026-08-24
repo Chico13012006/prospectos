@@ -53,6 +53,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!atual) return NextResponse.json({ erro: 'Campanha não encontrada' }, { status: 404 })
 
     if (b.publico && typeof b.publico === 'object') {
+      if (atual.status !== 'rascunho') {
+        return NextResponse.json(
+          { erro: 'Campanha publicada não pode reabrir público ou mensagens. Use a edição restrita da agenda.' },
+          { status: 409 },
+        )
+      }
       const tipo = typeof b.tipo === 'string' ? b.tipo : atual.tipo
       const publico = aplicarRegraPublicoPorTipo(normalizarPublicoCampanha(b.publico), tipo)
       const materializada = await materializarCampanhaGuiada(

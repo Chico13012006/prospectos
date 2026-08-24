@@ -49,11 +49,29 @@ export interface MensagemCampanha {
   templateTipo?: string;
 }
 
+// Patch completo para a opção "Escrever do zero". Os `undefined` são
+// intencionais: ao mesclar com uma mensagem existente, removem também HTML e
+// identificadores materializados que poderiam manter o template anterior.
+export function mensagemCampanhaVazia(): MensagemCampanha {
+  return {
+    assunto: '',
+    corpo: '',
+    html: undefined,
+    link: '',
+    templateOrigemId: undefined,
+    templateId: undefined,
+    templateTipo: undefined,
+  }
+}
+
 export interface FollowupCampanha extends MensagemCampanha {
   diasApos?: number;
 }
 
 export interface OperacaoCampanha {
+  // Comunicação/renovação são disparos únicos; os demais objetivos usam a
+  // cadência versionada. O servidor recalcula este valor a partir do tipo.
+  modoEnvio?: 'cadencia' | 'disparo_unico';
   remetenteConta?: string;
   remetenteEmail?: string;
   mensagemInicial?: MensagemCampanha;
