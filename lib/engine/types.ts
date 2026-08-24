@@ -41,6 +41,9 @@ export interface NovaInteracao {
 
 // Uma mensagem lida da caixa de entrada (Fluxo 2 — Detectar resposta).
 export interface MensagemRecebida {
+  // Identificador opaco do provedor. Permite confirmar a leitura somente depois
+  // que a resposta foi persistida, sem acoplar o fluxo a mailbox/UID do IMAP.
+  idRecebimento?: string
   de: string // e-mail do remetente
   assunto: string
   corpo: string

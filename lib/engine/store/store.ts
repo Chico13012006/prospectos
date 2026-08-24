@@ -36,9 +36,10 @@ export interface Store {
   leadsEsgotadosSemResposta(): Promise<Lead[]>
   // Dados do responsável/closer do lead (para notificação do Fluxo 3).
   buscarUsuario(id: string): Promise<UsuarioBasico | null>
-  // Responsável configurado na campanha ativa mais recente do lead, quando há.
+  // Responsável configurado na campanha mais recente que originou o contato.
   buscarResponsavelCampanhaAtiva?(leadId: string): Promise<UsuarioBasico | null>
-  // Contexto e modelo de notificação persistidos na campanha ativa.
+  // Contexto e modelo de notificação persistidos nessa campanha. Execuções já
+  // concluídas/canceladas continuam válidas porque a resposta chega depois.
   buscarContextoCampanhaAtiva?(leadId: string): Promise<ContextoCampanhaResposta | null>
   // TODAS as variantes de e-mail ATIVAS por (nicho, tipo). nicho=null busca o
   // GENÉRICO. A seleção da variante (A/B) e o fallback ficam em mensagem.ts.

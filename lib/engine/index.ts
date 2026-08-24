@@ -61,6 +61,20 @@ export function criarMotor(organizacaoId: string, overrides?: Partial<Motor>): M
   return motor
 }
 
+async function detectarEEncaminharRespostas(motor: Motor) {
+  const resultado = await detectarResposta(motor.store, motor.email, motor.fila, {
+    extrairContatos: extrairContatosAlternativos,
+    adiarConfirmacaoLeitura: true,
+  })
+  await motor.fila.processar()
+  const jobsComErro = motor.fila.escaninhoErro().length
+  if (jobsComErro > 0) {
+    throw new Error(`Falha ao encaminhar ${jobsComErro} resposta(s) ao responsável.`)
+  }
+  await motor.email.confirmarLeitura?.()
+  return { ...resultado, jobsComErro }
+}
+
 // Organizações ativas (para o cron varrer todas). service_role: bypassa RLS,
 // então listamos direto. Se a tabela ainda não existir (ambiente sem a
 // migration 0006), cai na org padrão pra não derrubar o cron.
@@ -110,10 +124,7 @@ export async function cadenciaDiaria(motor: Motor, opts?: { forcar?: boolean }) 
     organizacaoId: motor.store.organizacaoId,
     modoEnsaio: engineConfig.modoEnsaio,
   })
-  const resp = await detectarResposta(motor.store, motor.email, motor.fila, {
-    extrairContatos: extrairContatosAlternativos, // item 7 (auto-guarda se IA off)
-  })
-  await motor.fila.processar()
+  const resp = await detectarEEncaminharRespostas(motor)
   const fu = await followUp(motor.store, motor.email)
   // Telemetria de saúde (item 2.5): carimba execução bem-sucedida do follow-up.
   // organizacaoId pode ser undefined em contexto sem org (MemoryStore/testes).
@@ -151,6 +162,15 @@ async function resolverEmailProviderOrg(orgId: string): Promise<EmailProvider> {
     // sem break — cai no padrão abaixo
   }
   return escolherEmailProvider('followup')
+}
+
+// Leitura rápida usada pelo monitor durável. Processa apenas a caixa da
+// organização indicada, pausa respostas e entrega as notificações ao closer.
+// O cron diário continua chamando o mesmo núcleo como fallback operacional.
+export async function processarRespostasOrganizacao(orgId: string) {
+  const emailProvider = await resolverEmailProviderOrg(orgId)
+  const motor = criarMotor(orgId, { email: emailProvider })
+  return detectarEEncaminharRespostas(motor)
 }
 
 // Runner multi-tenant do cron: roda a cadência diária para CADA organização

@@ -208,7 +208,10 @@ export class SupabaseStore implements Store {
       .select('campanha_id')
       .eq('organizacao_id', this.organizacaoId)
       .eq('lead_id', leadId)
-      .in('status', ['em_andamento', 'aguardando'])
+      // Inclui concluídas/canceladas: a execução termina ou é pausada antes que
+      // o contato responda, mas o contexto/responsável continua sendo o da
+      // campanha que originou a conversa.
+      .in('status', ['em_andamento', 'aguardando', 'concluido', 'cancelado'])
       .not('campanha_id', 'is', null)
       .order('iniciado_em', { ascending: false })
       .limit(1)
@@ -222,7 +225,7 @@ export class SupabaseStore implements Store {
       .select('id, nome, tipo, publico')
       .eq('organizacao_id', this.organizacaoId)
       .eq('id', campanhaId)
-      .eq('status', 'ativa')
+      .in('status', ['ativa', 'pausada', 'concluida'])
       .maybeSingle()
     if (campanhaError) throw campanhaError
     if (!campanha) return null

@@ -68,6 +68,7 @@ export function lerCredenciaisGmail(papel: PapelEmail | string = 'followup'): Gm
 
 export class GmailProvider implements EmailProvider {
   private transporter: Transporter | null = null
+  private recebimentosPendentes = new Map<string, { mailbox: string; uid: number }>()
 
   constructor(private cred: GmailCredenciais) {}
 
@@ -138,6 +139,54 @@ export class GmailProvider implements EmailProvider {
     return mensagens
   }
 
+  async confirmarLeitura(mensagens?: MensagemRecebida[]): Promise<void> {
+    // Em ensaio, a caixa continua intocada mesmo quando o fluxo é exercitado.
+    if (engineConfig.modoEnsaio) return
+
+    const porMailbox = new Map<string, number[]>()
+    const idsConfirmados: string[] = []
+    const ids = mensagens
+      ? mensagens.flatMap((mensagem) => mensagem.idRecebimento ? [mensagem.idRecebimento] : [])
+      : [...this.recebimentosPendentes.keys()]
+    for (const idRecebimento of ids) {
+      const ref = this.recebimentosPendentes.get(idRecebimento)
+      if (!ref) continue
+      const uids = porMailbox.get(ref.mailbox) ?? []
+      uids.push(ref.uid)
+      porMailbox.set(ref.mailbox, uids)
+      idsConfirmados.push(idRecebimento)
+    }
+    if (porMailbox.size === 0) return
+
+    const client = new ImapFlow({
+      host: 'imap.gmail.com',
+      port: 993,
+      secure: true,
+      auth: { user: this.cred.user, pass: this.cred.appPassword },
+      logger: false,
+      greetingTimeout: 15000,
+      socketTimeout: 30000,
+    })
+    client.on('error', (e: unknown) => {
+      log.aviso('IMAP erro ao confirmar leitura', { erro: e instanceof Error ? e.message : String(e) })
+    })
+
+    await client.connect()
+    try {
+      for (const [mailbox, uids] of porMailbox) {
+        const lock = await client.getMailboxLock(mailbox)
+        try {
+          await client.messageFlagsAdd([...new Set(uids)], ['\\Seen'], { uid: true })
+        } finally {
+          lock.release()
+        }
+      }
+    } finally {
+      await client.logout()
+    }
+    for (const id of idsConfirmados) this.recebimentosPendentes.delete(id)
+  }
+
   private async lerMailbox(
     client: ImapFlow,
     mailbox: string,
@@ -163,25 +212,25 @@ export class GmailProvider implements EmailProvider {
           mailbox, totalNaoLidas: uids.length, processando: recentes.length,
         })
       }
-      const uidsLidos: number[] = []
       for await (const m of client.fetch(recentes, { source: true, uid: true }, { uid: true })) {
         const parsed = await simpleParser(m.source as Buffer)
         const de = parsed.from?.value?.[0]?.address?.toLowerCase() ?? ''
+        const idRecebimento = `${mailbox}\u0000${m.uid}`
+        if (m.uid) this.recebimentosPendentes.set(idRecebimento, { mailbox, uid: m.uid })
         resultado.push({
+          idRecebimento,
           de,
           assunto: parsed.subject ?? '',
           corpo: corpoTexto(parsed),
           automatica: detectarAutomatica(parsed),
           em: parsed.date ?? new Date(),
         })
-        if (m.uid) uidsLidos.push(m.uid)
       }
-      let marcadas = 0
-      if (!engineConfig.modoEnsaio && uidsLidos.length) {
-        await client.messageFlagsAdd(uidsLidos, ['\\Seen'], { uid: true })
-        marcadas = uidsLidos.length
-      }
-      log.info('IMAP caixa lida', { mailbox, naoLidas: resultado.length, marcadasComoLidas: marcadas })
+      log.info('IMAP caixa lida', {
+        mailbox,
+        naoLidas: recentes.length,
+        aguardandoConfirmacao: recentes.length,
+      })
     } finally {
       lock.release()
     }

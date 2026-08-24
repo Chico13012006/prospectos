@@ -64,6 +64,9 @@ export interface DetectarRespostaOpts {
   // Extrator de contato alternativo (item 7). Injetado nos pontos de produção
   // (usa IA); ausente nos testes/ensaio, quando a extração é simplesmente pulada.
   extrairContatos?: (corpo: string) => Promise<ContatoAlternativoExtraido[]>
+  // Orquestradores reais adiam o \Seen até a notificação ao responsável
+  // terminar. Chamadas isoladas preservam o comportamento auto-contido.
+  adiarConfirmacaoLeitura?: boolean
 }
 
 export async function detectarResposta(
@@ -110,8 +113,11 @@ export async function detectarResposta(
       continue
     }
 
-    // 3) Idempotência: se já saiu da esteira (já respondeu antes), não repetir.
-    if (!ESTAGIOS_EM_CADENCIA.includes(lead.estagio as never)) {
+    // 3) Idempotência: uma tentativa anterior pode já ter persistido a resposta
+    // e ainda estar aguardando a notificação ao closer. Nesse estado específico
+    // retomamos o encaminhamento; qualquer outro lead fora da cadência é ignorado.
+    const retomandoEncaminhamento = lead.proxima_acao === 'aguardando_closer'
+    if (!ESTAGIOS_EM_CADENCIA.includes(lead.estagio as never) && !retomandoEncaminhamento) {
       log.info('Lead já havia respondido/saído da esteira. Sem nova ação.', {
         leadId: lead.id,
         estagio: lead.estagio,
@@ -142,33 +148,46 @@ export async function detectarResposta(
     }
     // Score dinâmico (item 2.8): respondeu + bônus por velocidade (tempo entre
     // o último contato enviado e esta resposta).
-    const horas = horasEntre(lead.ultimo_contato, msg.em)
-    await store.atualizarLead(lead.id, {
-      estagio: 'interessado',
-      proxima_acao: 'aguardando_closer',
-      proxima_acao_data: null,
-      score: calcularScore({ respondeu: true, horasAteResposta: horas }),
-    })
+    if (!retomandoEncaminhamento) {
+      // Registra antes de mudar o estágio: se a persistência falhar, a mensagem
+      // continua não lida e uma nova tentativa não perde o conteúdo da resposta.
+      await store.registrarInteracao({
+        lead_id: lead.id,
+        tipo: 'resposta',
+        canal: 'email',
+        descricao: msg.corpo.slice(0, 2000),
+        origem_acao: 'ia',
+        responsavel_id: lead.responsavel_id ?? null,
+      })
+      const horas = horasEntre(lead.ultimo_contato, msg.em)
+      await store.atualizarLead(lead.id, {
+        estagio: 'interessado',
+        proxima_acao: 'aguardando_closer',
+        proxima_acao_data: null,
+        score: calcularScore({ respondeu: true, horasAteResposta: horas }),
+      })
+      respostas++
+    } else {
+      log.info('Retomando notificação pendente ao closer.', { leadId: lead.id })
+    }
     // O estágio tira o lead da cadência legada; o cancelamento explícito faz o
-    // mesmo para workflows persistentes, inclusive campanhas guiadas.
+    // mesmo para workflows persistentes. Também é repetido no retry, pois é
+    // idempotente e pode ter sido o ponto da falha anterior.
     await store.cancelarExecucoesWorkflow(lead.id)
-    await store.registrarInteracao({
-      lead_id: lead.id,
-      tipo: 'resposta',
-      canal: 'email',
-      descricao: msg.corpo.slice(0, 2000),
-      origem_acao: 'ia',
-      responsavel_id: lead.responsavel_id ?? null,
-    })
     log.ok('RESPOSTA detectada — cadência pausada. Encaminhando ao closer.', {
       leadId: lead.id,
       empresa: lead.empresa,
     })
-    respostas++
 
     // 5) Enfileirar o Fluxo 3 (direcionar ao closer).
     fila.enfileirar('direcionar_closer', { leadId: lead.id, textoResposta: msg.corpo, responsavelCampanha, contextoCampanha })
   }
+
+  // Só confirma a leitura depois que todas as alterações do lote terminaram.
+  // Se qualquer persistência falhar, a mensagem continua não lida e a fila
+  // durável poderá tentar novamente. A idempotência por estágio evita duplicar
+  // uma resposta que já tenha sido registrada antes da falha.
+  if (!opts.adiarConfirmacaoLeitura) await email.confirmarLeitura?.(mensagens)
 
   return { respostas, ignoradas, contatosAlternativos, bounces }
 }

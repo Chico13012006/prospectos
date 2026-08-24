@@ -8,6 +8,7 @@ import { detectarResposta, ehAutoResposta, MARCADOR_CONTATO_ALT } from '../flows
 import { direcionarCloser } from '../flows/direcionarCloser'
 import { followUp } from '../flows/followUp'
 import type { MensagemRecebida } from '../types'
+import type { EmailProvider } from '../email/provider'
 import { makeLead, ONTEM, SEMANA_PASSADA, AMANHA } from './helpers'
 
 function msg(over: Partial<MensagemRecebida> = {}): MensagemRecebida {
@@ -182,6 +183,60 @@ describe('Fluxo 2 — detectarResposta', () => {
     expect(await store.leadsParaFollowup()).toHaveLength(0)
     expect(await store.contarInteracoes(lead.id, 'resposta')).toBe(1)
     expect(cancelarWorkflows).toHaveBeenCalledWith(lead.id)
+  })
+
+  it('só confirma a leitura depois de persistir a resposta', async () => {
+    const lead = makeLead({ estagio: 'follow_up', contato_email: 'ana@acme.com.br' })
+    const store = new MemoryStore([lead])
+    const recebida = msg({ de: 'ana@acme.com.br', idRecebimento: 'INBOX:1' })
+    const confirmarLeitura = vi.fn().mockResolvedValue(undefined)
+    const provider: EmailProvider = {
+      enviar: vi.fn().mockResolvedValue(undefined),
+      lerCaixaEntrada: vi.fn().mockResolvedValue([recebida]),
+      confirmarLeitura,
+    }
+
+    await detectarResposta(store, provider, fila)
+
+    expect(await store.contarInteracoes(lead.id, 'resposta')).toBe(1)
+    expect(confirmarLeitura).toHaveBeenCalledWith([recebida])
+  })
+
+  it('não confirma a leitura quando o registro da resposta falha', async () => {
+    const lead = makeLead({ estagio: 'follow_up', contato_email: 'ana@acme.com.br' })
+    const store = new MemoryStore([lead])
+    vi.spyOn(store, 'registrarInteracao').mockRejectedValueOnce(new Error('banco indisponível'))
+    const confirmarLeitura = vi.fn().mockResolvedValue(undefined)
+    const provider: EmailProvider = {
+      enviar: vi.fn().mockResolvedValue(undefined),
+      lerCaixaEntrada: vi.fn().mockResolvedValue([msg({ de: 'ana@acme.com.br' })]),
+      confirmarLeitura,
+    }
+
+    await expect(detectarResposta(store, provider, fila)).rejects.toThrow('banco indisponível')
+
+    expect(confirmarLeitura).not.toHaveBeenCalled()
+    expect((await store.buscarLead(lead.id))?.estagio).toBe('follow_up')
+  })
+
+  it('retoma a notificação pendente sem duplicar a interação de resposta', async () => {
+    const lead = makeLead({
+      estagio: 'interessado',
+      proxima_acao: 'aguardando_closer',
+      contato_email: 'ana@acme.com.br',
+    })
+    const store = new MemoryStore([lead])
+    const registrar = vi.spyOn(store, 'registrarInteracao')
+
+    const resultado = await detectarResposta(store, email, fila)
+    expect(resultado.respostas).toBe(0)
+    expect(fila.pendentes()).toBe(0)
+
+    email.injetar(msg({ de: 'ana@acme.com.br' }))
+    await detectarResposta(store, email, fila)
+
+    expect(registrar).not.toHaveBeenCalled()
+    expect(fila.pendentes()).toBe(1)
   })
 
   it('não casa com lead de outro owner (n8n)', async () => {

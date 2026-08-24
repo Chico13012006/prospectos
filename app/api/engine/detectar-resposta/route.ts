@@ -1,8 +1,7 @@
 // FLUXO 2 (+3) — Detectar resposta e processar a fila (encaminhar ao closer).
 import { NextResponse } from 'next/server'
 import { autorizar } from '@/lib/engine/http'
-import { criarMotor, detectarResposta, listarOrganizacoesAtivas } from '@/lib/engine'
-import { extrairContatosAlternativos } from '@/lib/ia/contatosAlternativos'
+import { listarOrganizacoesAtivas, processarRespostasOrganizacao } from '@/lib/engine'
 
 export const runtime = 'nodejs'
 
@@ -15,12 +14,7 @@ export async function POST(req: Request) {
     const orgs = await listarOrganizacoesAtivas()
     const porOrg: Record<string, unknown> = {}
     for (const org of orgs) {
-      const motor = criarMotor(org)
-      const r = await detectarResposta(motor.store, motor.email, motor.fila, {
-        extrairContatos: extrairContatosAlternativos, // item 7
-      })
-      await motor.fila.processar() // dispara o Fluxo 3 para cada resposta
-      porOrg[org] = { ...r, jobsComErro: motor.fila.escaninhoErro().length }
+      porOrg[org] = await processarRespostasOrganizacao(org)
     }
     return NextResponse.json({ organizacoes: orgs.length, porOrg })
   } catch (err) {

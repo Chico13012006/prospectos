@@ -9,6 +9,16 @@
           "initialDelaySeconds": 0
         }
       ]
+    },
+    "app/api/queues/respostas-email/route.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "respostas-email-v1",
+          "retryAfterSeconds": 60,
+          "initialDelaySeconds": 0
+        }
+      ]
     }
   },
   "crons": [

@@ -17,6 +17,7 @@ import type { Motor } from '@/lib/engine'
 import type { Lead } from '@/lib/engine/types'
 import { montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha'
 import { enviarEmailCampanhaComCopia } from '@/lib/campanhas/emailComCopiaServidor'
+import { agendarMonitorRespostas } from '@/lib/engine/respostasAutomaticas'
 import {
   buscarControleExecucaoCampanha,
   type ControleExecucaoCampanha,
@@ -298,6 +299,20 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       responsavel_id: lead.responsavel_id ?? null,
       template_id: tpl.id, // A/B testing (item 6)
     })
+    // Cada envio real mantém um único monitor rápido por organização. A chave
+    // temporal da fila deduplica campanhas/envios concorrentes. Falha ao
+    // agendar não reenvia o e-mail que já saiu; o cron diário segue de fallback.
+    if (campanhaId && process.env.VERCEL === '1') {
+      try {
+        await agendarMonitorRespostas(this.organizacaoId)
+      } catch (erro) {
+        log.aviso('Não foi possível agendar o monitor rápido de respostas.', {
+          organizacaoId: this.organizacaoId,
+          campanhaId,
+          erro: erro instanceof Error ? erro.message : String(erro),
+        })
+      }
+    }
     return { enviado: true, assunto }
   }
 
