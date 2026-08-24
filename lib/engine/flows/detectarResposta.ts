@@ -113,22 +113,9 @@ export async function detectarResposta(
       continue
     }
 
-    // 3) Idempotência: uma tentativa anterior pode já ter persistido a resposta
-    // e ainda estar aguardando a notificação ao closer. Nesse estado específico
-    // retomamos o encaminhamento; qualquer outro lead fora da cadência é ignorado.
-    const retomandoEncaminhamento = lead.proxima_acao === 'aguardando_closer'
-    if (!ESTAGIOS_EM_CADENCIA.includes(lead.estagio as never) && !retomandoEncaminhamento) {
-      log.info('Lead já havia respondido/saído da esteira. Sem nova ação.', {
-        leadId: lead.id,
-        estagio: lead.estagio,
-      })
-      ignoradas++
-      continue
-    }
-
-    // 4) Resposta real → PAUSAR a cadência na hora e registrar.
-    // Resolve o responsável da campanha antes de cancelar as execuções que
-    // mantêm esse vínculo. Falha nessa resolução não pode perder a resposta.
+    // 3) Resolve o contexto antes do gate de estágio. Campanhas de comunicado
+    // podem enviar sem mover o lead para a cadência tradicional; ainda assim a
+    // resposta precisa ser reconhecida e encaminhada ao responsável escolhido.
     let responsavelCampanha: UsuarioBasico | null = null
     let contextoCampanha: ContextoCampanhaResposta | null = null
     try {
@@ -146,6 +133,26 @@ export async function detectarResposta(
         erro: e instanceof Error ? e.message : String(e),
       })
     }
+
+    // 4) Idempotência: uma tentativa anterior pode já ter persistido a resposta
+    // e ainda estar aguardando a notificação ao closer. Fora da cadência, só
+    // aceitamos um lead ligado a campanha e sem resposta já registrada.
+    const retomandoEncaminhamento = lead.proxima_acao === 'aguardando_closer'
+    const emCadencia = ESTAGIOS_EM_CADENCIA.includes(lead.estagio as never)
+    const respostaCampanhaPendente = !emCadencia
+      && !retomandoEncaminhamento
+      && !!contextoCampanha
+      && await store.contarInteracoes(lead.id, 'resposta') === 0
+    if (!emCadencia && !retomandoEncaminhamento && !respostaCampanhaPendente) {
+      log.info('Lead já havia respondido/saído da esteira. Sem nova ação.', {
+        leadId: lead.id,
+        estagio: lead.estagio,
+      })
+      ignoradas++
+      continue
+    }
+
+    // 5) Resposta real → PAUSAR a cadência na hora e registrar.
     // Score dinâmico (item 2.8): respondeu + bônus por velocidade (tempo entre
     // o último contato enviado e esta resposta).
     if (!retomandoEncaminhamento) {

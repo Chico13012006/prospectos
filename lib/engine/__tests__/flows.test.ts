@@ -185,6 +185,41 @@ describe('Fluxo 2 — detectarResposta', () => {
     expect(cancelarWorkflows).toHaveBeenCalledWith(lead.id)
   })
 
+  it('processa uma resposta de campanha mesmo quando o disparo não mudou o estágio do lead', async () => {
+    const lead = makeLead({ estagio: 'novos_leads', contato_email: 'ana@acme.com.br' })
+    const store = new MemoryStore([lead])
+    vi.spyOn(store, 'buscarContextoCampanhaAtiva').mockResolvedValue({
+      id: 'camp-1',
+      nome: 'Comunicado pontual',
+      tipo: 'novidade',
+      responsavel: null,
+      notificarResponsavel: true,
+      emailAssunto: null,
+      emailCorpo: null,
+      emailHtml: null,
+    })
+    const recebida = msg({ de: 'ana@acme.com.br' })
+
+    email.injetar(recebida)
+    const primeira = await detectarResposta(store, email, fila)
+
+    expect(primeira.respostas).toBe(1)
+    expect(await store.contarInteracoes(lead.id, 'resposta')).toBe(1)
+    expect((await store.buscarLead(lead.id))?.proxima_acao).toBe('aguardando_closer')
+
+    // Representa a conclusão do Fluxo 3, que troca o marcador após notificar.
+    await store.atualizarLead(lead.id, { proxima_acao: 'com_closer' })
+
+    // A busca IMAP recente pode devolver a mesma mensagem em ciclos seguintes.
+    // O registro persistido impede que ela seja contabilizada de novo.
+    email.injetar(recebida)
+    const segunda = await detectarResposta(store, email, new Queue())
+
+    expect(segunda.respostas).toBe(0)
+    expect(segunda.ignoradas).toBe(1)
+    expect(await store.contarInteracoes(lead.id, 'resposta')).toBe(1)
+  })
+
   it('só confirma a leitura depois de persistir a resposta', async () => {
     const lead = makeLead({ estagio: 'follow_up', contato_email: 'ana@acme.com.br' })
     const store = new MemoryStore([lead])
