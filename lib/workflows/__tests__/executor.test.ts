@@ -371,6 +371,7 @@ describe('executor de workflows', () => {
     expect(await store.existeExecucaoParaLead(wfId, 'lead-x')).toBe(true)
     const r2 = await inscreverLeadManual(store, wfId, 'lead-x')
     expect(r2.jaInscrito).toBe(true) // não duplica
+    expect(r2.execucaoId).toBe(r1.execucaoId) // permite republicar a mesma execução na fila
   })
 
   it('inscreverLeadManual exige workflow publicado', async () => {

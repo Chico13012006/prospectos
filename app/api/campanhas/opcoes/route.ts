@@ -48,6 +48,7 @@ export async function GET() {
       templates: templates ?? [],
       nichos,
       testeEmailDisponivel: !!remetente && !engineConfig.modoEnsaio,
+      envioRealDisponivel: !!remetente && !engineConfig.modoEnsaio,
     })
   } catch (e) {
     return NextResponse.json({ erro: e instanceof Error ? e.message : 'Erro' }, { status: 400 })

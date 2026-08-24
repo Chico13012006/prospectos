@@ -8,6 +8,7 @@ import {
   validarCampanhaGuiada,
 } from './configuracaoGuiada'
 import { buscarPreviaPublicoCampanha } from './publicoServidor'
+import { exigirEnvioRealCampanhaDisponivel } from './opcoesServidor'
 import {
   inscreverLeadManual,
   publicar,
@@ -103,6 +104,7 @@ export async function inscreverCampanhaReal(
   campanhaId: string,
   confirmarQuantidade?: number,
 ): Promise<ResultadoEnrollmentReal> {
+  await exigirEnvioRealCampanhaDisponivel(admin, org)
   const campanha = await buscarCampanha(admin, org, campanhaId)
   if (!campanha) throw new Error('Campanha não encontrada.')
   if (campanha.status !== 'ativa') throw new Error('Ative a campanha em modo ensaio antes do envio real.')
@@ -133,15 +135,15 @@ export async function inscreverCampanhaReal(
   let inscritos = 0
   let jaInscritos = 0
   let falhas = 0
-  const execucoesCriadas: string[] = []
+  const execucoesProcessaveis: string[] = []
   for (const leadId of previa.idsElegiveis) {
     try {
       const resultado = await inscreverLeadManual(store, workflow.id, leadId, campanhaId)
       if (resultado.jaInscrito) jaInscritos += 1
       else {
         inscritos += 1
-        if (resultado.execucaoId) execucoesCriadas.push(resultado.execucaoId)
       }
+      if (resultado.execucaoId) execucoesProcessaveis.push(resultado.execucaoId)
     } catch {
       falhas += 1
     }
@@ -160,7 +162,7 @@ export async function inscreverCampanhaReal(
     inscritos,
     ja_inscritos: jaInscritos,
     falhas,
-    execucoes_criadas: execucoesCriadas,
+    execucoes_criadas: execucoesProcessaveis,
   }
 }
 
@@ -179,6 +181,7 @@ export async function iniciarCampanhaReal(
     throw new Error('Confirme explicitamente a quantidade atual de contatos elegíveis.')
   }
 
+  await exigirEnvioRealCampanhaDisponivel(admin, org)
   await ativarCampanhaGuiada(admin, org, campanhaId, autorId, confirmarQuantidade)
   return inscreverCampanhaReal(admin, org, campanhaId, confirmarQuantidade)
 }

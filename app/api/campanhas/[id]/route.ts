@@ -7,6 +7,7 @@ import { buscarContextoResumoOperacional } from '@/lib/campanhas/resumoOperacion
 import { materializarCampanhaGuiada } from '@/lib/campanhas/materializarServidor'
 import { aplicarRegraPublicoPorTipo, normalizarPublicoCampanha } from '@/lib/campanhas/configuracaoGuiada'
 import { buscarPreviaPublicoCampanha, previaParaCliente } from '@/lib/campanhas/publicoServidor'
+import { engineConfig } from '@/lib/engine/config'
 
 export const runtime = 'nodejs'
 
@@ -36,7 +37,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           ).then(previaParaCliente)
         : Promise.resolve(null),
     ])
-    return NextResponse.json({ campanha, resumoOperacional, previaPublico })
+    return NextResponse.json({
+      campanha,
+      resumoOperacional,
+      previaPublico,
+      envioRealDisponivel: !!resumoOperacional.remetente && !engineConfig.modoEnsaio,
+    })
   } catch (e) {
     return NextResponse.json({ erro: e instanceof Error ? e.message : 'Erro' }, { status: 400 })
   }

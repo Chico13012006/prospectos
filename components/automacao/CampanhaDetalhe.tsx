@@ -58,6 +58,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
   const [erroAgenda, setErroAgenda] = useState<string | null>(null);
   const [confirmacaoTexto, setConfirmacaoTexto] = useState('');
   const [erroAcao, setErroAcao] = useState<string | null>(null);
+  const [envioRealDisponivel, setEnvioRealDisponivel] = useState(false);
 
   const carregar = useCallback(async () => {
     try {
@@ -67,6 +68,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
       setC(d.campanha);
       setContextoResumo(d.resumoOperacional ?? { remetente: null, responsavel: null, workflow: null });
       setPreviaPublico(d.previaPublico ?? null);
+      setEnvioRealDisponivel(d.envioRealDisponivel === true);
       setEstado('ok');
     } catch { setEstado('erro'); }
   }, [id]);
@@ -189,7 +191,8 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
           {c.status === 'ativa' && (
             <button
               onClick={() => { setModalDryRun(true); setConfirmacaoTexto(''); setErroAcao(null); }}
-              disabled={!previaPublico?.elegiveis}
+              disabled={!previaPublico?.elegiveis || !envioRealDisponivel}
+              title={!envioRealDisponivel ? 'Envio real indisponível: revise MODO_ENSAIO e a conta Gmail no Vercel.' : undefined}
               className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 font-semibold whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-40"
             >
               Ativar envio real
@@ -201,8 +204,8 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
           {c.status === 'ativa' ? <CheckCircle2 size={15} className="shrink-0" /> : <Info size={15} className="shrink-0" />}
           {c.status === 'ativa' ? (
             disparoUnico
-              ? <span><b>Disparo em processamento</b> — somente o público confirmado receberá esta mensagem; não há recorrência.</span>
-              : <span><b>Envio real ativo</b> — o próximo ciclo pode avançar os contatos inscritos se hoje estiver na agenda.</span>
+              ? <span><b>Disparo em processamento</b> — a fila envia um contato a cada 2 minutos, com cópia para o responsável; não há recorrência.</span>
+              : <span><b>Envio real ativo</b> — a mensagem inicial entra na fila imediatamente, com intervalo de 2 minutos e cópia para o responsável.</span>
           ) : c.status === 'pausada' ? (
             <span><b>Campanha pausada</b> — as execuções estão preservadas, mas nenhuma ação será processada até a retomada.</span>
           ) : c.status === 'concluida' ? (
@@ -230,7 +233,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
               <h2 className="text-lg font-bold">Ativar envio real</h2>
             </div>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Esta ação recalcula o público, desativa o modo ensaio e inscreve <b>{previaPublico?.elegiveis ?? 'um número não calculado de'} contatos elegíveis</b> no workflow. A partir daí, e-mails reais poderão ser enviados pelo cron existente.<br /><br />
+              Esta ação recalcula o público, desativa o modo ensaio e inscreve <b>{previaPublico?.elegiveis ?? 'um número não calculado de'} contatos elegíveis</b> no workflow. A primeira mensagem entra na fila imediatamente; as seguintes saem a cada 2 minutos, com cópia para o responsável comercial.<br /><br />
               Para confirmar, digite exatamente <code className="bg-red-500/20 text-red-300 px-1 rounded">CONFIRMAR</code> no campo abaixo.
             </p>
             <input

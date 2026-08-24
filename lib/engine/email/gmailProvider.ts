@@ -99,6 +99,7 @@ export class GmailProvider implements EmailProvider {
     log.ok('E-mail enviado via Gmail (SMTP)', {
       remetente: this.cred.user,
       para,
+      cc,
       assunto,
       messageId: info.messageId,
     })

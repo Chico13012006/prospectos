@@ -11,10 +11,12 @@ import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { criarMotorReal } from '@/lib/engine/scheduler'
 import { normalizarNicho, preencher, indiceVariante } from '@/lib/engine/mensagem'
 import { GmailProvider, lerCredenciaisGmail } from '@/lib/engine/email/gmailProvider'
+import { engineConfig } from '@/lib/engine/config'
 import { log } from '@/lib/engine/logger'
 import type { Motor } from '@/lib/engine'
 import type { Lead } from '@/lib/engine/types'
 import { montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha'
+import { enviarEmailCampanhaComCopia } from '@/lib/campanhas/emailComCopiaServidor'
 import {
   buscarControleExecucaoCampanha,
   type ControleExecucaoCampanha,
@@ -224,6 +226,11 @@ export class AmbienteSupabase implements AmbienteWorkflow {
 
     // Simulação (Fase 5): não envia nem grava — quem loga é o executor.
     if (this.simular) return { enviado: false, assunto }
+    // Revalida no momento do efeito. Uma mudança de ambiente entre o enrollment
+    // e o consumo da fila não pode transformar ensaio em falso positivo.
+    if (engineConfig.modoEnsaio) {
+      throw new Error('Envio bloqueado: o motor está em MODO_ENSAIO.')
+    }
 
     // Gate por campanha: independente do MODO_ENSAIO global.
     // dry_run=true (padrão) bloqueia o envio mesmo com MODO_ENSAIO=false em prod.
@@ -241,25 +248,18 @@ export class AmbienteSupabase implements AmbienteWorkflow {
         return { enviado: false, assunto }
     }
 
-    // A assinatura usa primeiro o responsável escolhido na campanha e preserva
-    // o responsável do lead como fallback para fluxos legados/renovação.
-    let responsavelNome: string | null = null
-    if (campanhaPublico) {
-      const responsavelId = typeof campanhaPublico.responsavel_id === 'string' ? campanhaPublico.responsavel_id : null
-      if (responsavelId) {
-        const { data: perfil, error: perfilError } = await this.db
-          .from('perfis')
-          .select('nome')
-          .eq('id', responsavelId)
-          .eq('organizacao_id', this.organizacaoId)
-          .maybeSingle()
-        if (perfilError) throw perfilError
-        responsavelNome = (perfil as { nome?: string | null } | null)?.nome?.trim() || null
-      }
-    }
-    if (!responsavelNome && lead.responsavel_id) {
-      responsavelNome = (await this.motor.store.buscarUsuario(lead.responsavel_id))?.nome?.trim() || null
-    }
+    // Todo e-mail de campanha leva o responsável comercial em cópia. O perfil
+    // escolhido na campanha prevalece; o responsável real do lead é o fallback
+    // legado. O mesmo responsável alimenta a assinatura do HTML.
+    const contextoCampanha = campanhaId
+      ? await this.motor.store.buscarContextoCampanhaAtiva?.(leadId)
+      : null
+    const responsavelLead = lead.responsavel_id
+      ? await this.motor.store.buscarUsuario(lead.responsavel_id)
+      : null
+    const responsavelNome = contextoCampanha?.responsavel?.nome?.trim()
+      || responsavelLead?.nome?.trim()
+      || null
     const operacao = campanhaPublico?.operacao && typeof campanhaPublico.operacao === 'object'
       ? campanhaPublico.operacao as Record<string, unknown>
       : null
@@ -277,7 +277,18 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     const html = montarEmailCampanhaHtml(corpo, { responsavelNome, nomeServico }, htmlPersonalizado)
 
     // Envio real: usa a conta da org (emailProvider) se configurada; senão a padrão.
-    await emailProvider.enviar(lead.contato_email, assunto, corpo, html)
+    if (campanhaId) {
+      await enviarEmailCampanhaComCopia(emailProvider, {
+        para: lead.contato_email,
+        assunto,
+        corpo,
+        html,
+        responsavelCampanha: contextoCampanha?.responsavel,
+        responsavelLead,
+      })
+    } else {
+      await emailProvider.enviar(lead.contato_email, assunto, corpo, html)
+    }
     await this.motor.store.registrarInteracao({
       lead_id: leadId,
       tipo: 'nota',

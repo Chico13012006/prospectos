@@ -132,6 +132,13 @@ export class MemoryWorkflowStore implements WorkflowStore {
     this.execucoes.set(id, { ...ex, ...patch })
   }
 
+  async buscarExecucaoParaLead(workflowId: string, leadId: string): Promise<WorkflowExecucao | null> {
+    const execucoes = [...this.execucoes.values()]
+      .filter((ex) => ex.workflow_id === workflowId && ex.lead_id === leadId && ex.status !== 'cancelado')
+      .sort((a, b) => b.iniciado_em.localeCompare(a.iniciado_em))
+    return execucoes[0] ? { ...execucoes[0] } : null
+  }
+
   async existeExecucaoParaLead(workflowId: string, leadId: string): Promise<boolean> {
     for (const ex of this.execucoes.values())
       if (ex.workflow_id === workflowId && ex.lead_id === leadId) return true

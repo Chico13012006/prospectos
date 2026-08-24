@@ -54,6 +54,10 @@ export interface WorkflowStore {
   }): Promise<WorkflowExecucao>
   buscarExecucao(id: string): Promise<WorkflowExecucao | null>
   atualizarExecucao(id: string, patch: PatchExecucao): Promise<void>
+  // Recupera a execução não cancelada que sustenta a idempotência do
+  // enrollment. Além de evitar duplicidade, permite reagendar com segurança
+  // uma campanha cuja publicação na fila tenha sido interrompida.
+  buscarExecucaoParaLead(workflowId: string, leadId: string): Promise<WorkflowExecucao | null>
   // Já existe alguma execução (qualquer status) deste workflow para o lead?
   // Base da idempotência de enrollment (não inscrever o mesmo lead 2x).
   existeExecucaoParaLead(workflowId: string, leadId: string): Promise<boolean>

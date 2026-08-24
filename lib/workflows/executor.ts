@@ -10,8 +10,9 @@
 //     (semântica at-least-once: se cair entre efeito e persistência, a ação pode
 //     repetir no resume — tradeoff documentado, aceitável para esta v1).
 //
-// Sem fila em memória e sem pg-boss: é o mesmo padrão poll-por-timestamp que o
-// leadsParaFollowup() do motor de cadência já usa, rodando no cron.
+// O timestamp persistido continua sendo a fonte de verdade das esperas. Para a
+// primeira mensagem de campanhas, uma fila durável apenas acorda cada execução
+// no horário salvo; as etapas posteriores seguem no poll/cron existente.
 import type { WorkflowStore } from './store/store'
 import type { CtxExec, RegistroWorkflows } from './registro'
 import type { AmbienteWorkflow } from './ambiente'
@@ -49,10 +50,15 @@ export async function processarExecucao(
   ambiente: AmbienteWorkflow,
   execucaoId: string,
   agoraISO: string = new Date().toISOString(),
+  opcoes: { propagarErro?: boolean; permitirRetryErro?: boolean; ignorarAgendaCampanha?: boolean } = {},
 ): Promise<void> {
   const ex = await store.buscarExecucao(execucaoId)
   if (!ex) return
-  if (ex.status === 'concluido' || ex.status === 'erro' || ex.status === 'cancelado') return
+  if (ex.status === 'concluido' || ex.status === 'cancelado') return
+  if (ex.status === 'erro' && !opcoes.permitirRetryErro) return
+  if (ex.status === 'erro') {
+    await store.atualizarExecucao(ex.id, { status: 'em_andamento', atualizado_em: agoraISO })
+  }
   // Espera ainda não venceu → não toca.
   if (ex.status === 'aguardando') {
     if (!ex.proxima_verificacao_em || new Date(ex.proxima_verificacao_em).getTime() > new Date(agoraISO).getTime()) return
@@ -73,7 +79,11 @@ export async function processarExecucao(
       const controle = await ambiente.buscarControleExecucaoCampanha(ex.campanha_id)
       if (!controle || controle.status === 'pausada') return
       if (controle.status !== 'ativa' && controle.status !== 'concluida') return
-      if (!controle.disparoUnico && !agendaPermiteProcessar(controle.diasSemana, agoraISO)) return
+      if (
+        !controle.disparoUnico
+        && !opcoes.ignorarAgendaCampanha
+        && !agendaPermiteProcessar(controle.diasSemana, agoraISO)
+      ) return
     }
 
     const def = await definicaoDaExecucao(store, ex.versao_id)
@@ -142,6 +152,7 @@ export async function processarExecucao(
   } catch (e) {
     await store.atualizarExecucao(ex.id, { status: 'erro', atualizado_em: agoraISO })
     await log('erro', { mensagem: e instanceof Error ? e.message : String(e) })
+    if (opcoes.propagarErro) throw e
   }
 }
 
@@ -188,7 +199,8 @@ export async function inscreverLeadManual(
   if (!wf) throw new Error(`workflow ${workflowId} não encontrado`)
   if (wf.status !== 'publicado' || !wf.versao_atual_id)
     throw new Error('workflow precisa estar publicado para inscrever um lead manualmente.')
-  if (await store.existeExecucaoParaLead(workflowId, leadId)) return { jaInscrito: true }
+  const existente = await store.buscarExecucaoParaLead(workflowId, leadId)
+  if (existente) return { jaInscrito: true, execucaoId: existente.id }
   const ex = await store.criarExecucao({
     workflow_id: workflowId,
     versao_id: wf.versao_atual_id,
@@ -230,12 +242,13 @@ export async function processarExecucoesCampanha(
   campanhaId: string,
   execucaoIds: string[],
   agoraISO: string = new Date().toISOString(),
+  opcoes: { propagarErro?: boolean; permitirRetryErro?: boolean; ignorarAgendaCampanha?: boolean } = {},
 ): Promise<number> {
   let processadas = 0
   for (const execucaoId of [...new Set(execucaoIds)]) {
     const execucao = await store.buscarExecucao(execucaoId)
     if (!execucao || execucao.campanha_id !== campanhaId) continue
-    await processarExecucao(store, registro, ambiente, execucaoId, agoraISO)
+    await processarExecucao(store, registro, ambiente, execucaoId, agoraISO, opcoes)
     processadas += 1
   }
   await ambiente.sincronizarConclusaoCampanha(campanhaId)

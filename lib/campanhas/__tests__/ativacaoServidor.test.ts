@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   publicar: vi.fn(),
   retomar: vi.fn(),
   inscreverLeadManual: vi.fn(),
+  exigirEnvioRealCampanhaDisponivel: vi.fn(),
 }))
 
 vi.mock('../repository', () => ({
@@ -23,6 +24,10 @@ vi.mock('../materializarServidor', () => ({
 
 vi.mock('../publicoServidor', () => ({
   buscarPreviaPublicoCampanha: mocks.buscarPreviaPublicoCampanha,
+}))
+
+vi.mock('../opcoesServidor', () => ({
+  exigirEnvioRealCampanhaDisponivel: mocks.exigirEnvioRealCampanhaDisponivel,
 }))
 
 vi.mock('@/lib/workflows', () => ({
@@ -89,6 +94,10 @@ function previa(ids: string[]) {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  mocks.exigirEnvioRealCampanhaDisponivel.mockResolvedValue({
+    conta: 'followup',
+    email: 'remetente@empresa.com.br',
+  })
   mocks.materializarCampanhaGuiada.mockResolvedValue({ publico, workflowId: 'workflow-1' })
   mocks.buscarWorkflow
     .mockResolvedValueOnce({ id: 'workflow-1', status: 'rascunho', rascunho_definicao: { acoes: [] } })
@@ -132,6 +141,20 @@ describe('início real de campanha guiada', () => {
     await expect(
       iniciarCampanhaReal(admin, 'org-a', 'campanha-1', 'usuario-1'),
     ).rejects.toThrow('Confirme explicitamente a quantidade atual')
+
+    expect(mocks.buscarCampanha).not.toHaveBeenCalled()
+    expect(mocks.atualizarCampanha).not.toHaveBeenCalled()
+    expect(mocks.inscreverLeadManual).not.toHaveBeenCalled()
+  })
+
+  it('bloqueia o início antes de qualquer alteração quando o envio real está indisponível', async () => {
+    mocks.exigirEnvioRealCampanhaDisponivel.mockRejectedValueOnce(
+      new Error('Envio real indisponível: desative o MODO_ENSAIO no ambiente do Vercel.'),
+    )
+
+    await expect(
+      iniciarCampanhaReal(admin, 'org-a', 'campanha-1', 'usuario-1', 2),
+    ).rejects.toThrow('MODO_ENSAIO')
 
     expect(mocks.buscarCampanha).not.toHaveBeenCalled()
     expect(mocks.atualizarCampanha).not.toHaveBeenCalled()

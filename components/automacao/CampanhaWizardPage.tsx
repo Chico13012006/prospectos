@@ -160,6 +160,7 @@ export default function CampanhaWizardPage({
   const [membros, setMembros] = useState<Membro[]>([])
   const [carregandoOpcoes, setCarregandoOpcoes] = useState(true)
   const [testeEmailDisponivel, setTesteEmailDisponivel] = useState(false)
+  const [envioRealDisponivel, setEnvioRealDisponivel] = useState(false)
   const [previa, setPrevia] = useState<PreviaPublico | null>(null)
   const [carregandoPrevia, setCarregandoPrevia] = useState(false)
   const [salvando, setSalvando] = useState<'rascunho' | 'ativar' | 'iniciar' | false>(false)
@@ -218,6 +219,7 @@ export default function CampanhaWizardPage({
       setTemplates(opcoes.templates ?? [])
       setNichos(opcoes.nichos ?? [])
       setTesteEmailDisponivel(opcoes.testeEmailDisponivel === true)
+      setEnvioRealDisponivel(opcoes.envioRealDisponivel === true)
       setMembros((equipe.membros ?? []).filter((m: Membro) => m.nome || m.email))
       setPublico((atual) => ({
         ...atual,
@@ -559,6 +561,9 @@ export default function CampanhaWizardPage({
   function solicitarInicioReal() {
     const erros = validarCampanhaGuiada(bodyCampanha().publico)
     const quantidade = previa?.elegiveis ?? 0
+    if (!envioRealDisponivel) {
+      erros.push('O envio real está indisponível. Confirme MODO_ENSAIO=false e a conta Gmail no Vercel.')
+    }
     if (!quantidade) erros.push('O público precisa ter ao menos um contato elegível.')
     if (erros.length) {
       setErro(erros.join(' '))
@@ -1155,9 +1160,11 @@ export default function CampanhaWizardPage({
               <li>• O público será recalculado no servidor.</li>
               <li>• O workflow ganhará uma versão imutável.</li>
               <li>• As inscrições serão criadas somente para os contatos elegíveis confirmados.</li>
+              <li>• A primeira mensagem entra na fila imediatamente; as seguintes são espaçadas em 2 minutos.</li>
+              <li>• O responsável comercial receberá uma cópia de cada e-mail.</li>
               <li>• O processamento respeita bloqueios e idempotência{disparoUnico ? '; esta comunicação não cria recorrência.' : ', além da agenda configurada.'}</li>
             </ul>
-            <button type="button" onClick={solicitarInicioReal} disabled={!!salvando || carregandoPrevia || carregandoOpcoes} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" onClick={solicitarInicioReal} disabled={!!salvando || carregandoPrevia || carregandoOpcoes || !envioRealDisponivel} title={!envioRealDisponivel ? 'Envio real indisponível: revise MODO_ENSAIO e a conta Gmail no Vercel.' : undefined} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
               {salvando === 'iniciar' ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} {disparoUnico ? 'Disparar comunicação' : tipo === 'prospeccao' ? 'Iniciar prospecção' : 'Iniciar campanha'}
             </button>
             <button type="button" onClick={solicitarAtivacao} disabled={!!salvando || carregandoPrevia || carregandoOpcoes} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#30384e] px-4 py-2.5 text-sm text-slate-400 hover:border-indigo-500/50 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50">
@@ -1186,9 +1193,7 @@ export default function CampanhaWizardPage({
             <p className="text-sm leading-6 text-slate-400">
               O servidor calculou <strong className="text-slate-200">{previa.elegiveis} contatos elegíveis</strong>.{' '}
               {modoConfirmacao === 'real'
-                ? disparoUnico
-                  ? 'Ao confirmar, uma única execução será criada para cada contato elegível, sem agenda recorrente ou follow-up. Digite essa quantidade para disparar.'
-                  : 'Ao confirmar, o workflow será publicado e as inscrições serão criadas para processamento pelo motor de cadência. Digite essa quantidade para iniciar.'
+                ? `Ao confirmar, a primeira mensagem entrará na fila imediatamente e as demais serão espaçadas em 2 minutos, sempre com cópia para o responsável comercial.${disparoUnico ? ' Este disparo não cria recorrência ou follow-up.' : ''} Digite essa quantidade para iniciar.`
                 : 'Digite essa quantidade para confirmar a publicação sem criar inscrições.'}
             </p>
             <input autoFocus inputMode="numeric" className={`${input} mt-4`} value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} placeholder={String(previa.elegiveis)} />

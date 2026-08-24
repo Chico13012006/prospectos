@@ -3,6 +3,8 @@
 import { NextResponse } from 'next/server'
 import { exigirPermissao } from '@/lib/rbac/servidor'
 import { inscreverCampanhaReal } from '@/lib/campanhas/ativacaoServidor'
+import { agendarExecucoesCampanha } from '@/lib/campanhas/filaDisparoServidor'
+import { SupabaseWorkflowStore } from '@/lib/workflows'
 
 export const runtime = 'nodejs'
 
@@ -12,13 +14,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if ('erro' in acc) return acc.erro
   try {
     const body = await req.json().catch(() => ({}))
-    const resultado = await inscreverCampanhaReal(
+    const { execucoes_criadas: execucaoIds, ...resultado } = await inscreverCampanhaReal(
       acc.acesso.admin,
       acc.acesso.org,
       id,
       typeof body.confirmarQuantidade === 'number' ? body.confirmarQuantidade : undefined,
     )
-    return NextResponse.json({ ok: true, ...resultado })
+    const fila = await agendarExecucoesCampanha(
+      new SupabaseWorkflowStore(acc.acesso.org, acc.acesso.admin),
+      acc.acesso.org,
+      id,
+      execucaoIds,
+    )
+    return NextResponse.json({ ok: true, ...resultado, fila })
   } catch (e) {
     return NextResponse.json({ erro: e instanceof Error ? e.message : 'Erro' }, { status: 400 })
   }
