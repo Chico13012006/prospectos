@@ -20,6 +20,19 @@ const ASSUNTO_AUTO = [
   'undeliverable', 'mail delivery', 'returned mail', 'delivery status notification',
 ]
 
+export const JANELA_PADRAO_RESPOSTAS_DIAS = 30
+
+export function montarBuscaMensagensRecentes(
+  agora: Date = new Date(),
+  janelaDiasRaw: string | undefined = process.env.GMAIL_JANELA_RESPOSTAS_DIAS,
+): { since: Date } {
+  const valor = Number(janelaDiasRaw)
+  const janelaDias = Number.isFinite(valor) && valor >= 1
+    ? Math.min(90, Math.floor(valor))
+    : JANELA_PADRAO_RESPOSTAS_DIAS
+  return { since: new Date(agora.getTime() - janelaDias * 24 * 60 * 60 * 1_000) }
+}
+
 // Detecta auto-resposta pelos CABEÇALHOS (Auto-Submitted, X-Autoreply, Precedence)
 // e, como reforço, pelo assunto. Os fluxos não enxergam cabeçalhos — por isso o
 // provedor é o lugar certo para essa marcação.
@@ -106,7 +119,10 @@ export class GmailProvider implements EmailProvider {
     })
   }
 
-  // Lê as mensagens NÃO LIDAS da INBOX e de [Gmail]/Spam via IMAP (imap.gmail.com:993).
+  // Lê as mensagens RECENTES da INBOX e de [Gmail]/Spam via IMAP (imap.gmail.com:993).
+  // Não depende da flag UNSEEN: Gmail/mobile/encaminhamentos podem marcar uma
+  // resposta como lida antes que o motor a processe. A idempotência do fluxo,
+  // baseada no estado persistido do lead, impede registrar a mesma resposta de novo.
   // Bounces de servidores externos (ex.: Office 365) frequentemente caem em Spam no
   // Gmail — não checar Spam causaria detecção zero em escala. Spam é lido na mesma
   // conexão; falha ao abrir a pasta de Spam é ignorada (não derruba a INBOX).
@@ -200,16 +216,16 @@ export class GmailProvider implements EmailProvider {
       return
     }
     try {
-      const uids = await client.search({ seen: false }, { uid: true })
+      const uids = await client.search(montarBuscaMensagensRecentes(), { uid: true })
       if (!uids || uids.length === 0) {
-        log.info('IMAP caixa lida', { mailbox, naoLidas: 0 })
+        log.info('IMAP caixa consultada', { mailbox, mensagensRecentes: 0 })
         return
       }
       const limite = Math.max(1, Number(process.env.GMAIL_MAX_FETCH ?? '50') || 50)
       const recentes = uids.slice(-limite)
       if (uids.length > recentes.length) {
-        log.aviso('IMAP: muitas não lidas; processando só as mais recentes', {
-          mailbox, totalNaoLidas: uids.length, processando: recentes.length,
+        log.aviso('IMAP: muitas mensagens recentes; processando só as mais novas', {
+          mailbox, totalRecentes: uids.length, processando: recentes.length,
         })
       }
       for await (const m of client.fetch(recentes, { source: true, uid: true }, { uid: true })) {
@@ -226,9 +242,9 @@ export class GmailProvider implements EmailProvider {
           em: parsed.date ?? new Date(),
         })
       }
-      log.info('IMAP caixa lida', {
+      log.info('IMAP caixa consultada', {
         mailbox,
-        naoLidas: recentes.length,
+        mensagensRecentes: recentes.length,
         aguardandoConfirmacao: recentes.length,
       })
     } finally {
