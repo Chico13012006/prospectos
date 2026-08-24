@@ -10,6 +10,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { getEngineConfig, OWNER_ENGINE } from '../config'
+import { log } from '../logger'
 import { ESTAGIOS_EM_CADENCIA, dominioDoLead } from '../templates'
 import type { ContextoCampanhaResposta, Lead, NovaInteracao, TipoInteracaoEngine, UsuarioBasico } from '../types'
 import type { Store, TemplateEmail } from './store'
@@ -84,6 +85,7 @@ export class SupabaseStore implements Store {
   }
 
   async registrarInteracao(i: NovaInteracao): Promise<void> {
+    const registradaEm = new Date().toISOString()
     const { error } = await this.db.from('interacoes').insert({
       lead_id: i.lead_id,
       tipo: i.tipo,
@@ -95,6 +97,22 @@ export class SupabaseStore implements Store {
       organizacao_id: this.organizacaoId,
     })
     if (error) throw error
+    if (i.canal === 'email') {
+      const { error: leadError } = await this.db
+        .from('leads')
+        .update({ ultimo_contato: registradaEm })
+        .eq('id', i.lead_id)
+        .eq('organizacao_id', this.organizacaoId)
+      // O e-mail e a interação já foram persistidos. Não propague esta falha:
+      // o executor poderia repetir uma mensagem externa que já foi enviada.
+      // A interface ainda consegue derivar o horário pelo histórico auditável.
+      if (leadError) {
+        log.aviso('Interação registrada, mas não foi possível sincronizar o último contato.', {
+          organizacaoId: this.organizacaoId,
+          leadId: i.lead_id,
+        })
+      }
+    }
   }
 
   async contarInteracoes(leadId: string, tipo: TipoInteracaoEngine): Promise<number> {

@@ -405,6 +405,15 @@ export async function createInteracao(interacao: Partial<Interacao>): Promise<In
     .select()
     .single()
   if (error) throw error
+  if (interacao.canal === 'email' && interacao.lead_id) {
+    const { error: leadError } = await supabase
+      .from('leads')
+      .update({ ultimo_contato: data.created_at ?? new Date().toISOString() })
+      .eq('id', interacao.lead_id)
+    // A interação já foi criada. Evita sugerir ao usuário que repita o registro
+    // e gerar uma duplicidade; o painel usa a própria interação como fallback.
+    if (leadError) console.warn('Interação registrada sem sincronizar o último contato do lead.')
+  }
   return data
 }
 

@@ -62,7 +62,8 @@ export default function EditarLeadModal({
   const campo = (chave: keyof Formulario) => ({
     value: form[chave],
     onChange: (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-      setForm((atual) => ({ ...atual, [chave]: event.target.value }))
+      const valor = event.currentTarget.value
+      setForm((atual) => ({ ...atual, [chave]: valor }))
       setErro(null)
     },
   })
@@ -178,7 +179,17 @@ export default function EditarLeadModal({
               </div>
               <div>
                 <label className={labelCls}>Validade do laudo</label>
-                <input {...campo('data_validade')} className={inputCls} type="date" aria-label="Validade do laudo" />
+                <input
+                  {...campo('data_validade')}
+                  onInput={(event) => {
+                    const valor = event.currentTarget.value
+                    setForm((atual) => ({ ...atual, data_validade: valor }))
+                    setErro(null)
+                  }}
+                  className={inputCls}
+                  type="date"
+                  aria-label="Validade do laudo"
+                />
               </div>
             </div>
           </fieldset>
@@ -187,6 +198,7 @@ export default function EditarLeadModal({
         </div>
 
         <div className="flex justify-end gap-2 border-t border-[#2a3147] bg-[#0f1117] px-6 py-4">
+          {!alterado && <span className="mr-auto self-center text-xs text-slate-500">Altere ao menos um campo para salvar.</span>}
           <button type="button" onClick={onClose} disabled={salvando} className="rounded-lg px-4 py-2 text-sm text-slate-300 hover:bg-[#1a1f2e] disabled:opacity-50">Cancelar</button>
           <button type="submit" disabled={!valido || !alterado || salvando} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
             {salvando && <Loader2 size={14} className="animate-spin" />} {salvando ? 'Salvando...' : 'Salvar alterações'}

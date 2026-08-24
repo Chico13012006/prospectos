@@ -65,12 +65,15 @@ describe('multi-tenant — SupabaseStore filtra/grava organizacao_id', () => {
     expect(chains.leads.temEq('id', 'L1')).toBe(true)
   })
 
-  it('registrarInteracao GRAVA organizacao_id', async () => {
+  it('registrarInteracao GRAVA organizacao_id e atualiza o último contato por e-mail', async () => {
     const { client, chains } = mockClient()
     await new SupabaseStore(ORG, client).registrarInteracao({
       lead_id: 'L1', tipo: 'follow_up', canal: 'email', descricao: 'x', origem_acao: 'ia',
     })
     expect(chains.interacoes.insertPayload?.organizacao_id).toBe(ORG)
+    expect(chains.leads.updatePayload?.ultimo_contato).toEqual(expect.any(String))
+    expect(chains.leads.temEq('id', 'L1')).toBe(true)
+    expect(chains.leads.temEq('organizacao_id', ORG)).toBe(true)
   })
 
   it('leadsParaFollowup filtra por organizacao_id + owner', async () => {

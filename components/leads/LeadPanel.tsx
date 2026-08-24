@@ -16,6 +16,7 @@ import { getLeadById, getInteracoesByLead, createInteracao, atualizarEstagio, re
 import type { InsightComercialLead, MensagemPreview } from '@/lib/api';
 import type { Lead, Interacao } from '@/lib/supabase';
 import { ESTAGIOS_MANUAIS } from '@/lib/pipeline-stages';
+import { ultimoContatoEfetivo } from '@/lib/leads/ultimoContato';
 
 // Data real de hoje (YYYY-MM-DD).
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -468,9 +469,14 @@ export default function LeadPanel({
     return m;
   }, [interacoes]);
 
+  const ultimoContato = useMemo(
+    () => ultimoContatoEfetivo(selectedLead?.ultimo_contato, interacoes),
+    [selectedLead?.ultimo_contato, interacoes],
+  );
+
   const panelTimeSince = selectedEmpresa
-    ? (selectedEmpresa.ultimo_contato
-        ? daysBetween(selectedEmpresa.ultimo_contato, TODAY)
+    ? (ultimoContato
+        ? daysBetween(ultimoContato, TODAY)
         : daysBetween(selectedEmpresa.data_entrada, TODAY))
     : 0;
   const isActionDelayed = !!selectedEmpresa && panelTimeSince > 5 &&
@@ -510,6 +516,16 @@ export default function LeadPanel({
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              {selectedLead && (
+                <button
+                  type="button"
+                  onClick={() => setEditandoDados(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20"
+                  title="Editar informações e validade do lead"
+                >
+                  <PencilLine size={12} /> Editar
+                </button>
+              )}
               <button className="text-slate-600 hover:text-amber-400 transition-colors"><Star size={16} /></button>
               <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors"><X size={18} /></button>
             </div>
@@ -639,6 +655,26 @@ export default function LeadPanel({
             ))}
           </div>
 
+          {selectedLead && (
+            <div className="px-4 py-3 border-b border-[#2a3147]">
+              <button
+                type="button"
+                onClick={() => setEditandoDados(true)}
+                className="w-full flex items-center justify-between gap-3 rounded-xl border border-[#2a3147] bg-[#0f1117] px-3 py-2 text-left hover:border-indigo-500/40 hover:bg-indigo-500/5"
+              >
+                <span>
+                  <span className="block text-xs text-slate-500">Validade do laudo</span>
+                  <span className="block text-sm font-semibold text-slate-300 mt-0.5">
+                    {selectedLead.data_validade ? formatDate(selectedLead.data_validade) : 'Não configurada'}
+                  </span>
+                </span>
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-300">
+                  <PencilLine size={12} /> Editar
+                </span>
+              </button>
+            </div>
+          )}
+
           {/* Próxima ação IA */}
           <div className="px-5 py-3 border-b border-[#2a3147]">
             <div className="flex items-center gap-1.5 mb-2">
@@ -730,7 +766,7 @@ export default function LeadPanel({
               <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${cadenciaPct}%` }} />
             </div>
             <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2">
-              <span>Último contato: {selectedLead?.ultimo_contato ? formatDate(selectedLead.ultimo_contato) : '—'}</span>
+              <span>Último contato: {ultimoContato ? formatDate(ultimoContato) : '—'}</span>
               <span className="capitalize">{selectedContato?.canal_preferencial ?? '—'}</span>
             </div>
           </div>
@@ -1035,6 +1071,7 @@ export default function LeadPanel({
               { label: 'Origem', value: L?.origem ?? selectedEmpresa.origem },
               { label: 'Score', value: score ? `${score} / 100` : null },
               { label: 'Criado em', value: criado ? formatDate(criado) : null },
+              { label: 'Validade do laudo', value: L?.data_validade ? formatDate(L.data_validade) : 'Não configurada' },
               { label: 'Site', value: site, link: true },
               { label: 'LinkedIn', value: linkedin, link: true },
             ];
@@ -1167,7 +1204,7 @@ export default function LeadPanel({
                 </div>
                 <div className="flex flex-col bg-[#0f1117] rounded-lg px-3 py-1.5 border border-[#2a3147]">
                   <span className="text-[10px] text-slate-500 uppercase tracking-wide">Último contato</span>
-                  <span className="text-sm font-medium text-slate-300">{selectedLead?.ultimo_contato ? formatDate(selectedLead.ultimo_contato) : '—'}</span>
+                  <span className="text-sm font-medium text-slate-300">{ultimoContato ? formatDate(ultimoContato) : '—'}</span>
                 </div>
                 <div className="flex flex-col bg-[#0f1117] rounded-lg px-3 py-1.5 border border-[#2a3147] max-w-xs">
                   <span className="text-[10px] text-slate-500 uppercase tracking-wide">Próxima ação</span>
@@ -1355,6 +1392,7 @@ export default function LeadPanel({
                     { label: 'Origem', value: selectedLead?.origem ?? selectedEmpresa.origem },
                     { label: 'Score', value: selectedLead ? `${selectedLead.score} / 100` : `${selectedEmpresa.score_engajamento} / 100` },
                     { label: 'Criado em', value: selectedLead?.created_at ? formatDate(selectedLead.created_at) : formatDate(selectedEmpresa.data_entrada) },
+                    { label: 'Validade do laudo', value: selectedLead?.data_validade ? formatDate(selectedLead.data_validade) : 'Não configurada' },
                   ].map(field => (
                     <div key={field.label} className="border-b border-[#2a3147] pb-2">
                       <span className="text-xs text-slate-500 uppercase tracking-wide block mb-0.5">{field.label}</span>

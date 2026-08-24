@@ -49,7 +49,12 @@ export class MemoryStore implements Store {
   }
 
   async registrarInteracao(i: NovaInteracao): Promise<void> {
-    this.interacoes.push({ ...i, id: `int-${++this.seq}`, created_at: new Date().toISOString() })
+    const createdAt = new Date().toISOString()
+    this.interacoes.push({ ...i, id: `int-${++this.seq}`, created_at: createdAt })
+    if (i.canal === 'email') {
+      const lead = this.leads.find((item) => item.id === i.lead_id)
+      if (lead) lead.ultimo_contato = createdAt
+    }
   }
 
   async contarInteracoes(leadId: string, tipo: TipoInteracaoEngine): Promise<number> {
