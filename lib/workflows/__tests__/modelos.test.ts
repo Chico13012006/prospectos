@@ -25,4 +25,11 @@ describe('modelos de workflow (Fase 11)', () => {
     const chaves = MODELOS.map((m) => m.chave)
     expect(new Set(chaves).size).toBe(chaves.length)
   })
+
+  it('o modelo de renovação observa a validade, não a próxima ação comercial', () => {
+    expect(modeloPorChave('renovacao_45d')?.definicao.gatilho.config).toEqual({
+      campo: 'data_validade',
+      dias: 45,
+    })
+  })
 })

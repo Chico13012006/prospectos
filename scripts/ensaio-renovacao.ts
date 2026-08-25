@@ -21,7 +21,7 @@ async function main() {
   const r = await processarRenovacoes(ORG, { dryRun: true })
   console.log(`\n=== ENSAIO DE RENOVAÇÃO (org ${ORG}) — dryRun, nada escrito/enviado ===`)
   console.table([{
-    servicos_avaliados: r.avaliados,
+    validades_avaliadas: r.avaliados,
     dentro_da_janela: r.naJanela,
     tarefas_que_seriam_criadas: r.tarefas,
     notificacoes_que_seriam_geradas: r.notificacoes,
@@ -31,11 +31,11 @@ async function main() {
   if (r.itens.length) {
     console.log('Itens na janela:')
     console.table(r.itens.map((i) => ({
-      empresa: i.empresa, vencimento: i.vencimento, dias: i.dias,
+      fonte: i.fonte, empresa: i.empresa, vencimento: i.vencimento, dias: i.dias,
       ja_tem_tarefa: i.jaTemTarefa, dest_tarefa: i.destinatarioTarefa, dest_mensagem: i.destinatarioMensagem,
     })))
   } else {
-    console.log('Nenhum serviço na janela (cadastre laudos no LeadPanel para popular).')
+    console.log('Nenhuma validade na janela (cadastre um serviço recorrente ou a validade legada no lead).')
   }
 }
 main().catch((e) => { console.error(e?.message ?? e); process.exit(1) })

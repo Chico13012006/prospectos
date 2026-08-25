@@ -30,6 +30,7 @@ export function makeLead(over: Partial<Lead> = {}): Lead {
     hubspot_id: over.hubspot_id,
     perdido: over.perdido ?? false,
     perdido_motivo: over.perdido_motivo,
+    data_validade: over.data_validade ?? null,
     bounced: over.bounced ?? false,
     bounced_em: over.bounced_em ?? null,
     created_at: over.created_at ?? now,

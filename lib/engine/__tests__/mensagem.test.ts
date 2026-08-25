@@ -34,6 +34,10 @@ describe('preencher', () => {
     const lead = makeLead({ contato_nome: '' })
     expect(preencher('Olá {nome}, tudo bem?', lead)).toBe('Olá, tudo bem?')
   })
+  it('mantém o dia exato da validade sem deslocamento de fuso', () => {
+    const lead = makeLead({ data_validade: '2026-08-30' })
+    expect(preencher('Validade: {data_validade}', lead)).toBe('Validade: 30/08/2026')
+  })
 })
 
 describe('montarEmail — seleção com fallback', () => {

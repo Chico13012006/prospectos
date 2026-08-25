@@ -9,6 +9,7 @@
 import type { Lead } from './types'
 import type { Store } from './store/store'
 import { NICHOS } from './templates-seed'
+import { formatarDataIsoSemFuso } from '@/lib/servicos/vencimento'
 
 export interface Envio {
   tipo: 'abordagem' | 'follow_up'
@@ -78,9 +79,7 @@ export function preencher(texto: string, lead: Lead, extras?: Record<string, str
     segmento: lead.segmento?.trim() || 'seu setor',
     cidade: lead.cidade?.trim() || '',
     responsavel_comercial: lead.usuarios?.nome || lead.responsavel_nome || 'Francisco',
-    data_validade: lead.data_validade
-      ? new Date(lead.data_validade).toLocaleDateString('pt-BR')
-      : '',
+    data_validade: formatarDataIsoSemFuso(lead.data_validade),
     ...extras,
   }
   return texto

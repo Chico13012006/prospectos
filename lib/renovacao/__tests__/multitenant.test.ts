@@ -22,7 +22,7 @@ class Chain {
   eqCalls: [string, unknown][] = []
   insertPayload: Record<string, unknown> | null = null
   mode: 'select' | 'count' | 'insert' = 'select'
-  constructor(public table: string) {}
+  constructor(public table: string, private scenario: 'servico' | 'legado') {}
   select(_cols?: unknown, opts?: { head?: boolean }) {
     if (opts?.head) this.mode = 'count'
     return this
@@ -36,6 +36,7 @@ class Chain {
   gte() { return this }
   is() { return this }
   ilike() { return this }
+  or() { return this }
   order() { return this }
   limit() { return this }
   maybeSingle() { return this }
@@ -44,11 +45,17 @@ class Chain {
   private resultado(): { data?: unknown; error: null; count?: number } {
     if (this.table === 'organizacoes') return { data: { configuracoes: {} }, error: null }
     if (this.table === 'servicos_recorrentes') {
-      if (this.mode === 'count') return { count: 1, error: null }
+      if (this.scenario === 'legado') return { data: [], error: null }
       return { data: [{ id: 'S1', empresa_id: 'E1', vencimento_em: '2026-08-20', responsavel_id: null }], error: null }
     }
     if (this.table === 'empresas') return { data: { nome: 'Empresa A' }, error: null }
-    if (this.table === 'leads') return { data: [], error: null }
+    if (this.table === 'leads') {
+      if (this.scenario === 'legado') return { data: [{
+        id: 'L1', empresa_id: null, empresa: 'Empresa legada', data_validade: '2026-08-20',
+        responsavel_id: null, contato_email: 'contato@empresa.test',
+      }], error: null }
+      return { data: [], error: null }
+    }
     if (this.table === 'tarefas') {
       if (this.mode === 'insert') return { data: { id: 'T1' }, error: null }
       return { data: [], error: null } // dedup: nenhuma tarefa aberta ainda
@@ -58,10 +65,10 @@ class Chain {
   then(resolve: (v: unknown) => void) { resolve(this.resultado()) }
 }
 
-function mockClient() {
+function mockClient(scenario: 'servico' | 'legado' = 'servico') {
   const chains: Chain[] = []
   const client = {
-    from(table: string) { const c = new Chain(table); chains.push(c); return c },
+    from(table: string) { const c = new Chain(table, scenario); chains.push(c); return c },
   } as unknown as SupabaseClient
   return { client, chains }
 }
@@ -82,7 +89,10 @@ describe('multi-tenant — processarRenovacoes escopa organizacao_id nas tabelas
     await processarRenovacoes(ORG, { client, hoje: new Date('2026-08-10') })
     const dedup = doTabela(chains, 'tarefas').filter((c) => c.mode === 'select')
     expect(dedup.length).toBeGreaterThan(0)
-    for (const c of dedup) expect(c.temEq('organizacao_id', ORG)).toBe(true)
+    for (const c of dedup) {
+      expect(c.temEq('organizacao_id', ORG)).toBe(true)
+      expect(c.temEq('prazo_em', '2026-08-20T00:00:00.000Z')).toBe(true)
+    }
   })
 
   it('GRAVA organizacao_id ao criar tarefa e notificação', async () => {
@@ -108,5 +118,24 @@ describe('multi-tenant — processarRenovacoes escopa organizacao_id nas tabelas
         expect(c.insertPayload.organizacao_id).toBe(ORG)
       }
     }
+  })
+
+  it('usa data_validade como fallback e cria tarefa idempotente sem servico_id', async () => {
+    const { client, chains } = mockClient('legado')
+    const r = await processarRenovacoes(ORG, { client, hoje: new Date('2026-08-10') })
+
+    expect(r.avaliados).toBe(1)
+    expect(r.itens[0]).toMatchObject({ fonte: 'lead_legado', empresa: 'Empresa legada', vencimento: '2026-08-20' })
+    const dedup = doTabela(chains, 'tarefas').find((c) => c.mode === 'select')
+    expect(dedup?.temEq('organizacao_id', ORG)).toBe(true)
+    expect(dedup?.temEq('lead_id', 'L1')).toBe(true)
+    expect(dedup?.temEq('prazo_em', '2026-08-20T00:00:00.000Z')).toBe(true)
+    const tarefa = doTabela(chains, 'tarefas').find((c) => c.mode === 'insert')
+    expect(tarefa?.insertPayload).toMatchObject({
+      organizacao_id: ORG,
+      lead_id: 'L1',
+      servico_id: null,
+      prazo_em: '2026-08-20T00:00:00.000Z',
+    })
   })
 })

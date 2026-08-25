@@ -33,7 +33,7 @@ export const MODELOS: ModeloWorkflow[] = [
     nome: 'Renovação 45 dias',
     descricao: 'Quando uma data do lead vence em até 45 dias: cria a tarefa de renovação e envia a 1ª mensagem.',
     definicao: {
-      gatilho: { tipo: 'campo_data_vence', config: { campo: 'proxima_acao_data', dias: 45 } },
+      gatilho: { tipo: 'campo_data_vence', config: { campo: 'data_validade', dias: 45 } },
       condicoes: [],
       acoes: [
         { tipo: 'criar_tarefa', config: { titulo: 'Iniciar renovação' } },
