@@ -2,13 +2,14 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Settings, Sliders, SlidersHorizontal, Palette } from 'lucide-react';
+import { Settings, Sliders, SlidersHorizontal, Palette, Target } from 'lucide-react';
 import ParametrosMotorPanel from '@/components/configuracoes/ParametrosMotorPanel';
 import ProcessoComercialPanel from '@/components/configuracoes/ProcessoComercialPanel';
 import PersonalizacaoPanel from '@/components/configuracoes/PersonalizacaoPanel';
+import ObjetivosOperacaoPanel from '@/components/configuracoes/ObjetivosOperacaoPanel';
 
-// Configurações: Motor de cadência, Processo comercial e Personalização do CRM.
-// Deep-link ?tab=processo / ?tab=personalizacao. useSearchParams exige Suspense.
+// Configurações por workspace: objetivos, motor, processo e personalização.
+// Deep-links por ?tab. useSearchParams exige Suspense.
 export default function ConfiguracoesPage() {
   return (
     <Suspense fallback={null}>
@@ -17,12 +18,12 @@ export default function ConfiguracoesPage() {
   );
 }
 
-type Aba = 'motor' | 'processo' | 'personalizacao';
-const ABAS: Aba[] = ['motor', 'processo', 'personalizacao'];
+type Aba = 'objetivos' | 'motor' | 'processo' | 'personalizacao';
+const ABAS: Aba[] = ['objetivos', 'motor', 'processo', 'personalizacao'];
 
 function Inner() {
   const searchParams = useSearchParams();
-  const [aba, setAba] = useState<Aba>('motor');
+  const [aba, setAba] = useState<Aba>('objetivos');
 
   useEffect(() => {
     const tab = searchParams.get('tab');
@@ -30,6 +31,7 @@ function Inner() {
   }, [searchParams]);
 
   const TABS: { id: Aba; label: string; Icon: typeof Sliders }[] = [
+    { id: 'objetivos', label: 'Objetivos da operação', Icon: Target },
     { id: 'motor', label: 'Motor de cadência', Icon: Sliders },
     { id: 'processo', label: 'Processo comercial', Icon: SlidersHorizontal },
     { id: 'personalizacao', label: 'Personalização', Icon: Palette },
@@ -43,7 +45,7 @@ function Inner() {
           Configurações
         </h1>
         <p className="text-sm text-slate-400 mt-0.5">
-          Motor, processo comercial e personalização de campos, pipelines e terminologia.
+          Objetivos, motor, processo comercial e personalização do workspace.
         </p>
       </div>
 
@@ -61,6 +63,7 @@ function Inner() {
         ))}
       </div>
 
+      {aba === 'objetivos' && <ObjetivosOperacaoPanel />}
       {aba === 'motor' && <ParametrosMotorPanel />}
       {aba === 'processo' && <ProcessoComercialPanel />}
       {aba === 'personalizacao' && <PersonalizacaoPanel />}

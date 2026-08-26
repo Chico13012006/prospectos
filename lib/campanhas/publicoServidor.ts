@@ -1,6 +1,7 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Publico } from '@/components/automacao/tiposCampanha'
+import { parseWorkspaceConfig, renovacaoEfetiva } from '@/lib/config/workspaceConfig'
 import { emailValido } from '@/lib/leads/importarCsv'
 import { LIMITE_PUBLICO_CAMPANHA } from './configuracaoGuiada'
 
@@ -21,6 +22,9 @@ export interface LinhaPublicoCampanha {
 
 interface MarcadoresCliente {
   empresasComServico: Set<string>
+  empresasComRenovacao: Set<string>
+  empresasComValidadeLegada: Set<string>
+  leadsComValidadeLegada: Set<string>
   empresasComOportunidadeGanha: Set<string>
   leadsComOportunidadeGanha: Set<string>
 }
@@ -32,8 +36,13 @@ export function linhaAtendeCriterioCliente(
   criterio: 'clientes' | 'renovacao',
   marcadores: MarcadoresCliente,
 ): boolean {
+  if (criterio === 'renovacao') {
+    return (!!linha.empresa_id && (
+      marcadores.empresasComRenovacao.has(linha.empresa_id)
+      || marcadores.empresasComValidadeLegada.has(linha.empresa_id)
+    )) || marcadores.leadsComValidadeLegada.has(linha.id)
+  }
   if (linha.empresa_id && marcadores.empresasComServico.has(linha.empresa_id)) return true
-  if (criterio === 'renovacao') return false
   return linha.estagio === 'ganho'
     || marcadores.leadsComOportunidadeGanha.has(linha.id)
     || (!!linha.empresa_id && marcadores.empresasComOportunidadeGanha.has(linha.empresa_id))
@@ -44,13 +53,22 @@ async function buscarMarcadoresCliente(
   org: string,
   criterio: 'clientes' | 'renovacao',
 ): Promise<MarcadoresCliente> {
-  const [servicos, oportunidades] = await Promise.all([
+  const { data: orgRow, error: orgErro } = await admin.from('organizacoes')
+    .select('configuracoes').eq('id', org).maybeSingle()
+  if (orgErro) throw orgErro
+  const antecedenciaDias = renovacaoEfetiva(parseWorkspaceConfig(orgRow?.configuracoes)).antecedenciaDias
+  const limiteVencimento = new Date()
+  limiteVencimento.setUTCDate(limiteVencimento.getUTCDate() + antecedenciaDias)
+  const limiteIso = limiteVencimento.toISOString().slice(0, 10)
+
+  const [servicos, oportunidades, validadesLegadas] = await Promise.all([
     admin
       .from('servicos_recorrentes')
-      .select('empresa_id')
+      .select('empresa_id, vencimento_em')
       .eq('organizacao_id', org)
       .eq('arquivado', false)
       .eq('status', 'vigente')
+      .order('id', { ascending: true })
       .limit(LIMITE_PUBLICO_CAMPANHA),
     criterio === 'clientes'
       ? admin
@@ -60,11 +78,35 @@ async function buscarMarcadoresCliente(
         .eq('status', 'ganha')
         .limit(LIMITE_PUBLICO_CAMPANHA)
       : Promise.resolve({ data: [], error: null }),
+    criterio === 'renovacao'
+      ? admin
+        .from('leads')
+        .select('id, empresa_id, data_validade')
+        .eq('organizacao_id', org)
+        .not('data_validade', 'is', null)
+        .lte('data_validade', limiteIso)
+        .order('data_validade', { ascending: true }).order('id', { ascending: true })
+        .limit(LIMITE_PUBLICO_CAMPANHA)
+      : Promise.resolve({ data: [], error: null }),
   ])
   if (servicos.error) throw servicos.error
   if (oportunidades.error) throw oportunidades.error
+  if (validadesLegadas.error) throw validadesLegadas.error
+  const empresasComServico = new Set((servicos.data ?? [])
+    .map((item) => item.empresa_id as string | null).filter((id): id is string => !!id))
+  const empresasComRenovacao = new Set((servicos.data ?? [])
+    .filter((item) => typeof item.vencimento_em === 'string' && item.vencimento_em <= limiteIso)
+    .map((item) => item.empresa_id as string | null).filter((id): id is string => !!id))
+  const legadosAutoritativos = (validadesLegadas.data ?? []).filter((item) =>
+    !item.empresa_id || !empresasComServico.has(item.empresa_id as string),
+  )
   return {
-    empresasComServico: new Set((servicos.data ?? []).map((item) => item.empresa_id as string | null).filter((id): id is string => !!id)),
+    empresasComServico,
+    empresasComRenovacao,
+    empresasComValidadeLegada: new Set(legadosAutoritativos
+      .map((item) => item.empresa_id as string | null).filter((id): id is string => !!id)),
+    leadsComValidadeLegada: new Set(legadosAutoritativos
+      .filter((item) => !item.empresa_id).map((item) => item.id as string)),
     empresasComOportunidadeGanha: new Set((oportunidades.data ?? []).map((item) => item.empresa_id as string | null).filter((id): id is string => !!id)),
     leadsComOportunidadeGanha: new Set((oportunidades.data ?? []).map((item) => item.lead_id as string | null).filter((id): id is string => !!id)),
   }
@@ -106,6 +148,7 @@ export function classificarPublicoCampanha(
     execucoesIncompativeis?: Set<string>
     limite?: number
     truncado?: boolean
+    umContatoPorEmpresa?: boolean
   } = {},
 ): PreviaPublicoCampanha {
   const excluidos = new Set(opts.excluirIds ?? [])
@@ -116,17 +159,24 @@ export function classificarPublicoCampanha(
   const ocorrencias = new Map<string, number>()
   for (const linha of selecionados) {
     const email = emailNormalizado(linha.contato_email)
-    if (email) ocorrencias.set(email, (ocorrencias.get(email) ?? 0) + 1)
+    if (email) {
+      const chaveDuplicidade = opts.umContatoPorEmpresa ? chaveEmpresaPublico(linha) : email
+      ocorrencias.set(chaveDuplicidade, (ocorrencias.get(chaveDuplicidade) ?? 0) + 1)
+    }
   }
 
   const usados = new Set<string>()
+  const empresasUsadas = new Set<string>()
   const elegiveis: LinhaPublicoCampanha[] = []
   for (const linha of selecionados) {
     const email = emailNormalizado(linha.contato_email)
     const bloqueado = linha.optout === true || linha.bounced === true || linha.perdido === true
     const incompativel = linha.owner !== 'engine' || execucoes.has(linha.id)
-    if (!email || bloqueado || incompativel || usados.has(email)) continue
+    const chaveEmpresa = chaveEmpresaPublico(linha)
+    if (!email || bloqueado || incompativel || usados.has(email)
+      || (opts.umContatoPorEmpresa && empresasUsadas.has(chaveEmpresa))) continue
     usados.add(email)
+    if (opts.umContatoPorEmpresa) empresasUsadas.add(chaveEmpresa)
     elegiveis.push(linha)
   }
 
@@ -257,6 +307,7 @@ export async function buscarPreviaPublicoCampanha(
     execucoesIncompativeis,
     limite: publico.empresas?.limite,
     truncado: truncadoConsulta,
+    umContatoPorEmpresa: criterioCliente === 'renovacao',
   })
 }
 

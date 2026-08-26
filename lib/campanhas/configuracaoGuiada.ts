@@ -94,7 +94,7 @@ const REGRAS_PUBLICO: Record<string, {
     permitirEscolhaStatus: false,
     criterio: 'renovacao',
     titulo: 'Clientes elegíveis para renovação',
-    descricao: 'Somente empresas com serviço recorrente vigente; prospecção e follow-up são excluídos.',
+    descricao: 'Clientes com laudo vencido ou dentro da antecedência configurada; prospecção e follow-up são excluídos.',
   },
 }
 

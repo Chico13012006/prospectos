@@ -15,7 +15,34 @@
 // junto com as fases). Se a superfície crescer muito, aí sim avaliamos um zod.
 
 // Suba este número ao mudar o formato do blob, e adicione o passo em `migrar()`.
-export const WORKSPACE_CONFIG_SCHEMA_VERSION = 2
+export const WORKSPACE_CONFIG_SCHEMA_VERSION = 3
+
+// Objetivos que o produto já consegue medir de ponta a ponta. Novos objetivos
+// só entram nesta allowlist quando houver dado operacional real para dashboard,
+// fila, campanha e relatório — não basta exibir um card na configuração.
+export const OBJETIVOS_OPERACIONAIS = ['prospeccao', 'vencimentos_laudos'] as const
+export type ObjetivoOperacional = (typeof OBJETIVOS_OPERACIONAIS)[number]
+
+export interface MetasMensaisOperacao {
+  contatos?: number
+  reunioes?: number
+  renovacoes?: number
+}
+
+export interface OperacaoConfig {
+  objetivoPrincipal?: ObjetivoOperacional
+  objetivosAtivos?: ObjetivoOperacional[]
+  relatorioSemanal?: boolean
+  metasMensais?: MetasMensaisOperacao
+}
+
+export const OPERACAO_PADRAO: Required<Omit<OperacaoConfig, 'metasMensais'>> & { metasMensais: MetasMensaisOperacao } = {
+  objetivoPrincipal: 'prospeccao',
+  // Preserva a visão que já estava disponível para workspaces existentes.
+  objetivosAtivos: ['prospeccao', 'vencimentos_laudos'],
+  relatorioSemanal: true,
+  metasMensais: {},
+}
 
 // Configuração de visibilidade de um campo por workspace (Personalização > Campos).
 export interface CampoUI {
@@ -76,6 +103,7 @@ export interface WorkspaceConfig {
   modulos?: Record<string, boolean>
   features?: FeaturesConfig
   renovacao?: RenovacaoConfig
+  operacao?: OperacaoConfig
   roi?: RoiConfig
   // Configuração de campos por workspace (Personalização > Campos). Ausência = todos no padrão.
   camposUI?: CampoUI[]
@@ -107,6 +135,8 @@ function migrar(bruto: Record<string, unknown>): Record<string, unknown> {
   if (v < 1) cfg = { ...cfg, _schema_version: 1 }
   // v1 -> v2: adiciona camposUI (Personalização). Nada a migrar, ausência = padrão.
   if (v < 2) cfg = { ...cfg, _schema_version: 2 }
+  // v2 -> v3: adiciona operação/objetivos. Ausência preserva o padrão legado.
+  if (v < 3) cfg = { ...cfg, _schema_version: 3 }
   return cfg
 }
 
@@ -163,7 +193,52 @@ export function parseWorkspaceConfig(bruto: unknown): WorkspaceConfig {
     if (typeof r.enviarPrimeiraMensagem === 'boolean') ren.enviarPrimeiraMensagem = r.enviarPrimeiraMensagem
     if (Object.keys(ren).length > 0) out.renovacao = ren
   }
+  if (ehObjeto(obj.operacao)) {
+    const brutoOperacao = obj.operacao as Record<string, unknown>
+    const objetivosAtivos = Array.isArray(brutoOperacao.objetivosAtivos)
+      ? [...new Set(brutoOperacao.objetivosAtivos.filter(
+          (x): x is ObjetivoOperacional =>
+            typeof x === 'string' && (OBJETIVOS_OPERACIONAIS as readonly string[]).includes(x),
+        ))]
+      : undefined
+    const objetivoPrincipal = typeof brutoOperacao.objetivoPrincipal === 'string'
+      && (OBJETIVOS_OPERACIONAIS as readonly string[]).includes(brutoOperacao.objetivoPrincipal)
+      ? brutoOperacao.objetivoPrincipal as ObjetivoOperacional
+      : undefined
+    const operacao: OperacaoConfig = {}
+    if (objetivosAtivos?.length) operacao.objetivosAtivos = objetivosAtivos
+    if (objetivoPrincipal && (!objetivosAtivos || objetivosAtivos.includes(objetivoPrincipal))) {
+      operacao.objetivoPrincipal = objetivoPrincipal
+    }
+    if (typeof brutoOperacao.relatorioSemanal === 'boolean') {
+      operacao.relatorioSemanal = brutoOperacao.relatorioSemanal
+    }
+    if (ehObjeto(brutoOperacao.metasMensais)) {
+      const metas: MetasMensaisOperacao = {}
+      for (const chave of ['contatos', 'reunioes', 'renovacoes'] as const) {
+        const valor = brutoOperacao.metasMensais[chave]
+        if (typeof valor === 'number' && Number.isFinite(valor) && valor > 0) metas[chave] = Math.round(valor)
+      }
+      if (Object.keys(metas).length) operacao.metasMensais = metas
+    }
+    if (Object.keys(operacao).length) out.operacao = operacao
+  }
   return out
+}
+
+export function operacaoEfetiva(cfg: WorkspaceConfig | null | undefined): Required<Omit<OperacaoConfig, 'metasMensais'>> & { metasMensais: MetasMensaisOperacao } {
+  const objetivosAtivos = cfg?.operacao?.objetivosAtivos?.length
+    ? cfg.operacao.objetivosAtivos
+    : OPERACAO_PADRAO.objetivosAtivos
+  const principalConfigurado = cfg?.operacao?.objetivoPrincipal
+  return {
+    objetivosAtivos,
+    objetivoPrincipal: principalConfigurado && objetivosAtivos.includes(principalConfigurado)
+      ? principalConfigurado
+      : objetivosAtivos[0],
+    relatorioSemanal: cfg?.operacao?.relatorioSemanal ?? OPERACAO_PADRAO.relatorioSemanal,
+    metasMensais: cfg?.operacao?.metasMensais ?? {},
+  }
 }
 
 // Config de renovação EFETIVA de um workspace: o que ele configurou sobrepõe os
@@ -187,6 +262,7 @@ export interface WorkspaceConfigEditavel {
   renovacaoAntecedenciaDias?: number
   roiCustoMensal?: number
   camposUI?: CampoUI[]
+  operacao?: OperacaoConfig
 }
 
 export function mesclarWorkspaceConfig(atual: WorkspaceConfig, patch: WorkspaceConfigEditavel): WorkspaceConfig {
@@ -200,5 +276,6 @@ export function mesclarWorkspaceConfig(atual: WorkspaceConfig, patch: WorkspaceC
     next.roi = { ...atual.roi, custoMensal: patch.roiCustoMensal }
   }
   if (Array.isArray(patch.camposUI)) next.camposUI = patch.camposUI
+  if (patch.operacao) next.operacao = patch.operacao
   return serializeWorkspaceConfig(next)
 }

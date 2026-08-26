@@ -7,6 +7,8 @@ import {
   mesclarWorkspaceConfig,
   renovacaoEfetiva,
   RENOVACAO_PADRAO,
+  operacaoEfetiva,
+  OPERACAO_PADRAO,
 } from '../workspaceConfig'
 
 describe('workspaceConfig', () => {
@@ -87,5 +89,34 @@ describe('workspaceConfig', () => {
     expect(efetiva.antecedenciaDias).toBe(30)
     expect(efetiva.enviarPrimeiraMensagem).toBe(false)
     expect(efetiva.templateTipo).toBe(RENOVACAO_PADRAO.templateTipo) // cai no default
+  })
+
+  it('operação: aplica padrão compatível em blob legado', () => {
+    expect(operacaoEfetiva(parseWorkspaceConfig({}))).toEqual(OPERACAO_PADRAO)
+  })
+
+  it('operação: aceita somente objetivos e metas suportados', () => {
+    const parsed = parseWorkspaceConfig({
+      operacao: {
+        objetivoPrincipal: 'vencimentos_laudos',
+        objetivosAtivos: ['vencimentos_laudos', 'pagamentos', 'vencimentos_laudos'],
+        relatorioSemanal: false,
+        metasMensais: { contatos: 120.4, reunioes: -1, renovacoes: 15, inventada: 9 },
+      },
+    })
+    expect(parsed.operacao).toEqual({
+      objetivoPrincipal: 'vencimentos_laudos',
+      objetivosAtivos: ['vencimentos_laudos'],
+      relatorioSemanal: false,
+      metasMensais: { contatos: 120, renovacoes: 15 },
+    })
+  })
+
+  it('operação: corrige objetivo principal fora dos objetivos ativos', () => {
+    const parsed = parseWorkspaceConfig({
+      operacao: { objetivoPrincipal: 'prospeccao', objetivosAtivos: ['vencimentos_laudos'] },
+    })
+    expect(parsed.operacao?.objetivoPrincipal).toBeUndefined()
+    expect(operacaoEfetiva(parsed).objetivoPrincipal).toBe('vencimentos_laudos')
   })
 })

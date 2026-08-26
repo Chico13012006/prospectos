@@ -89,9 +89,24 @@ describe('prévia real do público da campanha', () => {
     ])
   })
 
+  it('renovação escolhe somente um contato por cliente', () => {
+    const previa = classificarPublicoCampanha([
+      linha('a', { empresa_id: 'empresa-acme', empresa: 'Acme', contato_email: 'a@acme.com' }),
+      linha('b', { empresa_id: 'empresa-acme', empresa: 'Acme', contato_email: 'b@acme.com' }),
+      linha('c', { empresa_id: 'empresa-beta', empresa: 'Beta', contato_email: 'c@beta.com' }),
+    ], { umContatoPorEmpresa: true })
+
+    expect(previa.idsElegiveis).toEqual(['a', 'c'])
+    expect(previa.duplicados).toBe(1)
+    expect(previa.empresas.find((empresa) => empresa.nome === 'Acme')?.elegiveis).toBe(1)
+  })
+
   it('distingue clientes reais de contatos ainda em prospecção', () => {
     const marcadores = {
       empresasComServico: new Set(['empresa-servico']),
+      empresasComRenovacao: new Set(['empresa-renovacao']),
+      empresasComValidadeLegada: new Set(['empresa-legada']),
+      leadsComValidadeLegada: new Set(['lead-legado']),
       empresasComOportunidadeGanha: new Set(['empresa-oportunidade']),
       leadsComOportunidadeGanha: new Set(['lead-oportunidade']),
     }
@@ -100,5 +115,9 @@ describe('prévia real do público da campanha', () => {
     expect(linhaAtendeCriterioCliente(linha('lead-oportunidade'), 'clientes', marcadores)).toBe(true)
     expect(linhaAtendeCriterioCliente(linha('prospectando', { estagio: 'follow_up' }), 'clientes', marcadores)).toBe(false)
     expect(linhaAtendeCriterioCliente(linha('ganho', { estagio: 'ganho' }), 'renovacao', marcadores)).toBe(false)
+    expect(linhaAtendeCriterioCliente(linha('renovacao', { empresa_id: 'empresa-renovacao' }), 'renovacao', marcadores)).toBe(true)
+    expect(linhaAtendeCriterioCliente(linha('legada', { empresa_id: 'empresa-legada' }), 'renovacao', marcadores)).toBe(true)
+    expect(linhaAtendeCriterioCliente(linha('lead-legado', { empresa_id: null }), 'renovacao', marcadores)).toBe(true)
+    expect(linhaAtendeCriterioCliente(linha('servico', { empresa_id: 'empresa-servico' }), 'renovacao', marcadores)).toBe(false)
   })
 })
