@@ -2,13 +2,14 @@
 import { NextResponse } from 'next/server'
 import { engineConfig } from './config'
 
-// Protege os endpoints do motor com o INTERNAL_SECRET (reusa o já existente).
+// Protege os endpoints do motor com INTERNAL_SECRET (chamadas internas/manuais)
+// ou CRON_SECRET (enviado automaticamente pelo Vercel Cron no Authorization).
 // Aceita header `x-internal-secret` ou `Authorization: Bearer <secret>`.
 export function autorizar(req: Request): NextResponse | null {
-  const secret = engineConfig.internalSecret
-  if (!secret) {
+  const secrets = [engineConfig.internalSecret, process.env.CRON_SECRET ?? ''].filter(Boolean)
+  if (secrets.length === 0) {
     return NextResponse.json(
-      { erro: 'INTERNAL_SECRET não configurado no servidor' },
+      { erro: 'INTERNAL_SECRET ou CRON_SECRET não configurado no servidor' },
       { status: 500 },
     )
   }
@@ -16,7 +17,7 @@ export function autorizar(req: Request): NextResponse | null {
     req.headers.get('x-internal-secret') ??
     req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
     ''
-  if (header !== secret) {
+  if (!secrets.includes(header)) {
     return NextResponse.json({ erro: 'não autorizado' }, { status: 401 })
   }
   return null

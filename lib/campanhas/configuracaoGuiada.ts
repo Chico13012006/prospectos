@@ -10,12 +10,15 @@ export const TIPOS_CAMPANHA = [
   { id: 'followup', label: 'Fazer follow-up', descricao: 'Retomar contatos existentes sem resposta.' },
   { id: 'reativacao', label: 'Reativar contatos antigos', descricao: 'Voltar a falar com contatos sem avanço recente.' },
   { id: 'novidade_clientes', label: 'Enviar uma novidade', descricao: 'Comunicar clientes sobre uma novidade ou conteúdo.' },
-  { id: 'renovacao', label: 'Comunicar renovação', descricao: 'Avisar sobre renovação ou vencimento.' },
+  { id: 'renovacao', label: 'Comunicar renovação', descricao: 'Avisar sobre vencimento e acompanhar automaticamente até a resposta.' },
 ] as const
 
 export type TipoCampanhaGuiada = (typeof TIPOS_CAMPANHA)[number]['id']
 
-const TIPOS_DISPARO_UNICO = new Set<string>(['novidade_clientes', 'renovacao'])
+// Somente comunicados gerais terminam após uma mensagem. Renovação é uma
+// automação contínua: o cron inscreve cada novo ciclo de vencimento e o
+// workflow faz os follow-ups configurados até a resposta.
+const TIPOS_DISPARO_UNICO = new Set<string>(['novidade_clientes'])
 
 export function campanhaEhDisparoUnico(tipo: string | null | undefined): boolean {
   return TIPOS_DISPARO_UNICO.has(tipo ?? '')
@@ -317,6 +320,9 @@ export function validarCampanhaGuiada(publico: Publico): string[] {
   }
   if (op?.modoEnvio !== 'disparo_unico' && !publico.agenda?.diasSemana?.length) {
     erros.push('Escolha ao menos um dia de envio.')
+  }
+  if (publico.selecao?.criterio === 'renovacao' && !(op?.followups?.length)) {
+    erros.push('Configure ao menos um follow-up para a renovação automática.')
   }
   return erros
 }

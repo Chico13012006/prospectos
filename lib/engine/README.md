@@ -57,6 +57,7 @@ MAX_FOLLOWUPS=3             # máximo de follow-ups por lead
 CLOSER_EMAIL=               # fallback p/ closer (se o lead não tiver responsável)
 
 # Já existentes (reusados): SUPABASE_SERVICE_ROLE_KEY, INTERNAL_SECRET
+# Vercel Cron: CRON_SECRET (enviado automaticamente no Authorization)
 # Gmail real (só quando MODO_ENSAIO=false):
 GMAIL_CLIENT_ID=
 GMAIL_CLIENT_SECRET=
@@ -64,8 +65,9 @@ GMAIL_REFRESH_TOKEN=
 GMAIL_REMETENTE="Francisco | iNOVACODE <francisco@inovacode.com.br>"
 ```
 
-Os endpoints exigem o header `x-internal-secret: <INTERNAL_SECRET>` (ou
-`Authorization: Bearer <INTERNAL_SECRET>`).
+Os endpoints aceitam `x-internal-secret: <INTERNAL_SECRET>` ou
+`Authorization: Bearer <INTERNAL_SECRET>`. Os agendamentos do Vercel usam
+`Authorization: Bearer <CRON_SECRET>` automaticamente.
 
 ## Setup
 

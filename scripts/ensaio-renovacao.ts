@@ -5,7 +5,6 @@
  * Default: organização de Laudos.
  */
 process.env.MODO_ENSAIO = 'true'
-delete process.env.RENOVACAO_ENVIO_REAL
 import fs from 'node:fs'
 import path from 'node:path'
 import { processarRenovacoes } from '../lib/renovacao/processar'

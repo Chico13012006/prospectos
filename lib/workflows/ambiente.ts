@@ -33,9 +33,12 @@ export interface AmbienteWorkflow {
   // organização do ambiente; campanha ausente/cross-tenant devolve null e não
   // pode liberar ações externas.
   buscarControleExecucaoCampanha(campanhaId: string): Promise<ControleExecucaoCampanha | null>
-  // Comunicação/renovação deixam de ficar ativas assim que todas as execuções
-  // do público confirmado chegam a um estado terminal.
+  // Comunicados de disparo único deixam de ficar ativos assim que todas as
+  // execuções do público confirmado chegam a um estado terminal.
   sincronizarConclusaoCampanha(campanhaId: string): Promise<void>
+  // Alerta operacional idempotente quando uma execução automática entra em
+  // erro. Opcional nos ambientes falsos/legados; o ambiente real persiste no app.
+  notificarFalhaExecucao?(execucao: { id: string; lead_id: string | null }, mensagem: string): Promise<void>
   // Gatilho 'campo_data_vence': leads cujo `campo` (data) vence em até `dias`.
   selecionarLeadsComCampoVencendo(campo: string, dias: number): Promise<string[]>
   // Gatilho 'campo_igual' (Fase 4.6): leads cujo `campo` satisfaz `operador` vs
@@ -121,6 +124,32 @@ export class AmbienteSupabase implements AmbienteWorkflow {
 
   async sincronizarConclusaoCampanha(campanhaId: string): Promise<void> {
     await concluirDisparoUnicoSeFinalizado(this.db, this.organizacaoId, campanhaId)
+  }
+
+  async notificarFalhaExecucao(execucao: { id: string; lead_id: string | null }, mensagem: string): Promise<void> {
+    if (this.simular) return
+    const motivo = `Falha na execução automática ${execucao.id}`
+    const { data: existente, error: buscaError } = await this.db
+      .from('notificacoes')
+      .select('id')
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('origem', 'workflow')
+      .eq('motivo', motivo)
+      .eq('lida', false)
+      .limit(1)
+    if (buscaError) throw buscaError
+    if (existente?.length) return
+    const { error } = await this.db.from('notificacoes').insert({
+      organizacao_id: this.organizacaoId,
+      canal: 'app',
+      titulo: 'Automação precisa de atenção',
+      mensagem: mensagem.slice(0, 500),
+      lead_id: execucao.lead_id,
+      origem: 'workflow',
+      motivo,
+      link: execucao.lead_id ? `/leads/${execucao.lead_id}` : '/automacao',
+    })
+    if (error) throw error
   }
 
   async selecionarLeadsComCampoVencendo(campo: string, dias: number): Promise<string[]> {

@@ -66,6 +66,10 @@ export interface WorkflowExecucao {
   lead_id: string | null
   // Campanha que originou o enrollment (null = execução orgânica/manual).
   campanha_id?: string | null
+  // Contexto opcional de um processo recorrente. Em renovação, a chave impede
+  // reinscrever o mesmo vencimento, mas permite um novo ciclo no futuro.
+  ciclo_chave?: string | null
+  servico_id?: string | null
   passo_atual: number
   status: StatusExecucao
   proxima_verificacao_em: string | null

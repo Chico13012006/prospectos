@@ -14,6 +14,7 @@ type Resumo = {
   duplicadosNoArquivo: number
   jaExistentes: number
   novos: number
+  nichos: Array<{ nicho: string; leads: number; templateAtivo: boolean }>
 }
 type Membro = { id: string; nome: string | null; email: string | null }
 
@@ -22,6 +23,12 @@ const MOTIVO_LABEL: Record<string, string> = {
   sem_email: 'sem e-mail',
   email_invalido: 'e-mail inválido',
   sem_empresa: 'sem empresa',
+  sem_segmento: 'sem nicho/segmento',
+}
+
+function rotuloNicho(nicho: string): string {
+  const texto = nicho.replace(/_/g, ' ')
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
 }
 
 export default function ImportarLeadsModal({
@@ -124,7 +131,7 @@ export default function ImportarLeadsModal({
               <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => escolherArquivo(e.target.files?.[0] ?? null)} />
             </label>
             <p className="text-xs text-slate-600 mt-1.5">
-              Colunas: <span className="text-slate-500">Nome, E-mail, Empresa, Origem</span> (obrigatórias) · Telefone, Cargo, Cidade, Estado (opcionais).
+              Obrigatórias: <span className="text-slate-500">Nome, E-mail, Empresa, Nicho/Segmento</span> · Opcionais: Origem, Telefone, Cargo, Cidade e Estado.
             </p>
 
             {carregandoPrevia && (
@@ -140,6 +147,24 @@ export default function ImportarLeadsModal({
                 {resumo.jaExistentes > 0 && <div className="flex justify-between"><span className="text-slate-400">Já existem na base</span><span className="text-slate-300 tabular-nums">{resumo.jaExistentes}</span></div>}
                 {pulosTexto && <div className="flex justify-between gap-3"><span className="text-slate-400">Puladas</span><span className="text-amber-300/80 text-right">{pulosTexto}</span></div>}
                 <div className="flex justify-between pt-1 border-t border-[#2a3147] mt-1"><span className="text-slate-200 font-medium">A inserir</span><span className="text-emerald-400 font-semibold tabular-nums">{resumo.novos}</span></div>
+                {resumo.nichos.length > 0 && (
+                  <div className="pt-2 mt-2 border-t border-[#2a3147] space-y-1.5">
+                    <p className="text-xs font-medium text-slate-400">Nichos dos novos leads</p>
+                    {resumo.nichos.map((item) => (
+                      <div key={item.nicho} className="flex items-center justify-between gap-3 text-xs">
+                        <span className="text-slate-300">{rotuloNicho(item.nicho)} · {item.leads} lead{item.leads === 1 ? '' : 's'}</span>
+                        <span className={item.templateAtivo ? 'text-emerald-400' : 'text-amber-300'}>
+                          {item.templateAtivo ? 'template pronto' : 'sem template de 1º contato'}
+                        </span>
+                      </div>
+                    ))}
+                    {resumo.nichos.some((item) => !item.templateAtivo) && (
+                      <p className="text-xs leading-5 text-amber-300/80">
+                        Esses leads podem ser importados, mas o primeiro e-mail fica bloqueado até existir um template para o nicho.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

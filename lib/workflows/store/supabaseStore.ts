@@ -133,6 +133,8 @@ export class SupabaseWorkflowStore implements WorkflowStore {
     versao_id: string
     lead_id?: string | null
     campanha_id?: string | null
+    ciclo_chave?: string | null
+    servico_id?: string | null
     status?: StatusExecucao
     proxima_verificacao_em?: string | null
   }): Promise<WorkflowExecucao> {
@@ -144,6 +146,8 @@ export class SupabaseWorkflowStore implements WorkflowStore {
         versao_id: input.versao_id,
         lead_id: input.lead_id ?? null,
         campanha_id: input.campanha_id ?? null,
+        ciclo_chave: input.ciclo_chave ?? null,
+        servico_id: input.servico_id ?? null,
         status: input.status ?? 'em_andamento',
         proxima_verificacao_em: input.proxima_verificacao_em ?? null,
       })
@@ -181,6 +185,21 @@ export class SupabaseWorkflowStore implements WorkflowStore {
       .eq('workflow_id', workflowId)
       .eq('lead_id', leadId)
       .neq('status', 'cancelado')
+      .order('iniciado_em', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) throw error
+    return (data as WorkflowExecucao) ?? null
+  }
+
+  async buscarExecucaoParaCiclo(workflowId: string, leadId: string, cicloChave: string): Promise<WorkflowExecucao | null> {
+    const { data, error } = await this.db
+      .from('workflow_execucoes')
+      .select('*')
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('workflow_id', workflowId)
+      .eq('lead_id', leadId)
+      .eq('ciclo_chave', cicloChave)
       .order('iniciado_em', { ascending: false })
       .limit(1)
       .maybeSingle()

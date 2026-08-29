@@ -60,6 +60,9 @@ export interface UsuarioBasico {
 
 export interface ContextoCampanhaResposta {
   id: string
+  execucaoId?: string | null
+  iniciadoEm?: string | null
+  execucaoStatus?: string | null
   nome: string
   tipo: string | null
   responsavel: UsuarioBasico | null

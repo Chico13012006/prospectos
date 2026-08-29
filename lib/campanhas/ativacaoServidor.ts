@@ -132,6 +132,26 @@ export async function inscreverCampanhaReal(
     await atualizarCampanha(admin, org, campanhaId, { dry_run: false })
   }
 
+  // Renovação não é um lote manual. A ativação liga a automação contínua e o
+  // próprio processador de vencimentos cria ciclos idempotentes, agora e nos
+  // próximos crons. Assim o mesmo cliente pode renovar novamente no futuro sem
+  // depender de nova inscrição humana.
+  if (campanha.tipo === 'renovacao') {
+    const { processarRenovacoes } = await import('@/lib/renovacao/processar')
+    const renovacao = await processarRenovacoes(org, { client: admin })
+    return {
+      campanha_id: campanhaId,
+      workflow_id: campanha.workflow_id,
+      dry_run: false,
+      publico: previa.elegiveis,
+      inscritos: renovacao.cadenciasIniciadas,
+      ja_inscritos: renovacao.cadenciasExistentes,
+      falhas: renovacao.falhasCadencia,
+      // O processador já publica as novas execuções na fila espaçada.
+      execucoes_criadas: [],
+    }
+  }
+
   let inscritos = 0
   let jaInscritos = 0
   let falhas = 0

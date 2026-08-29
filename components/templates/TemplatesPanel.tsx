@@ -101,6 +101,10 @@ export default function TemplatesPanel() {
     const s = new Set(templates.map(t => t.tipo));
     return Array.from(s);
   }, [templates]);
+  const nichosSugeridos = useMemo(() => {
+    const s = new Set([...Object.keys(NICHO_LABEL), ...templates.map(t => t.nicho).filter((n): n is string => !!n)]);
+    return Array.from(s).sort((a, b) => labelNicho(a).localeCompare(labelNicho(b), 'pt-BR'));
+  }, [templates]);
 
   const filtered = useMemo(() => {
     const ordemCanal = ['email', 'linkedin', 'whatsapp', 'telefone'];
@@ -311,8 +315,15 @@ export default function TemplatesPanel() {
                       opcoes={CANAIS.map(c => ({ value: c.value, label: c.label }))} />
                     <SelectCampo label="Estágio" value={editor.tipo} onChange={v => setEditor({ ...editor, tipo: v })}
                       opcoes={Object.keys(TIPO_LABEL).map(t => ({ value: t, label: labelTipo(t) }))} />
-                    <SelectCampo label="Segmento" value={editor.nicho} onChange={v => setEditor({ ...editor, nicho: v })}
-                      opcoes={[{ value: '', label: 'Genérico' }, ...Object.keys(NICHO_LABEL).map(n => ({ value: n, label: labelNicho(n) }))]} />
+                    <div>
+                      <label className="text-xs font-medium text-slate-400 block mb-1">Segmento</label>
+                      <input list="nichos-template" value={editor.nicho} onChange={e => setEditor({ ...editor, nicho: e.target.value })}
+                        placeholder="Genérico"
+                        className="w-full text-sm border border-[#2a3147] rounded-lg px-2 py-2 bg-[#0f1117] text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                      <datalist id="nichos-template">
+                        {nichosSugeridos.map(n => <option key={n} value={n}>{labelNicho(n)}</option>)}
+                      </datalist>
+                    </div>
                   </>
                 ) : (
                   <>

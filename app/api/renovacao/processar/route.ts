@@ -1,8 +1,8 @@
 // Cron da renovação (Fase 4.3). Varre TODAS as organizações ativas e processa a
 // janela de renovação de cada uma (cria tarefa + notificação + 1ª mensagem +
-// execução). Autorizado pelo segredo interno (mesmo padrão do follow-up).
-// NÃO está agendado na Vercel ainda — inócuo até ser ligado deliberadamente e
-// existir template de renovação. Envio real segue gated por MODO_ENSAIO.
+// execução). Autorizado por INTERNAL_SECRET ou CRON_SECRET. Está agendado no
+// vercel.json; o envio real ainda exige campanha ativa, dry_run=false,
+// RENOVACAO_ENVIO_REAL=true e MODO_ENSAIO=false.
 import { NextResponse } from 'next/server'
 import { autorizar } from '@/lib/engine/http'
 import { listarOrganizacoesAtivas } from '@/lib/engine'

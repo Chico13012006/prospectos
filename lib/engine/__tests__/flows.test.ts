@@ -28,7 +28,7 @@ describe('Fluxo 1 — executarAcao', () => {
   })
 
   it('envia primeiro contato e avança o estágio', async () => {
-    const lead = makeLead({ estagio: 'novos_leads', contato_email: 'ana@acme.com.br' })
+    const lead = makeLead({ estagio: 'novos_leads', contato_email: 'ana@acme.com.br', segmento: '' })
     const store = new MemoryStore([lead])
     const r = await executarAcao(store, email, { leadId: lead.id })
     expect(r.ok).toBe(true)
@@ -40,7 +40,7 @@ describe('Fluxo 1 — executarAcao', () => {
   })
 
   it('IDEMPOTÊNCIA: não reenvia o primeiro contato', async () => {
-    const lead = makeLead({ estagio: 'novos_leads' })
+    const lead = makeLead({ estagio: 'novos_leads', segmento: '' })
     const store = new MemoryStore([lead])
     await executarAcao(store, email, { leadId: lead.id })
     // Volta o estágio à força para tentar burlar — ainda assim não reenvia,
@@ -218,6 +218,39 @@ describe('Fluxo 2 — detectarResposta', () => {
     expect(segunda.respostas).toBe(0)
     expect(segunda.ignoradas).toBe(1)
     expect(await store.contarInteracoes(lead.id, 'resposta')).toBe(1)
+  })
+
+  it('reconhece resposta de uma nova renovação mesmo com resposta em ciclo anterior', async () => {
+    const lead = makeLead({ estagio: 'interessado', contato_email: 'ana@acme.com.br', proxima_acao: null })
+    const store = new MemoryStore([lead])
+    await store.registrarInteracao({
+      lead_id: lead.id,
+      tipo: 'resposta',
+      canal: 'email',
+      descricao: 'Resposta da renovação anterior',
+      origem_acao: 'ia',
+    })
+    const inicioNovoCiclo = new Date(Date.now() + 1_000).toISOString()
+    vi.spyOn(store, 'buscarContextoCampanhaAtiva').mockResolvedValue({
+      id: 'camp-renovacao',
+      execucaoId: 'exec-nova',
+      iniciadoEm: inicioNovoCiclo,
+      execucaoStatus: 'aguardando',
+      nome: 'Renovação automática',
+      tipo: 'renovacao',
+      responsavel: null,
+      notificarResponsavel: true,
+      emailAssunto: null,
+      emailCorpo: null,
+      emailHtml: null,
+    })
+    email.injetar(msg({ de: 'ana@acme.com.br', em: new Date(Date.now() + 2_000) }))
+
+    const resultado = await detectarResposta(store, email, fila)
+
+    expect(resultado.respostas).toBe(1)
+    expect(await store.contarInteracoes(lead.id, 'resposta')).toBe(2)
+    expect(fila.pendentes()).toBe(1)
   })
 
   it('só confirma a leitura depois de persistir a resposta', async () => {

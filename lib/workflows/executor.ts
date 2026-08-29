@@ -151,7 +151,14 @@ export async function processarExecucao(
     await log('concluido')
   } catch (e) {
     await store.atualizarExecucao(ex.id, { status: 'erro', atualizado_em: agoraISO })
-    await log('erro', { mensagem: e instanceof Error ? e.message : String(e) })
+    const mensagem = e instanceof Error ? e.message : String(e)
+    await log('erro', { mensagem })
+    try {
+      await ambiente.notificarFalhaExecucao?.(ex, mensagem)
+    } catch {
+      // O alerta é best-effort: a falha original continua registrada no evento
+      // e não pode ser mascarada por uma indisponibilidade das notificações.
+    }
     if (opcoes.propagarErro) throw e
   }
 }
@@ -194,23 +201,34 @@ export async function inscreverLeadManual(
   workflowId: string,
   leadId: string,
   campanhaId?: string | null,
+  contexto: { cicloChave?: string | null; servicoId?: string | null } = {},
 ): Promise<{ jaInscrito: boolean; execucaoId?: string }> {
   const wf = await store.buscarWorkflow(workflowId)
   if (!wf) throw new Error(`workflow ${workflowId} não encontrado`)
   if (wf.status !== 'publicado' || !wf.versao_atual_id)
     throw new Error('workflow precisa estar publicado para inscrever um lead manualmente.')
-  const existente = await store.buscarExecucaoParaLead(workflowId, leadId)
+  const existente = contexto.cicloChave
+    ? await store.buscarExecucaoParaCiclo(workflowId, leadId, contexto.cicloChave)
+    : await store.buscarExecucaoParaLead(workflowId, leadId)
   if (existente) return { jaInscrito: true, execucaoId: existente.id }
   const ex = await store.criarExecucao({
     workflow_id: workflowId,
     versao_id: wf.versao_atual_id,
     lead_id: leadId,
     campanha_id: campanhaId ?? null,
+    ciclo_chave: contexto.cicloChave ?? null,
+    servico_id: contexto.servicoId ?? null,
   })
   await store.registrarEvento({
     execucao_id: ex.id,
     tipo: 'execucao_iniciada',
-    detalhe: { versao_id: ex.versao_id, lead_id: leadId, via: campanhaId ? 'campanha' : 'manual' },
+    detalhe: {
+      versao_id: ex.versao_id,
+      lead_id: leadId,
+      via: campanhaId ? 'campanha' : 'manual',
+      ciclo_chave: contexto.cicloChave ?? null,
+      servico_id: contexto.servicoId ?? null,
+    },
   })
   return { jaInscrito: false, execucaoId: ex.id }
 }

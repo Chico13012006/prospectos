@@ -139,10 +139,13 @@ export async function detectarResposta(
     // aceitamos um lead ligado a campanha e sem resposta já registrada.
     const retomandoEncaminhamento = lead.proxima_acao === 'aguardando_closer'
     const emCadencia = ESTAGIOS_EM_CADENCIA.includes(lead.estagio as never)
+    const respostasNesteCiclo = contextoCampanha?.iniciadoEm
+      ? await store.contarInteracoesDesde(lead.id, 'resposta', contextoCampanha.iniciadoEm)
+      : await store.contarInteracoes(lead.id, 'resposta')
     const respostaCampanhaPendente = !emCadencia
       && !retomandoEncaminhamento
       && !!contextoCampanha
-      && await store.contarInteracoes(lead.id, 'resposta') === 0
+      && respostasNesteCiclo === 0
     if (!emCadencia && !retomandoEncaminhamento && !respostaCampanhaPendente) {
       log.info('Lead já havia respondido/saído da esteira. Sem nova ação.', {
         leadId: lead.id,

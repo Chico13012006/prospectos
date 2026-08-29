@@ -101,6 +101,8 @@ export class MemoryWorkflowStore implements WorkflowStore {
     versao_id: string
     lead_id?: string | null
     campanha_id?: string | null
+    ciclo_chave?: string | null
+    servico_id?: string | null
     status?: StatusExecucao
     proxima_verificacao_em?: string | null
   }): Promise<WorkflowExecucao> {
@@ -111,6 +113,8 @@ export class MemoryWorkflowStore implements WorkflowStore {
       versao_id: input.versao_id,
       lead_id: input.lead_id ?? null,
       campanha_id: input.campanha_id ?? null,
+      ciclo_chave: input.ciclo_chave ?? null,
+      servico_id: input.servico_id ?? null,
       passo_atual: 0,
       status: input.status ?? 'em_andamento',
       proxima_verificacao_em: input.proxima_verificacao_em ?? null,
@@ -135,6 +139,13 @@ export class MemoryWorkflowStore implements WorkflowStore {
   async buscarExecucaoParaLead(workflowId: string, leadId: string): Promise<WorkflowExecucao | null> {
     const execucoes = [...this.execucoes.values()]
       .filter((ex) => ex.workflow_id === workflowId && ex.lead_id === leadId && ex.status !== 'cancelado')
+      .sort((a, b) => b.iniciado_em.localeCompare(a.iniciado_em))
+    return execucoes[0] ? { ...execucoes[0] } : null
+  }
+
+  async buscarExecucaoParaCiclo(workflowId: string, leadId: string, cicloChave: string): Promise<WorkflowExecucao | null> {
+    const execucoes = [...this.execucoes.values()]
+      .filter((ex) => ex.workflow_id === workflowId && ex.lead_id === leadId && ex.ciclo_chave === cicloChave)
       .sort((a, b) => b.iniciado_em.localeCompare(a.iniciado_em))
     return execucoes[0] ? { ...execucoes[0] } : null
   }

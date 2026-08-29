@@ -49,6 +49,8 @@ export interface WorkflowStore {
     versao_id: string
     lead_id?: string | null
     campanha_id?: string | null
+    ciclo_chave?: string | null
+    servico_id?: string | null
     status?: StatusExecucao
     proxima_verificacao_em?: string | null
   }): Promise<WorkflowExecucao>
@@ -58,6 +60,9 @@ export interface WorkflowStore {
   // enrollment. Além de evitar duplicidade, permite reagendar com segurança
   // uma campanha cuja publicação na fila tenha sido interrompida.
   buscarExecucaoParaLead(workflowId: string, leadId: string): Promise<WorkflowExecucao | null>
+  // Idempotência de processos recorrentes: considera QUALQUER status, inclusive
+  // cancelado por resposta, porque o mesmo ciclo nunca deve ser reinscrito.
+  buscarExecucaoParaCiclo(workflowId: string, leadId: string, cicloChave: string): Promise<WorkflowExecucao | null>
   // Já existe alguma execução (qualquer status) deste workflow para o lead?
   // Base da idempotência de enrollment (não inscrever o mesmo lead 2x).
   existeExecucaoParaLead(workflowId: string, leadId: string): Promise<boolean>

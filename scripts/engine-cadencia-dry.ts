@@ -43,6 +43,7 @@ async function main() {
     buscarLeadPorEmail: (e) => real.buscarLeadPorEmail(e),
     buscarLeadPorDominio: (d) => real.buscarLeadPorDominio(d),
     contarInteracoes: (id, t) => real.contarInteracoes(id, t),
+    contarInteracoesDesde: (id, t, desde) => real.contarInteracoesDesde(id, t, desde),
     enviosHoje: () => real.enviosHoje(),
     leadsParaFollowup: () => real.leadsParaFollowup(),
     leadsEsgotadosSemResposta: () => real.leadsEsgotadosSemResposta(),

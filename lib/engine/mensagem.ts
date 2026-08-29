@@ -1,56 +1,22 @@
 // Seleção do template de E-MAIL pelo motor + preenchimento de variáveis.
-// Regra (master): escolhe por (segmento + estágio). Se o lead tem nicho e existe
-// template do nicho, usa; senão cai no GENÉRICO do mesmo estágio. Follow-ups são
-// genéricos (não há template de nicho) e, por isso, sempre caem no genérico.
+// Regra (master): escolhe por (segmento + estágio). No primeiro contato, um lead
+// com nicho exige template ativo daquele nicho; não pode cair silenciosamente
+// no genérico. Follow-ups continuam usando o template genérico compartilhado.
 //
 // Threading: o assunto do follow-up NÃO sai da própria linha — o motor deriva
 // "Re: " do assunto do 1º contato do MESMO lead (mesmo nicho/genérico), mantendo
 // a thread. LinkedIn/WhatsApp/Telefone são manuais; o motor nunca os lê aqui.
 import type { Lead } from './types'
 import type { Store } from './store/store'
-import { NICHOS } from './templates-seed'
 import { formatarDataIsoSemFuso } from '@/lib/servicos/vencimento'
+import { normalizarNicho } from '@/lib/nichos/normalizar'
+
+export { normalizarNicho } from '@/lib/nichos/normalizar'
 
 export interface Envio {
   tipo: 'abordagem' | 'follow_up'
   // Nº do follow-up (1-based). Só quando tipo === 'follow_up'.
   numero?: number
-}
-
-// Sinônimos de segmento (free-text do lead) → chave canônica de nicho. A maioria
-// dos nichos já casa direto pelo nome (oticas, varejo, ...); aqui ficam só os
-// apelidos que não batem 1:1. Tudo passa antes por remoção de acento + lowercase.
-const SINONIMOS_NICHO: Record<string, (typeof NICHOS)[number]> = {
-  otica: 'oticas',
-  relojoaria: 'oticas',
-  hotel: 'hotelaria',
-  hoteis: 'hotelaria',
-  turismo: 'hotelaria',
-  comercio: 'varejo',
-  loja: 'varejo',
-  lojas: 'varejo',
-  saude: 'hospital',
-  hospitalar: 'hospital',
-  clinica: 'hospital',
-  industrial: 'industria',
-  manufatura: 'industria',
-  fabrica: 'industria',
-  alimenticio: 'alimentos',
-  alimenticia: 'alimentos',
-  bebidas: 'alimentos',
-}
-
-function canonizar(s: string): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase()
-}
-
-// free-text segmento → chave de nicho canônica, ou null (= genérico).
-export function normalizarNicho(segmento?: string | null): string | null {
-  if (!segmento) return null
-  const k = canonizar(segmento)
-  if (!k) return null
-  if ((NICHOS as readonly string[]).includes(k)) return k
-  return SINONIMOS_NICHO[k] ?? null
 }
 
 // Estágio do funil → `tipo` da tabela de templates.
@@ -111,8 +77,12 @@ export async function montarEmail(
   const nicho = normalizarNicho(lead.segmento)
   const tipo = tipoTemplate(envio)
 
-  // Variantes do corpo: tenta o nicho, cai no genérico do MESMO estágio.
+  // Primeiro contato: exige variante do nicho quando o lead o possui. Follow-up:
+  // tenta o nicho e pode cair no genérico compartilhado do mesmo estágio.
   const variantesNicho = nicho ? await store.buscarTemplateEmail(nicho, tipo) : []
+  if (envio.tipo === 'abordagem' && nicho && variantesNicho.length === 0) {
+    throw new Error(`Template de primeiro contato ausente para o nicho '${nicho}'.`)
+  }
   const variantes = variantesNicho.length ? variantesNicho : await store.buscarTemplateEmail(null, tipo)
   if (variantes.length === 0) {
     throw new Error(`Template de e-mail ausente (tipo=${tipo}, nicho=${nicho ?? 'generico'}).`)

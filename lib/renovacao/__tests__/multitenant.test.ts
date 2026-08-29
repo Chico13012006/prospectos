@@ -10,7 +10,7 @@
 //   nenhuma chamada pode tocar organizacao_id != org do processador.
 // (A prova de RLS de verdade, com 2 orgs num Postgres real, é o E2E à parte —
 // service_role não passa por RLS; ver lib/engine/__tests__/multitenant.test.ts.)
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { processarRenovacoes } from '../processar'
 
@@ -21,14 +21,14 @@ const ORG = 'org-aaaa'
 class Chain {
   eqCalls: [string, unknown][] = []
   insertPayload: Record<string, unknown> | null = null
-  mode: 'select' | 'count' | 'insert' = 'select'
+  mode: 'select' | 'count' | 'insert' | 'update' = 'select'
   constructor(public table: string, private scenario: 'servico' | 'legado') {}
   select(_cols?: unknown, opts?: { head?: boolean }) {
     if (opts?.head) this.mode = 'count'
     return this
   }
   insert(row: Record<string, unknown>) { this.mode = 'insert'; this.insertPayload = row; return this }
-  update(row: Record<string, unknown>) { this.insertPayload = row; return this }
+  update(row: Record<string, unknown>) { this.mode = 'update'; this.insertPayload = row; return this }
   eq(c: string, v: unknown) { this.eqCalls.push([c, v]); return this }
   in() { return this }
   not() { return this }
@@ -50,6 +50,7 @@ class Chain {
     }
     if (this.table === 'empresas') return { data: { nome: 'Empresa A' }, error: null }
     if (this.table === 'leads') {
+      if (this.mode === 'update') return { data: { id: 'L1' }, error: null }
       if (this.scenario === 'legado') return { data: [{
         id: 'L1', empresa_id: null, empresa: 'Empresa legada', data_validade: '2026-08-20',
         responsavel_id: null, contato_email: 'contato@empresa.test',
@@ -78,7 +79,7 @@ const doTabela = (chains: Chain[], t: string) => chains.filter((c) => c.table ==
 describe('multi-tenant — processarRenovacoes escopa organizacao_id nas tabelas novas', () => {
   it('lê serviços SÓ da org (filtra organizacao_id na contagem e na janela)', async () => {
     const { client, chains } = mockClient()
-    await processarRenovacoes(ORG, { client, hoje: new Date('2026-08-10') })
+    await processarRenovacoes(ORG, { client, hoje: new Date('2026-08-10'), processarCadencia: false })
     const svc = doTabela(chains, 'servicos_recorrentes')
     expect(svc.length).toBeGreaterThan(0)
     for (const c of svc) expect(c.temEq('organizacao_id', ORG)).toBe(true)
@@ -86,7 +87,7 @@ describe('multi-tenant — processarRenovacoes escopa organizacao_id nas tabelas
 
   it('dedup de tarefa é filtrado por organizacao_id', async () => {
     const { client, chains } = mockClient()
-    await processarRenovacoes(ORG, { client, hoje: new Date('2026-08-10') })
+    await processarRenovacoes(ORG, { client, hoje: new Date('2026-08-10'), processarCadencia: false })
     const dedup = doTabela(chains, 'tarefas').filter((c) => c.mode === 'select')
     expect(dedup.length).toBeGreaterThan(0)
     for (const c of dedup) {
@@ -97,7 +98,7 @@ describe('multi-tenant — processarRenovacoes escopa organizacao_id nas tabelas
 
   it('GRAVA organizacao_id ao criar tarefa e notificação', async () => {
     const { client, chains } = mockClient()
-    await processarRenovacoes(ORG, { client, hoje: new Date('2026-08-10') })
+    await processarRenovacoes(ORG, { client, hoje: new Date('2026-08-10'), processarCadencia: false })
     const tarefaInsert = doTabela(chains, 'tarefas').find((c) => c.mode === 'insert')
     const notifInsert = doTabela(chains, 'notificacoes').find((c) => c.insertPayload)
     expect(tarefaInsert?.insertPayload?.organizacao_id).toBe(ORG)
@@ -109,7 +110,7 @@ describe('multi-tenant — processarRenovacoes escopa organizacao_id nas tabelas
   // .eq('organizacao_id', org) ou carimbar outra org, este teste quebra.
   it('NUNCA toca organizacao_id de outro tenant (nem lendo, nem escrevendo)', async () => {
     const { client, chains } = mockClient()
-    await processarRenovacoes(ORG, { client, hoje: new Date('2026-08-10') })
+    await processarRenovacoes(ORG, { client, hoje: new Date('2026-08-10'), processarCadencia: false })
     for (const c of chains) {
       for (const [col, val] of c.eqCalls) {
         if (col === 'organizacao_id') expect(val).toBe(ORG)
@@ -122,7 +123,7 @@ describe('multi-tenant — processarRenovacoes escopa organizacao_id nas tabelas
 
   it('usa data_validade como fallback e cria tarefa idempotente sem servico_id', async () => {
     const { client, chains } = mockClient('legado')
-    const r = await processarRenovacoes(ORG, { client, hoje: new Date('2026-08-10') })
+    const r = await processarRenovacoes(ORG, { client, hoje: new Date('2026-08-10'), processarCadencia: false })
 
     expect(r.avaliados).toBe(1)
     expect(r.itens[0]).toMatchObject({ fonte: 'lead_legado', empresa: 'Empresa legada', vencimento: '2026-08-20' })
@@ -137,5 +138,31 @@ describe('multi-tenant — processarRenovacoes escopa organizacao_id nas tabelas
       servico_id: null,
       prazo_em: '2026-08-20T00:00:00.000Z',
     })
+  })
+
+  it('só libera para o motor um contato elegível da própria organização', async () => {
+    const { client, chains } = mockClient('legado')
+    const cadencia = {
+      limitePorLote: 40,
+      aceitaLead: vi.fn().mockReturnValue(true),
+      inscrever: vi.fn().mockResolvedValue({ jaInscrito: false, execucaoId: 'X1', precisaAgendar: true }),
+      agendar: vi.fn().mockResolvedValue({ agendadas: 1 }),
+    }
+
+    const r = await processarRenovacoes(ORG, {
+      client,
+      hoje: new Date('2026-08-10'),
+      cadencia,
+    })
+
+    const liberacao = doTabela(chains, 'leads').find((c) => c.mode === 'update')
+    expect(liberacao?.insertPayload).toEqual({ owner: 'engine' })
+    expect(liberacao?.temEq('organizacao_id', ORG)).toBe(true)
+    expect(liberacao?.temEq('id', 'L1')).toBe(true)
+    expect(liberacao?.temEq('optout', false)).toBe(true)
+    expect(liberacao?.temEq('bounced', false)).toBe(true)
+    expect(cadencia.inscrever).toHaveBeenCalledOnce()
+    expect(cadencia.agendar).toHaveBeenCalledWith(['X1'])
+    expect(r.cadenciasAgendadas).toBe(1)
   })
 })

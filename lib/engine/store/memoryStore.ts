@@ -63,6 +63,16 @@ export class MemoryStore implements Store {
     ).length
   }
 
+  async contarInteracoesDesde(leadId: string, tipo: TipoInteracaoEngine, desdeISO: string): Promise<number> {
+    const desde = new Date(desdeISO).getTime()
+    return this.interacoes.filter(
+      (i) => i.lead_id === leadId
+        && i.tipo === tipo
+        && i.origem_acao === 'ia'
+        && new Date(i.created_at).getTime() >= desde,
+    ).length
+  }
+
   async enviosHoje(): Promise<number> {
     const inicioDia = new Date()
     inicioDia.setHours(0, 0, 0, 0)

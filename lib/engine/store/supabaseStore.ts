@@ -127,6 +127,19 @@ export class SupabaseStore implements Store {
     return count ?? 0
   }
 
+  async contarInteracoesDesde(leadId: string, tipo: TipoInteracaoEngine, desdeISO: string): Promise<number> {
+    const { count, error } = await this.db
+      .from('interacoes')
+      .select('id', { count: 'exact', head: true })
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('lead_id', leadId)
+      .eq('tipo', tipo)
+      .eq('origem_acao', 'ia')
+      .gte('created_at', desdeISO)
+    if (error) throw error
+    return count ?? 0
+  }
+
   async enviosHoje(): Promise<number> {
     const inicioDia = new Date()
     inicioDia.setHours(0, 0, 0, 0)
@@ -223,7 +236,7 @@ export class SupabaseStore implements Store {
   async buscarContextoCampanhaAtiva(leadId: string): Promise<ContextoCampanhaResposta | null> {
     const { data: execucao, error: execError } = await this.db
       .from('workflow_execucoes')
-      .select('campanha_id')
+      .select('id, campanha_id, iniciado_em, status')
       .eq('organizacao_id', this.organizacaoId)
       .eq('lead_id', leadId)
       // Inclui concluídas/canceladas: a execução termina ou é pausada antes que
@@ -279,6 +292,9 @@ export class SupabaseStore implements Store {
       : {}
     return {
       id: campanhaRow.id,
+      execucaoId: (execucao as { id?: string | null }).id ?? null,
+      iniciadoEm: (execucao as { iniciado_em?: string | null }).iniciado_em ?? null,
+      execucaoStatus: (execucao as { status?: string | null }).status ?? null,
       nome: campanhaRow.nome,
       tipo: campanhaRow.tipo,
       responsavel,

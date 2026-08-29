@@ -27,6 +27,9 @@ export interface Store {
   registrarInteracao(i: NovaInteracao): Promise<void>
   // Quantas interações de um tipo o lead já tem (base da idempotência).
   contarInteracoes(leadId: string, tipo: TipoInteracaoEngine): Promise<number>
+  // Igual à contagem acima, limitada ao ciclo atual. Evita que uma resposta de
+  // uma renovação antiga bloqueie o reconhecimento da renovação deste ano.
+  contarInteracoesDesde(leadId: string, tipo: TipoInteracaoEngine, desdeISO: string): Promise<number>
   // Quantos e-mails o motor enviou hoje (respeita o limite diário).
   enviosHoje(): Promise<number>
   // Leads owner='engine' elegíveis para follow-up agora.

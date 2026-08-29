@@ -91,6 +91,15 @@ describe('multi-tenant — SupabaseWorkflowStore filtra/grava organizacao_id', (
     expect(chains.workflow_execucoes.insertPayload?.versao_id).toBe('V1')
   })
 
+  it('busca ciclo recorrente somente dentro da organização', async () => {
+    const { client, chains } = mockClient()
+    await store(client).buscarExecucaoParaCiclo('W1', 'L1', 'empresa:E1:2026-08')
+    expect(chains.workflow_execucoes.temEq('organizacao_id', ORG)).toBe(true)
+    expect(chains.workflow_execucoes.temEq('workflow_id', 'W1')).toBe(true)
+    expect(chains.workflow_execucoes.temEq('lead_id', 'L1')).toBe(true)
+    expect(chains.workflow_execucoes.temEq('ciclo_chave', 'empresa:E1:2026-08')).toBe(true)
+  })
+
   it('registrarEvento GRAVA organizacao_id', async () => {
     const { client, chains } = mockClient()
     await store(client).registrarEvento({ execucao_id: 'E1', tipo: 'execucao_iniciada' })

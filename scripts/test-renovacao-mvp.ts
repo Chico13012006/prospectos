@@ -1,13 +1,12 @@
 /**
  * E2E do MVP Renovação (Fases 4.3/4.5) — EFÊMERO, força MODO_ENSAIO=true e NÃO
- * define RENOVACAO_ENVIO_REAL (zero e-mail real). Monta um cenário controlado
+ * mantém a cadência desativada (zero e-mail real). Monta um cenário controlado
  * (na janela / fora / duplicado / outra org) e valida: relatório dryRun (sem
  * escrever), execução real (cria tarefa/notif, sem enviar), idempotência,
  * isolamento entre organizações. Limpa tudo. Imprime o RELATÓRIO de ensaio.
  *   npx tsx scripts/test-renovacao-mvp.ts
  */
 process.env.MODO_ENSAIO = 'true'
-delete process.env.RENOVACAO_ENVIO_REAL
 import fs from 'node:fs'
 import path from 'node:path'
 import pg from 'pg'
@@ -47,14 +46,14 @@ async function main() {
     ok('dryRun: naJanela = 2 (S1,S3; S2 fora)', rep.naJanela === 2)
     ok('dryRun: tarefas que seriam criadas = 1 (S3 é dup)', rep.tarefas === 1)
     ok('dryRun: duplicações evitadas = 1', rep.duplicacoesEvitadas === 1)
-    ok('dryRun: mensagens = 0 (sem RENOVACAO_ENVIO_REAL)', rep.mensagens === 0)
+    ok('dryRun: mensagens = 0', rep.mensagens === 0)
     ok('dryRun NÃO escreveu (contagem de tarefas inalterada)', (await c.query(`select count(*)::int n from tarefas where origem='renovacao' and empresa_id in ($1,$2,$3)`, [E1, E2, E3])).rows[0].n === tarefasAntes)
     console.log('\n=== RELATÓRIO DE ENSAIO (dryRun, cenário controlado) ===')
     console.log({ avaliados: rep.avaliados, naJanela: rep.naJanela, tarefas: rep.tarefas, notificacoes: rep.notificacoes, mensagens: rep.mensagens, duplicacoesEvitadas: rep.duplicacoesEvitadas })
     console.table(rep.itens.map((i) => ({ empresa: i.empresa, vence: i.vencimento, dias: i.dias, jaTem: i.jaTemTarefa, dest_msg: i.destinatarioMensagem })))
 
     // 2) EXECUÇÃO real (cria tarefa/notif; NÃO envia)
-    const r1 = await processarRenovacoes(ORG, {})
+    const r1 = await processarRenovacoes(ORG, { processarCadencia: false })
     ok('run: criou 1 tarefa (S1)', r1.tarefas === 1)
     ok('run: 0 mensagens reais', r1.mensagens === 0)
     ok('tarefa de S1 existe (aparece em Minhas Tarefas)', (await c.query(`select count(*)::int n from tarefas where servico_id=$1 and tipo='renovacao'`, [S1])).rows[0].n === 1)
@@ -65,7 +64,7 @@ async function main() {
     ok('isolamento: serviço da outra org NÃO recebeu tarefa', (await c.query(`select count(*)::int n from tarefas where servico_id=$1`, [S4])).rows[0].n === 0)
 
     // 4) IDEMPOTÊNCIA
-    const r2 = await processarRenovacoes(ORG, {})
+    const r2 = await processarRenovacoes(ORG, { processarCadencia: false })
     ok('idempotente: 2ª execução não cria tarefa', r2.tarefas === 0 && r2.duplicacoesEvitadas >= 2)
     ok('sem tarefa duplicada de S1', (await c.query(`select count(*)::int n from tarefas where servico_id=$1 and tipo='renovacao'`, [S1])).rows[0].n === 1)
   } finally {

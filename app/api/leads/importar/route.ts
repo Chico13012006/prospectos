@@ -5,6 +5,7 @@ import {
   processarPlanilhaPadrao,
   dedupeInternaPorEmail,
   buscarEmailsExistentes,
+  resumirNichosImportacao,
 } from '@/lib/leads/importarCsv'
 import { resolverResponsavelPorAuthId } from '@/lib/leads/responsavelServer'
 
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
     const { validos, pulados, totalLinhas } = processarPlanilhaPadrao(texto)
     const { unicos, duplicados } = dedupeInternaPorEmail(validos)
 
-    // Contagem por motivo de pulo (nome/e-mail/empresa), pro preview.
+    // Contagem por motivo de pulo (nome/e-mail/empresa/nicho), pro preview.
     const puladosPorMotivo = pulados.reduce<Record<string, number>>((acc, p) => {
       acc[p.motivo] = (acc[p.motivo] ?? 0) + 1
       return acc
@@ -77,6 +78,25 @@ export async function POST(req: NextRequest) {
     const novos = unicos.filter((l) => !existentes.has(l.contato_email))
     const jaExistentes = unicos.length - novos.length
 
+    // A prévia deixa explícito se cada nicho do arquivo já tem uma mensagem de
+    // primeiro contato ativa. Importar continua permitido; o motor bloqueia o
+    // primeiro envio daquele nicho até o template existir, sem usar um texto
+    // genérico silenciosamente.
+    const { data: templatesNicho, error: templatesError } = await admin
+      .from('templates')
+      .select('nicho')
+      .eq('organizacao_id', org)
+      .eq('canal', 'email')
+      .eq('tipo', 'primeiro_contato')
+      .eq('ativo', true)
+      .not('nicho', 'is', null)
+    if (templatesError) throw templatesError
+
+    const nichos = resumirNichosImportacao(
+      novos,
+      (templatesNicho ?? []).map((template) => template.nicho).filter((nicho): nicho is string => typeof nicho === 'string'),
+    )
+
     const resumo = {
       totalLinhas,
       validas: validos.length,
@@ -84,6 +104,7 @@ export async function POST(req: NextRequest) {
       duplicadosNoArquivo: duplicados,
       jaExistentes,
       novos: novos.length,
+      nichos,
     }
 
     if (modo !== 'confirmar') {
@@ -121,6 +142,7 @@ export async function POST(req: NextRequest) {
       contato_nome: l.contato_nome,
       contato_email: l.contato_email,
       empresa: l.empresa,
+      segmento: l.segmento,
       origem: l.origem,
       contato_telefone: l.contato_telefone,
       contato_cargo: l.contato_cargo,

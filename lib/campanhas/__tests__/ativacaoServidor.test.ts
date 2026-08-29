@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   retomar: vi.fn(),
   inscreverLeadManual: vi.fn(),
   exigirEnvioRealCampanhaDisponivel: vi.fn(),
+  processarRenovacoes: vi.fn(),
 }))
 
 vi.mock('../repository', () => ({
@@ -37,6 +38,10 @@ vi.mock('@/lib/workflows', () => ({
   publicar: mocks.publicar,
   retomar: mocks.retomar,
   inscreverLeadManual: mocks.inscreverLeadManual,
+}))
+
+vi.mock('@/lib/renovacao/processar', () => ({
+  processarRenovacoes: mocks.processarRenovacoes,
 }))
 
 import { iniciarCampanhaReal } from '../ativacaoServidor'
@@ -104,6 +109,11 @@ beforeEach(() => {
     .mockResolvedValueOnce({ id: 'workflow-1', status: 'publicado', versao_atual_id: 'versao-1' })
   mocks.publicar.mockResolvedValue({})
   mocks.atualizarCampanha.mockResolvedValue(undefined)
+  mocks.processarRenovacoes.mockResolvedValue({
+    cadenciasIniciadas: 1,
+    cadenciasExistentes: 0,
+    falhasCadencia: 0,
+  })
 })
 
 describe('início real de campanha guiada', () => {
@@ -144,6 +154,28 @@ describe('início real de campanha guiada', () => {
 
     expect(mocks.buscarCampanha).not.toHaveBeenCalled()
     expect(mocks.atualizarCampanha).not.toHaveBeenCalled()
+    expect(mocks.inscreverLeadManual).not.toHaveBeenCalled()
+  })
+
+  it('ativar renovação liga o processador contínuo em vez de fazer enrollment manual', async () => {
+    const publicoRenovacao = {
+      ...publico,
+      selecao: { criterio: 'renovacao' as const },
+      operacao: {
+        ...publico.operacao,
+        followups: [{ diasApos: 3, assunto: 'Retomando', corpo: 'Podemos renovar?' }],
+      },
+    }
+    const rascunho = { ...campanhaRascunho, tipo: 'renovacao', publico: publicoRenovacao }
+    const ativa = { ...rascunho, status: 'ativa', workflow_id: 'workflow-1' }
+    mocks.buscarCampanha.mockResolvedValueOnce(rascunho).mockResolvedValueOnce(ativa)
+    mocks.materializarCampanhaGuiada.mockResolvedValueOnce({ publico: publicoRenovacao, workflowId: 'workflow-1' })
+    mocks.buscarPreviaPublicoCampanha.mockResolvedValueOnce(previa(['lead-1'])).mockResolvedValueOnce(previa(['lead-1']))
+
+    const resultado = await iniciarCampanhaReal(admin, 'org-a', 'campanha-1', 'usuario-1', 1)
+
+    expect(resultado).toMatchObject({ inscritos: 1, ja_inscritos: 0, falhas: 0, execucoes_criadas: [] })
+    expect(mocks.processarRenovacoes).toHaveBeenCalledWith('org-a', { client: admin })
     expect(mocks.inscreverLeadManual).not.toHaveBeenCalled()
   })
 

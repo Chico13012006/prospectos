@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
+import { normalizarNicho } from '@/lib/nichos/normalizar'
 
 export const runtime = 'nodejs'
 
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
     const tipo = String(body.tipo ?? '').trim()
     const canal = String(body.canal ?? '').trim()
     const nichoRaw = String(body.nicho ?? '').trim()
-    const nicho = nichoRaw || null // vazio = genérico
+    const nicho = normalizarNicho(nichoRaw) // vazio = genérico; valor = chave canônica
     const assunto = String(body.assunto ?? '').trim() || null
     const corpo = String(body.corpo ?? '').trim()
 

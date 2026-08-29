@@ -6,8 +6,10 @@
 //
 // `mapearLead` do HubSpot NÃO vive aqui (é específico do CSV de lá, com colunas
 // tipo "Associated Company"): ele continua no próprio script. Aqui mora o
-// mapeamento do TEMPLATE PADRÃO desta tela (campos de 2.1).
+// mapeamento do TEMPLATE PADRÃO desta tela. Nome, e-mail, empresa e nicho são
+// obrigatórios; origem e demais dados são opcionais.
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { normalizarNicho } from '@/lib/nichos/normalizar'
 
 // Parser CSV que respeita aspas: um campo entre aspas pode conter o delimitador,
 // quebras de linha e aspas escapadas (""). `delimitador` default ';' (formato BR
@@ -66,6 +68,7 @@ export interface LeadPadrao {
   contato_nome: string
   contato_email: string
   empresa: string
+  segmento: string
   origem: string
   contato_telefone: string | null
   contato_cargo: string | null
@@ -73,7 +76,7 @@ export interface LeadPadrao {
   estado: string | null
 }
 
-export type MotivoPulo = 'sem_nome' | 'sem_email' | 'email_invalido' | 'sem_empresa'
+export type MotivoPulo = 'sem_nome' | 'sem_email' | 'email_invalido' | 'sem_empresa' | 'sem_segmento'
 export interface LinhaPulada { linha: number; motivo: MotivoPulo }
 export interface ResultadoPlanilha {
   validos: LeadPadrao[]
@@ -91,6 +94,7 @@ const ALIASES: Record<keyof Omit<LeadPadrao, never>, string[]> = {
   contato_nome: ['nome', 'name', 'contato', 'nome do contato', 'nome completo'],
   contato_email: ['email', 'e-mail', 'e mail', 'mail'],
   empresa: ['empresa', 'company', 'organizacao', 'razao social', 'associated company'],
+  segmento: ['nicho', 'segmento', 'setor', 'industry', 'mercado'],
   origem: ['origem', 'source', 'canal', 'origem do lead', 'fonte'],
   contato_telefone: ['telefone', 'phone', 'celular', 'fone', 'numero de telefone', 'whatsapp'],
   contato_cargo: ['cargo', 'title', 'role', 'posicao', 'funcao', 'job title'],
@@ -134,6 +138,9 @@ export function mapearLeadPadrao(
   const empresa = get('empresa')
   if (!empresa) return { motivo: 'sem_empresa' }
 
+  const segmento = normalizarNicho(get('segmento'))
+  if (!segmento) return { motivo: 'sem_segmento' }
+
   const telefone = get('contato_telefone').replace(/[^\d+]/g, '') || null
 
   return {
@@ -141,6 +148,7 @@ export function mapearLeadPadrao(
       contato_nome: nome,
       contato_email: email,
       empresa,
+      segmento,
       origem: get('origem') || ORIGEM_PADRAO_IMPORT,
       contato_telefone: telefone,
       contato_cargo: get('contato_cargo') || null,
@@ -148,6 +156,32 @@ export function mapearLeadPadrao(
       estado: get('estado') || null,
     },
   }
+}
+
+export interface ResumoNichoImportacao {
+  nicho: string
+  leads: number
+  templateAtivo: boolean
+}
+
+export function resumirNichosImportacao(
+  leads: Pick<LeadPadrao, 'segmento'>[],
+  nichosComTemplate: Iterable<string>,
+): ResumoNichoImportacao[] {
+  const templates = new Set(
+    [...nichosComTemplate]
+      .map((nicho) => normalizarNicho(nicho))
+      .filter((nicho): nicho is string => !!nicho),
+  )
+  const contagem = new Map<string, number>()
+  for (const lead of leads) {
+    const nicho = normalizarNicho(lead.segmento)
+    if (!nicho) continue
+    contagem.set(nicho, (contagem.get(nicho) ?? 0) + 1)
+  }
+  return [...contagem.entries()]
+    .map(([nicho, total]) => ({ nicho, leads: total, templateAtivo: templates.has(nicho) }))
+    .sort((a, b) => a.nicho.localeCompare(b.nicho, 'pt-BR'))
 }
 
 // Planilha inteira (texto do CSV) → válidos + pulados contados por linha.

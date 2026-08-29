@@ -55,24 +55,42 @@ describe('configuração guiada de campanha', () => {
     expect(validarCampanhaGuiada(completa)).toEqual([])
   })
 
-  it('trata comunicação e renovação como disparos únicos impostos pelo servidor', () => {
-    for (const tipo of ['novidade_clientes', 'renovacao']) {
-      const publico = aplicarRegraPublicoPorTipo(normalizarPublicoCampanha({
-        agenda: { diasSemana: [] },
-        operacao: {
-          mensagemInicial: { assunto: 'Comunicado', corpo: 'Corpo', templateTipo: 'campanha_x_m1' },
-          followups: [{ diasApos: 3, assunto: 'FUP indevido', corpo: 'Corpo', templateTipo: 'campanha_x_m2' }],
-        },
-      }), tipo)
+  it('trata somente comunicado como disparo único imposto pelo servidor', () => {
+    const publico = aplicarRegraPublicoPorTipo(normalizarPublicoCampanha({
+      agenda: { diasSemana: [] },
+      operacao: {
+        mensagemInicial: { assunto: 'Comunicado', corpo: 'Corpo', templateTipo: 'campanha_x_m1' },
+        followups: [{ diasApos: 3, assunto: 'FUP indevido', corpo: 'Corpo', templateTipo: 'campanha_x_m2' }],
+      },
+    }), 'novidade_clientes')
 
-      expect(campanhaEhDisparoUnico(tipo)).toBe(true)
-      expect(publico.operacao?.modoEnvio).toBe('disparo_unico')
-      expect(publico.operacao?.followups).toBeUndefined()
-      expect(montarDefinicaoCampanha(publico).acoes).toEqual([
-        { id: 'email-0', tipo: 'enviar_email', config: { template: 'campanha_x_m1' } },
-      ])
-      expect(validarCampanhaGuiada(publico)).not.toContain('Escolha ao menos um dia de envio.')
-    }
+    expect(campanhaEhDisparoUnico('novidade_clientes')).toBe(true)
+    expect(publico.operacao?.modoEnvio).toBe('disparo_unico')
+    expect(publico.operacao?.followups).toBeUndefined()
+    expect(montarDefinicaoCampanha(publico).acoes).toEqual([
+      { id: 'email-0', tipo: 'enviar_email', config: { template: 'campanha_x_m1' } },
+    ])
+    expect(validarCampanhaGuiada(publico)).not.toContain('Escolha ao menos um dia de envio.')
+  })
+
+  it('renovação é cadência e exige ao menos um follow-up', () => {
+    const semFollowup = aplicarRegraPublicoPorTipo(normalizarPublicoCampanha({
+      operacao: {
+        mensagemInicial: { assunto: 'Renovação', corpo: 'Corpo', templateTipo: 'campanha_x_m1' },
+      },
+    }), 'renovacao')
+    expect(campanhaEhDisparoUnico('renovacao')).toBe(false)
+    expect(semFollowup.operacao?.modoEnvio).toBe('cadencia')
+    expect(validarCampanhaGuiada(semFollowup)).toContain('Configure ao menos um follow-up para a renovação automática.')
+
+    const comFollowup = aplicarRegraPublicoPorTipo(normalizarPublicoCampanha({
+      operacao: {
+        mensagemInicial: { assunto: 'Renovação', corpo: 'Corpo', templateTipo: 'campanha_x_m1' },
+        followups: [{ diasApos: 3, assunto: 'Retorno', corpo: 'Retomando', templateTipo: 'campanha_x_m2' }],
+      },
+    }), 'renovacao')
+    expect(comFollowup.operacao?.followups).toHaveLength(1)
+    expect(montarDefinicaoCampanha(comFollowup).acoes).toHaveLength(3)
   })
 
   it('materializa uma sequência determinística de e-mails e esperas incrementais', () => {

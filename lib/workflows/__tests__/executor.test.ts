@@ -22,6 +22,8 @@ class AmbienteFake implements AmbienteWorkflow {
   alvos: string[] = []
   respondeu = new Set<string>()
   emails: { leadId: string; template: string }[] = []
+  falharEmail = false
+  falhasNotificadas: { id: string; mensagem: string }[] = []
   tarefas: { leadId: string; titulo: string; responsavelId?: string | null }[] = []
   campos: Record<string, Record<string, unknown>> = {} // leadId -> { campo: valor }
   escritas: { leadId: string; campo: string; valor: unknown }[] = []
@@ -42,7 +44,13 @@ class AmbienteFake implements AmbienteWorkflow {
   }
   async leadRespondeu(leadId: string) { return this.respondeu.has(leadId) }
   async lerCampoLead(leadId: string, campo: string) { return this.campos[leadId]?.[campo] ?? null }
-  async enviarEmailTemplate(leadId: string, template: string) { this.emails.push({ leadId, template }); return { enviado: true, assunto: 'assunto' } }
+  async enviarEmailTemplate(leadId: string, template: string) {
+    if (this.falharEmail) throw new Error('provedor indisponível')
+    this.emails.push({ leadId, template }); return { enviado: true, assunto: 'assunto' }
+  }
+  async notificarFalhaExecucao(execucao: { id: string }, mensagem: string) {
+    this.falhasNotificadas.push({ id: execucao.id, mensagem })
+  }
   async criarTarefa(leadId: string, titulo: string, responsavelId?: string | null) { this.tarefas.push({ leadId, titulo, responsavelId }) }
   oportunidades: { leadId: string; titulo?: string; valor?: number | null }[] = []
   async criarOportunidade(leadId: string, dados: { titulo?: string; valor?: number | null }) { this.oportunidades.push({ leadId, ...dados }) }
@@ -380,6 +388,39 @@ describe('executor de workflows', () => {
       nome: 'W', definicao: { gatilho: { tipo: 'manual', config: {} }, condicoes: [], acoes: [{ tipo: 'criar_tarefa', config: {} }] },
     })
     await expect(inscreverLeadManual(store, wf.id, 'l1')).rejects.toThrow(/publicado/)
+  })
+
+  it('renovação não duplica o mesmo ciclo e permite um vencimento futuro', async () => {
+    const store = new MemoryWorkflowStore()
+    const wfId = await publicarWorkflow(store, {
+      gatilho: { tipo: 'manual', config: {} }, condicoes: [], acoes: [{ tipo: 'enviar_email', config: { template: 'renovacao' } }],
+    })
+    const agosto = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1', {
+      cicloChave: 'empresa:1:2026-08', servicoId: 'servico-1',
+    })
+    const agostoRepetido = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1', {
+      cicloChave: 'empresa:1:2026-08', servicoId: 'servico-1',
+    })
+    const fevereiro = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1', {
+      cicloChave: 'empresa:1:2027-02', servicoId: 'servico-1',
+    })
+
+    expect(agostoRepetido).toEqual({ jaInscrito: true, execucaoId: agosto.execucaoId })
+    expect(fevereiro.jaInscrito).toBe(false)
+    expect(fevereiro.execucaoId).not.toBe(agosto.execucaoId)
+  })
+
+  it('erro de envio registra o evento e alerta a operação', async () => {
+    const store = new MemoryWorkflowStore(); const amb = new AmbienteFake()
+    amb.alvos = ['lead-1']; amb.falharEmail = true
+    await publicarWorkflow(store, {
+      gatilho, condicoes: [], acoes: [{ tipo: 'enviar_email', config: { template: 'renovacao' } }],
+    })
+
+    await processarTudo(store, registro, amb)
+
+    expect(amb.falhasNotificadas).toHaveLength(1)
+    expect(amb.falhasNotificadas[0].mensagem).toContain('provedor indisponível')
   })
 
   it('campanha ativa usa a agenda atual sem recriar nem duplicar a execução', async () => {

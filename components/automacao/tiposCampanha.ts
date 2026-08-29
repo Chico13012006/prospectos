@@ -69,8 +69,8 @@ export interface FollowupCampanha extends MensagemCampanha {
 }
 
 export interface OperacaoCampanha {
-  // Comunicação/renovação são disparos únicos; os demais objetivos usam a
-  // cadência versionada. O servidor recalcula este valor a partir do tipo.
+  // Comunicados gerais são disparos únicos; renovação e objetivos comerciais
+  // usam a cadência versionada. O servidor recalcula este valor a partir do tipo.
   modoEnvio?: 'cadencia' | 'disparo_unico';
   remetenteConta?: string;
   remetenteEmail?: string;

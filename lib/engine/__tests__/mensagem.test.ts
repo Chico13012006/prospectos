@@ -1,5 +1,5 @@
-// Cobre a seleção de template do motor: fallback nicho→genérico, threading do
-// assunto ("Re:" do 1º contato) e preenchimento de variáveis. Usa o MemoryStore,
+// Cobre a seleção de template do motor, bloqueio de nicho sem template, threading
+// do assunto ("Re:" do 1º contato) e preenchimento de variáveis. Usa o MemoryStore,
 // que lê do mesmo SEED_TEMPLATES que popula a tabela `templates`.
 import { describe, it, expect } from 'vitest'
 import { MemoryStore } from '../store/memoryStore'
@@ -17,8 +17,8 @@ describe('normalizarNicho', () => {
     expect(normalizarNicho('Saúde')).toBe('hospital')
     expect(normalizarNicho('Comércio')).toBe('varejo')
   })
-  it('desconhecido/vazio → null (genérico)', () => {
-    expect(normalizarNicho('Mineração')).toBeNull()
+  it('mantém nicho desconhecido em uma chave canônica; vazio → null', () => {
+    expect(normalizarNicho('Mineração')).toBe('mineracao')
     expect(normalizarNicho('')).toBeNull()
     expect(normalizarNicho(null)).toBeNull()
   })
@@ -40,7 +40,7 @@ describe('preencher', () => {
   })
 })
 
-describe('montarEmail — seleção com fallback', () => {
+describe('montarEmail — seleção de primeiro contato', () => {
   it('1º contato de nicho conhecido usa o template do nicho', async () => {
     const lead = makeLead({ segmento: 'Óticas', empresa: 'VejaBem', contato_nome: 'Maria Souza' })
     const msg = await montarEmail(store, lead, { tipo: 'abordagem' })
@@ -56,10 +56,10 @@ describe('montarEmail — seleção com fallback', () => {
     expect(msg.corpo).toContain('RFID pra ajudar empresas como a Piloto SA')
   })
 
-  it('segmento desconhecido cai no GENÉRICO', async () => {
+  it('segmento sem template bloqueia o primeiro contato', async () => {
     const lead = makeLead({ segmento: 'Mineração', empresa: 'Ferro Ltda' })
-    const msg = await montarEmail(store, lead, { tipo: 'abordagem' })
-    expect(msg.assunto).toBe('Ferro Ltda — perdas no estoque')
+    await expect(montarEmail(store, lead, { tipo: 'abordagem' }))
+      .rejects.toThrow("Template de primeiro contato ausente para o nicho 'mineracao'.")
   })
 })
 
