@@ -91,7 +91,6 @@ export default function Sidebar() {
         </div>
         <div>
           <div className="text-white font-bold text-sm leading-tight">ProspectOS</div>
-          <div className="text-indigo-300 text-xs leading-tight">InovaCode</div>
         </div>
       </div>
 

@@ -29,6 +29,73 @@ export interface ResumoEmpresasVencimento {
   totalMonitoradas: number
 }
 
+export type SituacaoRenovacao =
+  | 'nao_comunicado'
+  | 'agendado'
+  | 'em_acompanhamento'
+  | 'enviado'
+  | 'respondido'
+  | 'erro'
+  | 'encerrado'
+
+export interface ContextoSituacaoRenovacao {
+  execucaoStatus?: string | null
+  execucaoIniciadaEm?: string | null
+  ultimaMensagemEm?: string | null
+  ultimaRespostaEm?: string | null
+}
+
+function citarValorFiltroPostgrest(valor: string): string {
+  return `"${valor.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
+// leads.responsavel_id é a chave atual; registros legados podem carregar só o
+// nome completo. O filtro mantém o fallback por prefixo usado no restante do
+// CRM sem aceitar sintaxe PostgREST vinda do nome do usuário.
+export function filtroResponsavelDashboard(responsavelId: string, responsavelNome: string): string {
+  const nome = responsavelNome.trim()
+  if (!nome) return `responsavel_id.eq.${responsavelId}`
+  return [
+    `responsavel_id.eq.${responsavelId}`,
+    `and(responsavel_id.is.null,responsavel_nome.ilike.${citarValorFiltroPostgrest(`${nome}%`)})`,
+  ].join(',')
+}
+
+export function podeVerDashboardDaEquipe(role: string): boolean {
+  return role === 'admin'
+}
+
+function timestampValido(valor?: string | null): number | null {
+  if (!valor) return null
+  const timestamp = new Date(valor).getTime()
+  return Number.isNaN(timestamp) ? null : timestamp
+}
+
+// Resume o estado operacional sem inferir sucesso quando não há evidência.
+// Resposta só pertence ao ciclo quando ocorreu depois do início da execução;
+// envio real depende do evento/interação persistido, nunca só do status do job.
+export function situacaoRenovacao({
+  execucaoStatus,
+  execucaoIniciadaEm,
+  ultimaMensagemEm,
+  ultimaRespostaEm,
+}: ContextoSituacaoRenovacao): SituacaoRenovacao {
+  const inicio = timestampValido(execucaoIniciadaEm)
+  const mensagem = timestampValido(ultimaMensagemEm)
+  const resposta = timestampValido(ultimaRespostaEm)
+  const referenciaCiclo = inicio ?? mensagem
+
+  if (resposta !== null && referenciaCiclo !== null && resposta >= referenciaCiclo) return 'respondido'
+  if (execucaoStatus === 'erro') return 'erro'
+
+  const ativa = execucaoStatus === 'em_andamento' || execucaoStatus === 'aguardando'
+  if (mensagem !== null && ativa) return 'em_acompanhamento'
+  if (mensagem !== null) return 'enviado'
+  if (ativa) return 'agendado'
+  if (execucaoStatus === 'cancelado' || execucaoStatus === 'concluido') return 'encerrado'
+  return 'nao_comunicado'
+}
+
 export function statusVencimento(dias: number): ClienteControleVencimento['status'] {
   if (dias < 0) return 'vencido'
   if (dias <= 7) return 'critico'

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { agruparVencimentosPorCliente, resumirEmpresasVencimento, statusVencimento } from '../dashboard'
+import {
+  agruparVencimentosPorCliente,
+  filtroResponsavelDashboard,
+  podeVerDashboardDaEquipe,
+  resumirEmpresasVencimento,
+  situacaoRenovacao,
+  statusVencimento,
+} from '../dashboard'
 
 const hoje = new Date('2026-08-25T12:00:00.000Z')
 
@@ -57,5 +64,54 @@ describe('dashboard operacional', () => {
     ], hoje)
 
     expect(resumo).toMatchObject({ vencidas: 1, proximos30: 0, entre31e60: 0 })
+  })
+
+  it('não apresenta execução sem envio como comunicação realizada', () => {
+    expect(situacaoRenovacao({ execucaoStatus: 'aguardando' })).toBe('agendado')
+    expect(situacaoRenovacao({ execucaoStatus: 'erro' })).toBe('erro')
+    expect(situacaoRenovacao({ execucaoStatus: 'concluido' })).toBe('encerrado')
+    expect(situacaoRenovacao({})).toBe('nao_comunicado')
+  })
+
+  it('distingue envio realizado, follow-up ativo e resposta do ciclo atual', () => {
+    expect(situacaoRenovacao({
+      execucaoStatus: 'aguardando',
+      execucaoIniciadaEm: '2026-08-20T10:00:00.000Z',
+      ultimaMensagemEm: '2026-08-20T10:01:00.000Z',
+    })).toBe('em_acompanhamento')
+    expect(situacaoRenovacao({
+      execucaoStatus: 'concluido',
+      execucaoIniciadaEm: '2026-08-20T10:00:00.000Z',
+      ultimaMensagemEm: '2026-08-20T10:01:00.000Z',
+    })).toBe('enviado')
+    expect(situacaoRenovacao({
+      execucaoStatus: 'aguardando',
+      execucaoIniciadaEm: '2026-08-20T10:00:00.000Z',
+      ultimaMensagemEm: '2026-08-20T10:01:00.000Z',
+      ultimaRespostaEm: '2026-08-20T11:00:00.000Z',
+    })).toBe('respondido')
+  })
+
+  it('não atribui uma resposta antiga ao ciclo atual de renovação', () => {
+    expect(situacaoRenovacao({
+      execucaoStatus: 'aguardando',
+      execucaoIniciadaEm: '2026-08-20T10:00:00.000Z',
+      ultimaMensagemEm: '2026-08-20T10:01:00.000Z',
+      ultimaRespostaEm: '2026-08-10T11:00:00.000Z',
+    })).toBe('em_acompanhamento')
+  })
+
+  it('restringe o comercial à própria carteira e preserva o fallback legado por nome', () => {
+    expect(podeVerDashboardDaEquipe('admin')).toBe(true)
+    expect(podeVerDashboardDaEquipe('usuario')).toBe(false)
+    expect(filtroResponsavelDashboard('usuario-1', 'Silmara')).toBe(
+      'responsavel_id.eq.usuario-1,and(responsavel_id.is.null,responsavel_nome.ilike."Silmara%")',
+    )
+  })
+
+  it('escapa nomes antes de compor o filtro PostgREST', () => {
+    expect(filtroResponsavelDashboard('usuario-1', 'Ana "SDR" \\ Sul')).toBe(
+      'responsavel_id.eq.usuario-1,and(responsavel_id.is.null,responsavel_nome.ilike."Ana \\"SDR\\" \\\\ Sul%")',
+    )
   })
 })
