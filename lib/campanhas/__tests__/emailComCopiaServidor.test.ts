@@ -48,6 +48,25 @@ describe('e-mail de campanha com cópia comercial', () => {
     )
   })
 
+  it('não copia o responsável quando ele é a própria conta remetente', async () => {
+    const email = provider()
+    await enviarEmailCampanhaComCopia(email, {
+      para: 'lead@empresa.com',
+      assunto: 'Assunto',
+      corpo: 'Mensagem',
+      remetenteEmail: 'comercial@laudos.com',
+      responsavelCampanha: { id: 'perfil-1', nome: 'Francisco', email: 'COMERCIAL@LAUDOS.COM' },
+    })
+
+    expect(email.enviar).toHaveBeenCalledWith(
+      'lead@empresa.com',
+      'Assunto',
+      'Mensagem',
+      undefined,
+      undefined,
+    )
+  })
+
   it('bloqueia o envio se nenhum responsável tiver e-mail real', async () => {
     const email = provider()
     await expect(enviarEmailCampanhaComCopia(email, {

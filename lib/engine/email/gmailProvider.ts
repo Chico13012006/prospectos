@@ -73,8 +73,14 @@ export function lerCredenciaisGmail(papel: PapelEmail | string = 'followup'): Gm
     papel === 'prospeccao' ? 'PROSPECCAO'
     : papel === 'followup'  ? 'FOLLOWUP'
     : papel.toUpperCase()
-  const user = process.env[`GMAIL_USER_${prefixo}`] ?? process.env.GMAIL_USER
-  const appPassword = process.env[`GMAIL_APP_PASSWORD_${prefixo}`] ?? process.env.GMAIL_APP_PASSWORD
+  const contaEspecifica = papel !== 'prospeccao' && papel !== 'followup'
+  // Chaves por organização (ex.: LAUDO) são isoladas: se a credencial dedicada
+  // estiver ausente, bloqueamos o envio em vez de cair silenciosamente na conta
+  // padrão de outra operação. Os papéis legados mantêm o fallback compatível.
+  const user = process.env[`GMAIL_USER_${prefixo}`]
+    ?? (contaEspecifica ? undefined : process.env.GMAIL_USER)
+  const appPassword = process.env[`GMAIL_APP_PASSWORD_${prefixo}`]
+    ?? (contaEspecifica ? undefined : process.env.GMAIL_APP_PASSWORD)
   if (!user || !appPassword) return null
   return { user, appPassword }
 }

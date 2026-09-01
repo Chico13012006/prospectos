@@ -252,6 +252,9 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     // Provider de e-mail: conta específica da org (email_conta_key) ou a padrão.
     const emailContaKey = orgNomenclaturas?.['email_conta_key']
     const emailCred = emailContaKey ? lerCredenciaisGmail(emailContaKey) : null
+    if (emailContaKey && !emailCred && !this.simular) {
+      throw new Error(`Envio bloqueado: credencial Gmail dedicada '${emailContaKey}' não configurada.`)
+    }
     const emailProvider = emailCred ? new GmailProvider(emailCred) : this.motor.email
 
     // Simulação (Fase 5): não envia nem grava — quem loga é o executor.
@@ -313,6 +316,7 @@ export class AmbienteSupabase implements AmbienteWorkflow {
         assunto,
         corpo,
         html,
+        remetenteEmail: emailCred?.user,
         responsavelCampanha: contextoCampanha?.responsavel,
         responsavelLead,
       })
