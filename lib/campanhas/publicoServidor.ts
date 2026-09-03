@@ -171,7 +171,10 @@ export function classificarPublicoCampanha(
   for (const linha of selecionados) {
     const email = emailNormalizado(linha.contato_email)
     const bloqueado = linha.optout === true || linha.bounced === true || linha.perdido === true
-    const incompativel = linha.owner !== 'engine' || execucoes.has(linha.id)
+    // `n8n` é o estado seguro dos leads recém-importados: fora do motor, mas
+    // elegível para uma campanha que o gestor ativará explicitamente. A troca
+    // para `engine` só ocorre no enrollment real confirmado.
+    const incompativel = !['engine', 'n8n'].includes(linha.owner ?? '') || execucoes.has(linha.id)
     const chaveEmpresa = chaveEmpresaPublico(linha)
     if (!email || bloqueado || incompativel || usados.has(email)
       || (opts.umContatoPorEmpresa && empresasUsadas.has(chaveEmpresa))) continue
@@ -218,7 +221,7 @@ export function classificarPublicoCampanha(
     duplicados: [...ocorrencias.values()].reduce((total, quantidade) => total + Math.max(0, quantidade - 1), 0),
     bloqueados: selecionados.filter((linha) => linha.optout === true || linha.bounced === true || linha.perdido === true).length,
     semResponsavel: selecionados.filter((linha) => !linha.responsavel_id).length,
-    incompativeis: selecionados.filter((linha) => linha.owner !== 'engine' || execucoes.has(linha.id)).length,
+    incompativeis: selecionados.filter((linha) => !['engine', 'n8n'].includes(linha.owner ?? '') || execucoes.has(linha.id)).length,
     elegiveis: finais.length,
     truncado: opts.truncado === true || elegiveis.length > limiteSolicitado,
     idsElegiveis: finais.map((linha) => linha.id),

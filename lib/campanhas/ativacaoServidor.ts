@@ -9,6 +9,7 @@ import {
 } from './configuracaoGuiada'
 import { buscarPreviaPublicoCampanha } from './publicoServidor'
 import { exigirEnvioRealCampanhaDisponivel } from './opcoesServidor'
+import { restaurarLeadImportadoForaDoMotor, transferirLeadImportadoParaMotor } from './carteiraServidor'
 import {
   inscreverLeadManual,
   publicar,
@@ -157,7 +158,13 @@ export async function inscreverCampanhaReal(
   let falhas = 0
   const execucoesProcessaveis: string[] = []
   for (const leadId of previa.idsElegiveis) {
+    let assumidoPelaCampanha = false
     try {
+      // Leads importados ficam fora do motor (`n8n`) até este ponto. A ação
+      // explícita e numericamente confirmada do gestor transfere somente os
+      // selecionados desta campanha para o motor.
+      assumidoPelaCampanha = await transferirLeadImportadoParaMotor(admin, org, leadId)
+
       const resultado = await inscreverLeadManual(store, workflow.id, leadId, campanhaId)
       if (resultado.jaInscrito) jaInscritos += 1
       else {
@@ -166,6 +173,9 @@ export async function inscreverCampanhaReal(
       if (resultado.execucaoId) execucoesProcessaveis.push(resultado.execucaoId)
     } catch {
       falhas += 1
+      if (assumidoPelaCampanha) {
+        await restaurarLeadImportadoForaDoMotor(admin, org, leadId)
+      }
     }
   }
 

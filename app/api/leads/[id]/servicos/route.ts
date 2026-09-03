@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { resolverAcesso } from '@/lib/rbac/servidor'
 import { leituraEntidadesLigada } from '@/lib/empresas/flag'
+import { podeAcessarLead } from '@/lib/leads/acessoServidor'
 
 export const runtime = 'nodejs'
 
@@ -18,6 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const acc = await resolverAcesso()
   if ('erro' in acc) return acc.erro
   const { admin, org } = acc.acesso
+  if (!(await podeAcessarLead(acc.acesso, id))) return NextResponse.json({ erro: 'Lead não encontrado' }, { status: 404 })
 
   // Escopo: a UI de laudos segue o mesmo flag org-scoped do LeadPanel.
   if (!(await leituraEntidadesLigada(admin, org))) return NextResponse.json({ empresaId: null, servicos: [] })
@@ -39,6 +41,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const acc = await resolverAcesso()
   if ('erro' in acc) return acc.erro
   const { admin, org } = acc.acesso
+  if (!(await podeAcessarLead(acc.acesso, id))) return NextResponse.json({ erro: 'Lead não encontrado' }, { status: 404 })
 
   if (!(await leituraEntidadesLigada(admin, org))) return NextResponse.json({ erro: 'Recurso não habilitado para esta organização' }, { status: 403 })
 

@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server'
 import { resolverAcesso } from '@/lib/rbac/servidor'
 import { resolverEntidadesDoLead, listarContatosDaEmpresa } from '@/lib/empresas/repository'
 import { leituraEntidadesLigada } from '@/lib/empresas/flag'
+import { podeAcessarLead } from '@/lib/leads/acessoServidor'
 
 export const runtime = 'nodejs'
 
@@ -15,6 +16,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const acc = await resolverAcesso()
   if ('erro' in acc) return acc.erro
   const { admin, org } = acc.acesso
+  if (!(await podeAcessarLead(acc.acesso, id))) {
+    return NextResponse.json({ erro: 'Lead não encontrado' }, { status: 404 })
+  }
 
   // Gate por organização (config tipada). Off => a tela renderiza nada novo (legado).
   if (!(await leituraEntidadesLigada(admin, org))) {

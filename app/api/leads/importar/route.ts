@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { createSupabaseAdminClient } from '@/lib/supabase-admin'
+import { resolverAcesso } from '@/lib/rbac/servidor'
 import {
   processarPlanilhaPadrao,
   dedupeInternaPorEmail,
@@ -8,6 +7,7 @@ import {
   resumirNichosImportacao,
 } from '@/lib/leads/importarCsv'
 import { resolverResponsavelPorAuthId } from '@/lib/leads/responsavelServer'
+import { camposBaseImportacao, montarAvisoImportacao } from '@/lib/leads/importacaoOperacional'
 
 // Importação de leads em LOTE pela tela (2.2). Roda server-side com service role
 // (nunca expõe a chave ao client). Dois modos no mesmo endpoint:
@@ -29,33 +29,11 @@ async function lerTextoCsv(file: File): Promise<string> {
   }
 }
 
-// Defaults de persistência dos leads criados por esta tela. owner='engine' (o
-// motor só trabalha esse owner) para entrarem na cadência e receberem follow-up
-// automático — com o CC do responsável (2.4). followups_enviados/owner são
-// NOT NULL sem default no banco, então vão explícitos.
-function camposBase(organizacaoId: string) {
-  return {
-    organizacao_id: organizacaoId,
-    owner: 'engine' as const,
-    estagio: 'novos_leads',
-    followups_enviados: 0,
-    canal_preferencial: 'email',
-    perdido: false,
-    score: 50,
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const server = await createSupabaseServerClient()
-    const { data: { user } } = await server.auth.getUser()
-    if (!user) return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 })
-
-    const admin = createSupabaseAdminClient()
-    const { data: perfil } = await admin
-      .from('perfis').select('organizacao_id').eq('id', user.id).maybeSingle()
-    const org = perfil?.organizacao_id as string | undefined
-    if (!org) return NextResponse.json({ erro: 'Usuário sem organização' }, { status: 400 })
+    const acc = await resolverAcesso()
+    if ('erro' in acc) return acc.erro
+    const { admin, org, user } = acc.acesso
 
     const form = await req.formData()
     const file = form.get('file')
@@ -111,20 +89,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ resumo })
     }
 
-    // --- CONFIRMAR: resolve responsável, insere ---
-    const responsavelAuthId = String(form.get('responsavelAuthId') ?? '')
-    if (!responsavelAuthId) {
-      return NextResponse.json({ erro: 'Escolha um comercial responsável.' }, { status: 400 })
-    }
-
-    const vinculo = await resolverResponsavelPorAuthId(admin, org, responsavelAuthId)
+    // O responsável é sempre o próprio usuário autenticado. O payload do CSV
+    // não pode atribuir carteira a outro comercial.
+    const vinculo = await resolverResponsavelPorAuthId(admin, org, user.id)
     if (!vinculo.ok) {
       // Bloqueia e avisa (decisão do Chico): não cria lead com responsável errado
       // nem sem CC. Cadastro/desambiguação em `usuarios` resolve.
       const detalhe = vinculo.motivo === 'ambiguo' ? vinculo.detalhe : undefined
       return NextResponse.json(
         {
-          erro: 'Não foi possível vincular o comercial escolhido a um usuário real (usuarios).',
+          erro: 'Sua conta não está vinculada a um usuário comercial ativo.',
           motivo: vinculo.motivo,
           detalhe,
         },
@@ -136,7 +110,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ inseridos: 0, resumo, responsavel: { nome: vinculo.usuario.nome } })
     }
 
-    const base = camposBase(org)
+    const base = camposBaseImportacao(org)
     const payload = novos.map((l) => ({
       ...base,
       contato_nome: l.contato_nome,
@@ -165,7 +139,41 @@ export async function POST(req: NextRequest) {
       inseridos += lote.length
     }
 
-    return NextResponse.json({ inseridos, resumo, responsavel: { nome: vinculo.usuario.nome } })
+    // Aviso in-app aos administradores. É best-effort: uma falha de aviso não
+    // desfaz nem mascara uma importação que já foi concluída.
+    let avisoCriado = false
+    try {
+      const { data: admins } = await admin
+        .from('perfis').select('id').eq('organizacao_id', org).eq('role', 'admin')
+      const totalPulados = Object.values(puladosPorMotivo).reduce((soma, n) => soma + n, 0)
+      const nomeComercial = vinculo.usuario.nome ?? vinculo.usuario.email ?? 'Comercial'
+      const aviso = montarAvisoImportacao(nomeComercial, {
+        novos: inseridos,
+        jaExistentes,
+        duplicadosNoArquivo: duplicados,
+        totalPulados,
+      })
+      if (admins?.length) {
+        const { error: erroAviso } = await admin.from('notificacoes').insert(
+          admins.map((perfil) => ({
+            organizacao_id: org,
+            perfil_id: perfil.id,
+            canal: 'app',
+            titulo: aviso.titulo,
+            mensagem: aviso.mensagem,
+            origem: 'importacao_csv',
+            motivo: 'lote_importado',
+            link: '/base-leads',
+          })),
+        )
+        if (erroAviso) throw erroAviso
+        avisoCriado = true
+      }
+    } catch (erroAviso) {
+      console.error('[leads/importar] importação concluída, mas aviso ao gestor falhou:', erroAviso)
+    }
+
+    return NextResponse.json({ inseridos, resumo, responsavel: { nome: vinculo.usuario.nome }, avisoCriado })
   } catch (err) {
     console.error('[leads/importar] erro:', err)
     return NextResponse.json({ erro: 'Erro interno ao importar.' }, { status: 500 })

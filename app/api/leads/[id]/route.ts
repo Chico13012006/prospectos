@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { resolverAcesso } from '@/lib/rbac/servidor'
 import { ErroEdicaoLead, normalizarPatchCadastralLead } from '@/lib/leads/edicao'
 import { atualizarDadosCadastraisLead, buscarLeadParaEdicao, emailPertenceAOutroLead } from '@/lib/leads/repository'
+import { podeAcessarLead } from '@/lib/leads/acessoServidor'
 
 export const runtime = 'nodejs'
 
@@ -10,6 +11,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const acc = await resolverAcesso()
   if ('erro' in acc) return acc.erro
   const { admin, org } = acc.acesso
+  if (!(await podeAcessarLead(acc.acesso, id))) {
+    return NextResponse.json({ erro: 'Lead não encontrado.' }, { status: 404 })
+  }
 
   try {
     const patch = normalizarPatchCadastralLead(await req.json())

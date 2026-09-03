@@ -38,9 +38,9 @@ describe('prévia real do público da campanha', () => {
       duplicados: 1,
       bloqueados: 1,
       semResponsavel: 1,
-      incompativeis: 2,
-      elegiveis: 2,
-      idsElegiveis: ['a', 'g'],
+      incompativeis: 1,
+      elegiveis: 3,
+      idsElegiveis: ['a', 'e', 'g'],
       totalEmpresas: 7,
     })
   })

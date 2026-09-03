@@ -6,8 +6,8 @@
 // O lead é buscado com service role MAS escopado à organização do usuário logado
 // (organizacao_id), para não vazar leads de outra org mesmo com a admin key.
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { createSupabaseAdminClient } from '@/lib/supabase-admin'
+import { resolverAcesso } from '@/lib/rbac/servidor'
+import { podeAcessarLead } from '@/lib/leads/acessoServidor'
 import { iaConfigurada } from '@/lib/ia/cliente'
 import { gerarInsightComercial, type LeadParaInsight } from '@/lib/ia/insightComercial'
 
@@ -23,15 +23,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       )
     }
 
-    const server = await createSupabaseServerClient()
-    const { data: { user } } = await server.auth.getUser()
-    if (!user) return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 })
-
-    const admin = createSupabaseAdminClient()
-    const { data: perfil } = await admin
-      .from('perfis').select('organizacao_id').eq('id', user.id).maybeSingle()
-    const org = perfil?.organizacao_id as string | undefined
-    if (!org) return NextResponse.json({ erro: 'Usuário sem organização' }, { status: 400 })
+    const acc = await resolverAcesso()
+    if ('erro' in acc) return acc.erro
+    const { admin, org } = acc.acesso
+    if (!(await podeAcessarLead(acc.acesso, id))) return NextResponse.json({ erro: 'Lead não encontrado.' }, { status: 404 })
 
     // Busca o lead escopado à org (a admin key ignora RLS — o filtro é a trava).
     const { data: lead, error } = await admin

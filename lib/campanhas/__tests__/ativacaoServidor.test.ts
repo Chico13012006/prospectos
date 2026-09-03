@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   inscreverLeadManual: vi.fn(),
   exigirEnvioRealCampanhaDisponivel: vi.fn(),
   processarRenovacoes: vi.fn(),
+  transferirLeadImportadoParaMotor: vi.fn(),
+  restaurarLeadImportadoForaDoMotor: vi.fn(),
 }))
 
 vi.mock('../repository', () => ({
@@ -42,6 +44,11 @@ vi.mock('@/lib/workflows', () => ({
 
 vi.mock('@/lib/renovacao/processar', () => ({
   processarRenovacoes: mocks.processarRenovacoes,
+}))
+
+vi.mock('../carteiraServidor', () => ({
+  transferirLeadImportadoParaMotor: mocks.transferirLeadImportadoParaMotor,
+  restaurarLeadImportadoForaDoMotor: mocks.restaurarLeadImportadoForaDoMotor,
 }))
 
 import { iniciarCampanhaReal } from '../ativacaoServidor'
@@ -114,6 +121,8 @@ beforeEach(() => {
     cadenciasExistentes: 0,
     falhasCadencia: 0,
   })
+  mocks.transferirLeadImportadoParaMotor.mockResolvedValue(false)
+  mocks.restaurarLeadImportadoForaDoMotor.mockResolvedValue(undefined)
 })
 
 describe('início real de campanha guiada', () => {
@@ -145,6 +154,7 @@ describe('início real de campanha guiada', () => {
     expect(mocks.inscreverLeadManual).toHaveBeenNthCalledWith(2, expect.anything(), 'workflow-1', 'lead-2', 'campanha-1')
     expect(mocks.atualizarCampanha).toHaveBeenCalledWith(admin, 'org-a', 'campanha-1', { status: 'ativa' })
     expect(mocks.atualizarCampanha).toHaveBeenCalledWith(admin, 'org-a', 'campanha-1', { dry_run: false })
+    expect(mocks.transferirLeadImportadoParaMotor).toHaveBeenCalledTimes(2)
   })
 
   it('exige confirmação numérica explícita antes de consultar ou alterar a campanha', async () => {
@@ -222,6 +232,7 @@ describe('início real de campanha guiada', () => {
       .mockResolvedValueOnce(previa(['lead-1', 'lead-2']))
       .mockResolvedValueOnce(previa(['lead-1', 'lead-2']))
     mocks.inscreverLeadManual.mockRejectedValue(new Error('falha de persistência'))
+    mocks.transferirLeadImportadoParaMotor.mockResolvedValue(true)
 
     await expect(
       iniciarCampanhaReal(admin, 'org-a', 'campanha-1', 'usuario-1', 2),
@@ -229,5 +240,6 @@ describe('início real de campanha guiada', () => {
 
     expect(mocks.atualizarCampanha).toHaveBeenNthCalledWith(2, admin, 'org-a', 'campanha-1', { dry_run: false })
     expect(mocks.atualizarCampanha).toHaveBeenNthCalledWith(3, admin, 'org-a', 'campanha-1', { dry_run: true })
+    expect(mocks.restaurarLeadImportadoForaDoMotor).toHaveBeenCalledTimes(2)
   })
 })

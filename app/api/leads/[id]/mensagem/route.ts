@@ -5,8 +5,8 @@
 //
 // Auth por sessão; o lead é validado contra a organização do usuário logado.
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { createSupabaseAdminClient } from '@/lib/supabase-admin'
+import { resolverAcesso } from '@/lib/rbac/servidor'
+import { podeAcessarLead } from '@/lib/leads/acessoServidor'
 import { criarMotor } from '@/lib/engine'
 import { montarEmail, type Envio } from '@/lib/engine/mensagem'
 
@@ -15,15 +15,10 @@ export const runtime = 'nodejs'
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   try {
-    const server = await createSupabaseServerClient()
-    const { data: { user } } = await server.auth.getUser()
-    if (!user) return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 })
-
-    const admin = createSupabaseAdminClient()
-    const { data: perfil } = await admin
-      .from('perfis').select('organizacao_id').eq('id', user.id).maybeSingle()
-    const org = perfil?.organizacao_id as string | undefined
-    if (!org) return NextResponse.json({ erro: 'Usuário sem organização' }, { status: 400 })
+    const acc = await resolverAcesso()
+    if ('erro' in acc) return acc.erro
+    const { admin, org } = acc.acesso
+    if (!(await podeAcessarLead(acc.acesso, id))) return NextResponse.json({ erro: 'Lead não encontrado.' }, { status: 404 })
 
     // Trava de tenant: o lead precisa ser da org do usuário.
     const { data: leadRow } = await admin
