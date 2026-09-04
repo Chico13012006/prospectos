@@ -17,11 +17,13 @@
  * dry_run permanece TRUE. Envio real só quando o usuário autorizar via UI.
  *
  * Usage:
- *   npx tsx scripts/atualizar-workflow-reativacao.ts
+ *   npx tsx scripts/atualizar-workflow-reativacao.ts              (ensaio: só mostra)
+ *   npx tsx scripts/atualizar-workflow-reativacao.ts --confirmar  (executa)
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import pg from 'pg'
+import { exigirConfirmacao } from './_guarda'
 
 for (const l of fs.readFileSync(path.join(process.cwd(), '.env.local'), 'utf-8').split(/\r?\n/)) {
   const i = l.indexOf('='); if (i <= 0 || l.startsWith('#')) continue
@@ -186,6 +188,17 @@ const DEFINICAO_V2 = {
 }
 
 async function main() {
+  exigirConfirmacao({
+    nome: 'ATUALIZAR WORKFLOW — Reativação de clientes',
+    alvo: 'org Laudos ' + ORG + ' · campanha ' + CAMPANHA_ID,
+    efeitos: [
+      'DESTRUTIVO: apaga TODAS as execuções da campanha (workflow_execucoes + eventos)',
+      're-inscreve os leads do zero (passo 0) — quem já recebeu a sequência recebe T1 de novo',
+      'sobrescreve 5 templates de e-mail e publica nova versão do workflow',
+      'grava organizacoes.configuracoes da org',
+    ],
+  })
+
   const c = new pg.Client({ connectionString: process.env.DATABASE_URL })
   await c.connect()
   try {

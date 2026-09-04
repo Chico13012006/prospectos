@@ -49,3 +49,6 @@ backups/
 # Cache local da prospeccao free-tier (candidatos da RF + status por CNPJ)
 data/prospeccao/
 lote-*.log
+
+# Planilhas de demonstração — regeneráveis por scripts/gerar-demo-importacao-dashboard.py
+demo/

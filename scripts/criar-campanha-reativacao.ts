@@ -15,11 +15,13 @@
  * Ou via PATCH /api/campanhas/<id> { dry_run: false } com campanhas.manage.
  *
  * Usage:
- *   npx tsx scripts/criar-campanha-reativacao.ts
+ *   npx tsx scripts/criar-campanha-reativacao.ts              (ensaio: só mostra)
+ *   npx tsx scripts/criar-campanha-reativacao.ts --confirmar  (executa)
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import pg from 'pg'
+import { exigirConfirmacao } from './_guarda'
 
 for (const l of fs.readFileSync(path.join(process.cwd(), '.env.local'), 'utf-8').split(/\r?\n/)) {
   const i = l.indexOf('='); if (i <= 0 || l.startsWith('#')) continue
@@ -99,6 +101,17 @@ const DEFINICAO_WORKFLOW = {
 }
 
 async function main() {
+  exigirConfirmacao({
+    nome: 'CRIAR CAMPANHA — ' + CAMPANHA_NOME,
+    alvo: 'org Laudos ' + ORG,
+    efeitos: [
+      'semeia 3 templates de reativação na org',
+      'cria e publica o workflow "' + WORKFLOW_NOME + '"',
+      'cria a campanha com dry_run=true e a ativa',
+      'inscreve todos os leads elegíveis nas execuções do workflow',
+    ],
+  })
+
   const c = new pg.Client({ connectionString: process.env.DATABASE_URL })
   await c.connect()
   try {

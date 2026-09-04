@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import pg from 'pg'
+import { exigirConfirmacao } from './_guarda'
 
 for (const l of fs.readFileSync(path.join(process.cwd(), '.env.local'), 'utf-8').split(/\r?\n/)) {
   const i = l.indexOf('='); if (i <= 0 || l.startsWith('#')) continue
@@ -10,6 +11,15 @@ for (const l of fs.readFileSync(path.join(process.cwd(), '.env.local'), 'utf-8')
 const ORG = '03097614-9fd5-4491-a91c-589f84461683'
 
 async function main() {
+  exigirConfirmacao({
+    nome: 'FIX BOUNCE — lead individual',
+    alvo: 'org Laudos ' + ORG,
+    efeitos: [
+      'marca o lead como bounced=true e limpa próxima ação',
+      'cancela as execuções de workflow ativas desse lead',
+    ],
+  })
+
   const c = new pg.Client({ connectionString: process.env.DATABASE_URL })
   await c.connect()
 
