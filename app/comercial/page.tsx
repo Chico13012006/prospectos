@@ -2,10 +2,9 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Briefcase, Calculator, Sparkles, Target } from 'lucide-react';
+import { Briefcase, Calculator, Sparkles } from 'lucide-react';
 import SimuladorPanel from '@/components/comercial/SimuladorPanel';
 import CopilotoPanel from '@/components/comercial/CopilotoPanel';
-import OportunidadesPanel from '@/components/comercial/OportunidadesPanel';
 
 // Módulo "Comercial": junta o Simulador de propostas e o Copiloto pós-reunião
 // em abas internas (?tab=simulador|copiloto), um único item na navegação.
@@ -18,17 +17,17 @@ export default function ComercialPage() {
   );
 }
 
-type Aba = 'simulador' | 'copiloto' | 'oportunidades';
+type Aba = 'simulador' | 'copiloto';
 
 function Inner() {
   const searchParams = useSearchParams();
   const [aba, setAba] = useState<Aba>('simulador');
 
-  // Deep-link: ?tab=copiloto|oportunidades (nav, redirect de /oportunidades ou
-  // link externo). O simulador também lê ?modelo/?itens (vindo do copiloto).
+  // Deep-link: ?tab=copiloto|simulador (nav ou link externo). O simulador
+  // também lê ?modelo/?itens (vindo do copiloto).
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab === 'copiloto' || tab === 'simulador' || tab === 'oportunidades') setAba(tab);
+    if (tab === 'copiloto' || tab === 'simulador') setAba(tab);
   }, [searchParams]);
 
   return (
@@ -38,16 +37,15 @@ function Inner() {
           <Briefcase size={22} className="text-indigo-400" /> Comercial
         </h1>
         <p className="text-sm text-slate-400 mt-0.5">
-          Propostas, copiloto pós-reunião e oportunidades em negociação.
+          Propostas e copiloto pós-reunião.
         </p>
       </div>
 
-      {/* Abas: Simulador · Copiloto · Oportunidades */}
+      {/* Abas: Simulador · Copiloto */}
       <div className="flex items-center rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-0.5 w-fit animate-in stagger-2">
         {([
           { id: 'simulador', label: 'Simulador', Icon: Calculator },
           { id: 'copiloto', label: 'Copiloto', Icon: Sparkles },
-          { id: 'oportunidades', label: 'Oportunidades', Icon: Target },
         ] as const).map(t => (
           <button
             key={t.id}
@@ -64,7 +62,6 @@ function Inner() {
       <div className="animate-in stagger-3">
         {aba === 'simulador' && <SimuladorPanel />}
         {aba === 'copiloto' && <CopilotoPanel />}
-        {aba === 'oportunidades' && <OportunidadesPanel />}
       </div>
     </div>
   );
