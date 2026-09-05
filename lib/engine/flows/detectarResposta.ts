@@ -242,6 +242,19 @@ async function tratarBounce(store: Store, msg: MensagemRecebida): Promise<boolea
     return false
   }
 
+  // Idempotência: a busca de mensagens varre uma JANELA de dias e não depende da
+  // flag \Seen, então o mesmo bounce reaparece a cada passada do monitor (a cada
+  // INTERVALO_MONITOR_RESPOSTAS_SEGUNDOS). Sem esta guarda, cada passada remarca
+  // o lead e grava outra nota — foi assim que 3 leads acumularam ~2.400 notas
+  // cada. Já tratado é sucesso: contabiliza como bounce, não escreve de novo.
+  if (lead.bounced === true) {
+    log.info('Bounce já tratado para este lead — ignorado (idempotência).', {
+      leadId: lead.id,
+      emailOriginal,
+    })
+    return true
+  }
+
   // Marca o lead como bounced e cancela as execuções ativas.
   await store.atualizarLead(lead.id, {
     bounced: true,

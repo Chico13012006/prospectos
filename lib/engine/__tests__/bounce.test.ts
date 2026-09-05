@@ -78,6 +78,43 @@ describe('detectarResposta — bounce handling', () => {
     expect(fila.pendentes()).toBe(0)
   })
 
+  // O SimulatedProvider esvazia a caixa a cada leitura, mas o Gmail real varre
+  // uma JANELA de dias sem depender de \Seen: o mesmo bounce volta em toda
+  // passada do monitor. Injetar duas vezes reproduz esse comportamento — foi
+  // essa diferença que escondeu o loop que gerou ~2.400 notas por lead.
+  it('bounce repetido não remarca o lead nem duplica a nota', async () => {
+    const lead = makeLead({
+      estagio: 'primeiro_contato',
+      contato_email: 'contato@acme.com.br',
+      ultimo_contato: SEMANA_PASSADA,
+    })
+    store = new MemoryStore([lead])
+
+    const bounce = msgBounce({
+      corpo: 'Your message to contato@acme.com.br could not be delivered. 550 User not found.',
+    })
+
+    email.injetar(bounce)
+    const primeira = await detectarResposta(store, email, fila)
+    const marcadoEm = (await store.buscarLead(lead.id))?.bounced_em
+
+    email.injetar(bounce)
+    const segunda = await detectarResposta(store, email, fila)
+
+    // Segue contando como bounce (a mensagem É um bounce), mas sem reescrever.
+    expect(primeira.bounces).toBe(1)
+    expect(segunda.bounces).toBe(1)
+
+    const notas = store.interacoes.filter(
+      (i) => i.lead_id === lead.id && i.descricao?.startsWith('Bounce SMTP detectado'),
+    )
+    expect(notas).toHaveLength(1)
+
+    const depois = await store.buscarLead(lead.id)
+    expect(depois?.bounced).toBe(true)
+    expect(depois?.bounced_em).toBe(marcadoEm) // carimbo original preservado
+  })
+
   it('lead bounced não entra em leadsParaFollowup', async () => {
     const lead = makeLead({
       estagio: 'primeiro_contato',
