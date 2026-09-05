@@ -1,4 +1,5 @@
 import type { Lead, Interacao, Usuario, Template } from './supabase'
+import { apenasTemplatesAutorais } from './campanhas/workflowsInternos'
 import { createSupabaseBrowserClient } from './supabase-browser'
 import { ESTAGIOS_RESERVATORIO, estagiosDoStatus } from './pipeline-stages'
 
@@ -455,7 +456,9 @@ export async function getTemplates(): Promise<Template[]> {
     .eq('ativo', true)
     .order('nome')
   if (error) throw error
-  return data || []
+  // A biblioteca mostra só o que o usuário escreveu; os templates gerados ao
+  // ativar uma campanha ("campanha_<id>_m1") vivem dentro da campanha.
+  return apenasTemplatesAutorais(data || [])
 }
 
 // --- ANALYTICS / DASHBOARD ---

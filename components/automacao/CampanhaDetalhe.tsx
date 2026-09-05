@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import {
   ChevronRight, Loader2, PencilLine, Play, Pause, CheckCircle2, Building2, Users,
-  MessageSquare, BarChart3, ClipboardList, Workflow, TrendingUp, Info, Target, AlertTriangle, Activity, CalendarDays,
+  MessageSquare, BarChart3, ClipboardList, Workflow, TrendingUp, Info, Target, AlertTriangle, Activity, CalendarDays, Clock,
 } from 'lucide-react';
 import { type Campanha, type Publico, STATUS_BADGE, STATUS_LABEL, fmtData, resumoPublico } from './tiposCampanha';
 import {
@@ -18,6 +18,7 @@ import {
   type ContextoResumoOperacional,
 } from '@/lib/campanhas/resumoOperacional';
 import { DIAS_CAMPANHA, normalizarDiasCampanha, type DiaCampanha } from '@/lib/campanhas/agenda';
+import { descreverCadencia, rotuloDoDia, rotuloDaEspera } from '@/lib/campanhas/cadenciaLegivel';
 import { campanhaEhDisparoUnico } from '@/lib/campanhas/configuracaoGuiada';
 
 // Detalhe de campanha com abas internas. Visão geral/Empresas/Decisores/Mensagens
@@ -160,6 +161,9 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
     ? `${previaPublico.elegiveis} elegíveis de ${previaPublico.totalSelecionado} selecionados — ${formatarPublicoOperacional(c.publico)}`
     : formatarPublicoOperacional(c.publico);
   const mensagensOperacionais = formatarMensagensOperacionais(contextoResumo.workflow?.definicao ?? null, pub.operacao);
+  // Sequência legível da cadência — evita mandar o usuário ao builder para
+  // descobrir o que a campanha faz.
+  const cadencia = descreverCadencia(contextoResumo.workflow?.definicao ?? null, pub.operacao);
   const cadenciaOperacional = disparoUnico
     ? 'Disparo único — somente a mensagem inicial'
     : formatarCadenciaOperacional(contextoResumo.workflow, pub.agenda, pub.operacao);
@@ -465,17 +469,50 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
       {aba === 'mensagens' && (
         <div className={card}>
           <h3 className="font-semibold text-slate-200 text-sm mb-3 flex items-center gap-2"><Workflow size={15} className="text-indigo-400" /> {disparoUnico ? 'Mensagem do disparo' : 'Cadência de mensagens'}</h3>
-          {c.workflow_id ? (
-            <div className="flex items-center justify-between p-3 rounded-lg border border-[#2a3147] bg-[#0f1117]">
-              <span className="text-sm text-slate-200 inline-flex items-center gap-2"><Workflow size={15} className="text-indigo-400" /> {contextoResumo.workflow?.nome ?? 'Workflow vinculado'}</span>
-              <Link href={`/workflows/${c.workflow_id}`} className="text-xs text-indigo-300 hover:text-indigo-200">Abrir no builder →</Link>
-            </div>
+          {cadencia.length > 0 ? (
+            <ol className="space-y-0">
+              {cadencia.map((passo) => {
+                const espera = rotuloDaEspera(passo.esperaAntes);
+                return (
+                  <li key={passo.ordem}>
+                    {espera && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 pl-4 py-1.5">
+                        <span className="w-px h-4 bg-[#2a3147] mr-1.5" />
+                        <Clock size={11} /> {espera}
+                      </div>
+                    )}
+                    <div className="flex items-start gap-3 p-3 rounded-lg border border-[#2a3147] bg-[#0f1117]">
+                      <span className="shrink-0 text-[10px] font-semibold text-indigo-300 bg-indigo-500/15 border border-indigo-500/25 rounded px-2 py-1 tabular-nums">
+                        {rotuloDoDia(passo.dia)}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-slate-200">{passo.rotulo}</div>
+                        {passo.detalhe ? (
+                          <div className="text-xs text-slate-400 mt-0.5 break-words">{passo.detalhe}</div>
+                        ) : (
+                          <div className="text-xs text-slate-600 mt-0.5">sem assunto configurado</div>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
           ) : (
             <div className="text-sm text-slate-500 bg-[#0f1117] border border-[#2a3147] rounded-lg p-4">
-              {disparoUnico ? 'Nenhuma mensagem materializada para este disparo.' : 'Nenhuma cadência vinculada. Edite a campanha e escolha um workflow na etapa Cadência.'}
+              {disparoUnico ? 'Nenhuma mensagem materializada para este disparo.' : 'Nenhuma cadência vinculada. Edite a campanha e configure as mensagens na etapa Cadência.'}
             </div>
           )}
-          <p className="text-xs text-slate-600 mt-3">As mensagens editadas na campanha são materializadas em templates reais e congeladas na versão publicada do workflow.</p>
+          <div className="flex items-center justify-between gap-3 mt-3">
+            <p className="text-xs text-slate-600">
+              A cadência é congelada quando a campanha é ativada: quem já entrou segue esta sequência mesmo que você a edite depois.
+            </p>
+            {c.workflow_id && (
+              <Link href={`/workflows/${c.workflow_id}`} className="shrink-0 text-[11px] text-slate-600 hover:text-slate-400">
+                ver estrutura →
+              </Link>
+            )}
+          </div>
         </div>
       )}
 

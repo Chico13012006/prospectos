@@ -4,6 +4,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resolverContexto } from '@/lib/workflows/api'
 import { criarWorkflow } from '@/lib/workflows'
+import { createSupabaseAdminClient } from '@/lib/supabase-admin'
+import { apenasWorkflowsAutorais } from '@/lib/campanhas/workflowsInternos'
 
 export const runtime = 'nodejs'
 
@@ -15,7 +17,21 @@ export async function GET() {
   const ctx = await resolverContexto()
   if (ctx instanceof NextResponse) return ctx
   try {
-    const workflows = await ctx.store.listarWorkflows()
+    // Workflows materializados por campanha são internos: aparecem dentro da
+    // própria campanha (aba Mensagens), não nesta lista. O motor continua
+    // enxergando todos — o filtro é só de apresentação.
+    const admin = createSupabaseAdminClient()
+    const { data: vinculos, error: erroVinculos } = await admin
+      .from('campanhas')
+      .select('workflow_id')
+      .eq('organizacao_id', ctx.organizacaoId)
+      .not('workflow_id', 'is', null)
+    if (erroVinculos) throw erroVinculos
+    const idsDeCampanha = (vinculos ?? [])
+      .map((v) => (v as { workflow_id: string | null }).workflow_id)
+      .filter((id): id is string => !!id)
+
+    const workflows = apenasWorkflowsAutorais(await ctx.store.listarWorkflows(), idsDeCampanha)
     const ativos = await ctx.store.contarExecucoesAtivasPorWorkflow()
     const enriquecidos = await Promise.all(
       workflows.map(async (wf) => {
