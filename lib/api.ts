@@ -1,5 +1,6 @@
 import type { Lead, Interacao, Usuario, Template } from './supabase'
 import { apenasTemplatesAutorais } from './campanhas/workflowsInternos'
+import { normalizarNicho } from './nichos/normalizar'
 import { createSupabaseBrowserClient } from './supabase-browser'
 import { ESTAGIOS_RESERVATORIO, estagiosDoStatus } from './pipeline-stages'
 
@@ -447,6 +448,45 @@ export async function criarTemplate(dados: {
   }
   const { template } = await res.json()
   return template as Template
+}
+
+export interface SegmentoConhecido {
+  nicho: string
+  // Existe mensagem de primeiro contato ativa para este segmento? Mesma regra
+  // da prévia de importação (canal e-mail + tipo primeiro_contato + ativo).
+  // Sem ela, o motor NÃO aborda um lead desse segmento.
+  temTemplate: boolean
+}
+
+// Segmentos que a organização já conhece: os que têm mensagem de primeiro
+// contato e os que já aparecem em algum lead. A união importa porque uma base
+// recém-importada costuma ter segmento antes de ter template — sugerir só os
+// com template deixaria o campo vazio justamente em quem está começando.
+export async function getSegmentosConhecidos(): Promise<SegmentoConhecido[]> {
+  const [templates, leads] = await Promise.all([
+    supabase
+      .from('templates')
+      .select('nicho')
+      .eq('canal', 'email')
+      .eq('tipo', 'primeiro_contato')
+      .eq('ativo', true)
+      .not('nicho', 'is', null),
+    supabase.from('leads').select('segmento').not('segmento', 'is', null),
+  ])
+  if (templates.error) throw templates.error
+  if (leads.error) throw leads.error
+
+  const norm = (v: unknown) => normalizarNicho(typeof v === 'string' ? v : null)
+  const comTemplate = new Set(
+    (templates.data ?? []).map((t) => norm((t as { nicho: string | null }).nicho)).filter((n): n is string => !!n),
+  )
+  const usados = (leads.data ?? [])
+    .map((l) => norm((l as { segmento: string | null }).segmento))
+    .filter((n): n is string => !!n)
+
+  return [...new Set([...comTemplate, ...usados])]
+    .sort((x, y) => x.localeCompare(y, 'pt-BR'))
+    .map((nicho) => ({ nicho, temTemplate: comTemplate.has(nicho) }))
 }
 
 export async function getTemplates(): Promise<Template[]> {

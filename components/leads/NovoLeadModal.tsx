@@ -1,12 +1,28 @@
 'use client'
 
-import { useState } from 'react'
-import { X, Loader2, UserPlus } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { X, Loader2, UserPlus, AlertTriangle } from 'lucide-react'
 import { ORIGENS, ORIGEM_OUTRO } from '@/lib/leads/origens'
+import { normalizarNicho } from '@/lib/nichos/normalizar'
+import { getSegmentosConhecidos, type SegmentoConhecido } from '@/lib/api'
 
-// Modal de cadastro MANUAL de 1 lead (2.3). Os 4 obrigatórios (nome, e-mail,
-// empresa, origem) + opcionais. O responsável é definido no server (usuário
-// logado) — aqui não há seletor. Ao salvar, chama onCreated e fecha.
+// Modal de cadastro MANUAL de 1 lead (2.3). Os 5 obrigatórios (nome, e-mail,
+// empresa, origem, segmento) + opcionais. O responsável é definido no server
+// (usuário logado) — aqui não há seletor. Ao salvar, chama onCreated e fecha.
+//
+// Segmento é obrigatório porque é ele que escolhe o template do primeiro
+// contato: a importação por planilha já recusa linha sem segmento, e um lead
+// manual sem ele nasceria sem conseguir ser abordado pelo motor. As opções são
+// os segmentos que a organização já usa; "Outro" aceita um novo. Quando o
+// segmento escolhido não tem mensagem de primeiro contato, o formulário avisa —
+// o lead é criado, mas o motor não vai abordá-lo até o template existir.
+
+const SEGMENTO_OUTRO = '__outro__'
+
+function rotuloSegmento(nicho: string): string {
+  const texto = nicho.replace(/_/g, ' ')
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
+}
 const inputCls =
   'w-full bg-[#0f1117] border border-[#2a3147] rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500/50'
 const labelCls = 'block text-sm text-slate-400 mb-1.5'
@@ -23,6 +39,12 @@ export default function NovoLeadModal({
   const [empresa, setEmpresa] = useState('')
   const [origem, setOrigem] = useState<string>('')
   const [origemOutro, setOrigemOutro] = useState('')
+  const [segmento, setSegmento] = useState('')
+  const [segmentoOutro, setSegmentoOutro] = useState('')
+  const [segmentos, setSegmentos] = useState<SegmentoConhecido[]>([])
+  // Só avaliamos "não tem template" depois de uma leitura bem-sucedida: falhar
+  // na busca não pode virar um aviso falso de que falta template.
+  const [segmentosCarregados, setSegmentosCarregados] = useState(false)
   const [telefone, setTelefone] = useState('')
   const [cargo, setCargo] = useState('')
   const [cidade, setCidade] = useState('')
@@ -30,8 +52,23 @@ export default function NovoLeadModal({
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
+  // Falha em silêncio de propósito: sem a lista resta a opção "Outro", que é
+  // texto livre, e o cadastro continua possível — não vale travar o formulário
+  // por causa da sugestão.
+  useEffect(() => {
+    let ativo = true
+    getSegmentosConhecidos()
+      .then((lista) => { if (!ativo) return; setSegmentos(lista); setSegmentosCarregados(true) })
+      .catch(() => {})
+    return () => { ativo = false }
+  }, [])
+
   const origemFinal = origem === ORIGEM_OUTRO ? origemOutro.trim() || ORIGEM_OUTRO : origem
-  const valido = nome.trim() && email.trim() && empresa.trim() && origem
+  const segmentoFinal = normalizarNicho(segmento === SEGMENTO_OUTRO ? segmentoOutro : segmento)
+  const semTemplate = !!segmentoFinal
+    && segmentosCarregados
+    && !segmentos.some((s) => s.nicho === segmentoFinal && s.temTemplate)
+  const valido = nome.trim() && email.trim() && empresa.trim() && origem && !!segmentoFinal
 
   async function salvar() {
     if (!valido || salvando) return
@@ -46,6 +83,7 @@ export default function NovoLeadModal({
           email: email.trim(),
           empresa: empresa.trim(),
           origem: origemFinal,
+          segmento: segmentoFinal,
           telefone: telefone.trim() || undefined,
           cargo: cargo.trim() || undefined,
           cidade: cidade.trim() || undefined,
@@ -110,6 +148,33 @@ export default function NovoLeadModal({
             <div>
               <label className={labelCls}>Qual origem?</label>
               <input value={origemOutro} onChange={(e) => setOrigemOutro(e.target.value)} className={inputCls} placeholder="Descreva a origem" />
+            </div>
+          )}
+          <div>
+            <label className={labelCls}>Segmento <span className="text-rose-400">*</span></label>
+            <select value={segmento} onChange={(e) => setSegmento(e.target.value)} className={inputCls}>
+              <option value="">Selecione…</option>
+              {segmentos.map((s) => (
+                <option key={s.nicho} value={s.nicho}>
+                  {rotuloSegmento(s.nicho)}{s.temTemplate ? '' : ' — sem mensagem'}
+                </option>
+              ))}
+              <option value={SEGMENTO_OUTRO}>Outro…</option>
+            </select>
+          </div>
+          {segmento === SEGMENTO_OUTRO && (
+            <div>
+              <label className={labelCls}>Qual segmento?</label>
+              <input value={segmentoOutro} onChange={(e) => setSegmentoOutro(e.target.value)} className={inputCls} placeholder="Ex.: buffet infantil" />
+            </div>
+          )}
+          {semTemplate && (
+            <div className="sm:col-span-2 flex items-start gap-2 text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/25 rounded-lg p-2.5">
+              <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+              <span>
+                Ainda não existe mensagem de primeiro contato para <b>{rotuloSegmento(segmentoFinal!)}</b>. O lead é criado
+                normalmente, mas o motor não vai abordá-lo até você criar esse template.
+              </span>
             </div>
           )}
           <div>

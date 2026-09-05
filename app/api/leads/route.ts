@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { emailValido } from '@/lib/leads/importarCsv'
 import { resolverResponsavelPorAuthId } from '@/lib/leads/responsavelServer'
+import { normalizarNicho } from '@/lib/nichos/normalizar'
 
 // Cadastro MANUAL de 1 lead (2.3, botão "Novo lead"). Server-side com service
 // role. O responsável é o PRÓPRIO usuário logado (não há seletor aqui) — mesmo
@@ -30,12 +31,22 @@ export async function POST(req: NextRequest) {
     const cargo = String(body.cargo ?? '').trim() || null
     const cidade = String(body.cidade ?? '').trim() || null
     const estado = String(body.estado ?? '').trim() || null
+    // Segmento (nicho) escolhe o template do primeiro contato. A importação já
+    // recusa linha sem ele; o cadastro manual segue a mesma regra para o lead
+    // não nascer sem conseguir ser abordado.
+    const segmento = normalizarNicho(String(body.segmento ?? ''))
 
     // Validação dos obrigatórios de 2.1.
     if (!nome) return NextResponse.json({ erro: 'Informe o nome.' }, { status: 400 })
     if (!email || !emailValido(email)) return NextResponse.json({ erro: 'Informe um e-mail válido.' }, { status: 400 })
     if (!empresa) return NextResponse.json({ erro: 'Informe a empresa.' }, { status: 400 })
     if (!origem) return NextResponse.json({ erro: 'Escolha a origem.' }, { status: 400 })
+    if (!segmento) {
+      return NextResponse.json(
+        { erro: 'Informe o segmento — é ele que define qual mensagem o motor usa no primeiro contato.' },
+        { status: 400 },
+      )
+    }
 
     // Responsável = usuário logado, resolvido para uma linha de `usuarios`.
     const vinculo = await resolverResponsavelPorAuthId(admin, org, user.id)
@@ -72,6 +83,7 @@ export async function POST(req: NextRequest) {
         contato_email: email,
         empresa,
         origem,
+        segmento,
         contato_telefone: telefone,
         contato_cargo: cargo,
         cidade,
