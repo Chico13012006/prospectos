@@ -2,12 +2,15 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Briefcase, Calculator, Sparkles } from 'lucide-react';
+import { Briefcase, Calculator, Sparkles, FileText } from 'lucide-react';
 import SimuladorPanel from '@/components/comercial/SimuladorPanel';
 import CopilotoPanel from '@/components/comercial/CopilotoPanel';
+import TemplatesPanel from '@/components/templates/TemplatesPanel';
 
-// Módulo "Comercial": junta o Simulador de propostas e o Copiloto pós-reunião
-// em abas internas (?tab=simulador|copiloto), um único item na navegação.
+// Módulo "Comercial": junta o Simulador de propostas, o Copiloto pós-reunião e
+// a biblioteca de Templates em abas internas (?tab=simulador|copiloto|templates),
+// um único item na navegação. O TemplatesPanel é o mesmo usado em
+// Automação > Modelos — painel compartilhado, não uma segunda cópia.
 // useSearchParams() exige limite de Suspense (Next) — conteúdo real em Inner.
 export default function ComercialPage() {
   return (
@@ -17,17 +20,17 @@ export default function ComercialPage() {
   );
 }
 
-type Aba = 'simulador' | 'copiloto';
+type Aba = 'simulador' | 'copiloto' | 'templates';
 
 function Inner() {
   const searchParams = useSearchParams();
   const [aba, setAba] = useState<Aba>('simulador');
 
-  // Deep-link: ?tab=copiloto|simulador (nav ou link externo). O simulador
-  // também lê ?modelo/?itens (vindo do copiloto).
+  // Deep-link: ?tab=copiloto|simulador|templates (nav, redirect de /templates
+  // ou link externo). O simulador também lê ?modelo/?itens (vindo do copiloto).
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab === 'copiloto' || tab === 'simulador') setAba(tab);
+    if (tab === 'copiloto' || tab === 'simulador' || tab === 'templates') setAba(tab);
   }, [searchParams]);
 
   return (
@@ -37,15 +40,16 @@ function Inner() {
           <Briefcase size={22} className="text-indigo-400" /> Comercial
         </h1>
         <p className="text-sm text-slate-400 mt-0.5">
-          Propostas e copiloto pós-reunião.
+          Propostas, copiloto pós-reunião e biblioteca de templates.
         </p>
       </div>
 
-      {/* Abas: Simulador · Copiloto */}
+      {/* Abas: Simulador · Copiloto · Templates */}
       <div className="flex items-center rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-0.5 w-fit animate-in stagger-2">
         {([
           { id: 'simulador', label: 'Simulador', Icon: Calculator },
           { id: 'copiloto', label: 'Copiloto', Icon: Sparkles },
+          { id: 'templates', label: 'Templates', Icon: FileText },
         ] as const).map(t => (
           <button
             key={t.id}
@@ -62,6 +66,7 @@ function Inner() {
       <div className="animate-in stagger-3">
         {aba === 'simulador' && <SimuladorPanel />}
         {aba === 'copiloto' && <CopilotoPanel />}
+        {aba === 'templates' && <TemplatesPanel />}
       </div>
     </div>
   );

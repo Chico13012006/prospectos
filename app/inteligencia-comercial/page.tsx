@@ -1,18 +1,15 @@
 'use client';
 
-import { Suspense, useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import {
-  BrainCircuit, FileText, Send, MessageSquare, CalendarCheck, TrendingUp, Repeat,
+  BrainCircuit, Send, MessageSquare, CalendarCheck, TrendingUp, Repeat,
   Radio, Layers, Trophy, Save, Download, FlaskConical,
 } from 'lucide-react';
 import EmptyState from '@/components/charts/EmptyState';
-import TemplatesPanel from '@/components/templates/TemplatesPanel';
-import RoiPanel from '@/components/roi/RoiPanel';
 import AnimatedKpiCard from '@/components/charts/AnimatedKpiCard';
 import ChartContainer from '@/components/charts/ChartContainer';
 import ChartTooltip from '@/components/charts/ChartTooltip';
@@ -26,60 +23,18 @@ import {
   respostasPorFollowup, topLeadsPorResposta, opcoesFiltro, taxaRespostaPorVariante,
 } from '@/lib/inteligencia';
 
-// useSearchParams() exige limite de Suspense (Next) — conteúdo real em Inner.
 export default function InteligenciaComercialPage() {
-  return (
-    <Suspense fallback={null}>
-      <Inner />
-    </Suspense>
-  );
-}
-
-type Aba = 'analises' | 'templates' | 'roi';
-
-function Inner() {
-  const searchParams = useSearchParams();
-  const [aba, setAba] = useState<Aba>('analises');
-
-  // Deep-link: ?tab=templates (redirect de /templates) ou ?tab=roi (redirect de
-  // /roi — ROI não é mais módulo isolado, virou visão de analytics aqui).
-  useEffect(() => {
-    const tab = searchParams.get('tab');
-    if (tab === 'templates' || tab === 'roi') setAba(tab);
-  }, [searchParams]);
-
   return (
     <div className="p-6 space-y-5">
       <div className="animate-in stagger-1">
         <h1 className="text-2xl font-bold text-slate-100">Inteligência Comercial</h1>
         <p className="text-sm text-slate-400 mt-0.5">
-          Análises detalhadas e biblioteca de templates da sua prospecção.
+          Análises detalhadas da sua prospecção.
         </p>
       </div>
 
-      {/* Abas: Análises · Templates · ROI */}
-      <div className="flex items-center rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-0.5 w-fit animate-in stagger-2">
-        {([
-          { id: 'analises', label: 'Análises', Icon: BrainCircuit },
-          { id: 'templates', label: 'Templates', Icon: FileText },
-          { id: 'roi', label: 'ROI', Icon: TrendingUp },
-        ] as const).map(t => (
-          <button
-            key={t.id}
-            onClick={() => setAba(t.id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors focus-ring ${
-              aba === t.id ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <t.Icon size={14} /> {t.label}
-          </button>
-        ))}
-      </div>
-
       <div className="animate-in stagger-3">
-        {aba === 'analises' && <Analises />}
-        {aba === 'templates' && <TemplatesPanel />}
-        {aba === 'roi' && <RoiPanel />}
+        <Analises />
       </div>
     </div>
   );
