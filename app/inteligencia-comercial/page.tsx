@@ -339,7 +339,7 @@ function Analises() {
         loading={loading}
         empty={variantes.length === 0}
         emptyTitle="Nenhum envio com variante registrada ainda"
-        emptyDescription="Crie 2+ variantes de um template (aba Templates) e o motor passa a testá-las por lead automaticamente. A taxa de resposta de cada variante aparece aqui conforme os leads respondem."
+        emptyDescription="Crie 2+ variantes de um template (Comercial > Templates) e o motor passa a testá-las por lead automaticamente. A taxa de resposta de cada variante aparece aqui conforme os leads respondem."
         skeletonVariant="table"
         skeletonRows={4}
       >
