@@ -84,6 +84,57 @@ describe('Fluxo 2 — detectarResposta', () => {
     fila = new Queue()
   })
 
+  // A caixa é varrida por JANELA de dias e sem depender do \Seen, então mensagem
+  // antiga reaparece em toda passada. Em 05/09/2026 isso cancelou 2 de 5 envios:
+  // respostas de semanas atrás foram reprocessadas como novas e derrubaram a
+  // execução antes do e-mail sair.
+  it('mensagem ANTERIOR ao último contato NÃO vira resposta', async () => {
+    const lead = makeLead({
+      estagio: 'follow_up',
+      contato_email: 'ana@acme.com.br',
+      ultimo_contato: ONTEM,
+    })
+    const store = new MemoryStore([lead])
+    email.injetar(msg({ de: 'ana@acme.com.br', em: new Date(SEMANA_PASSADA) }))
+
+    const r = await detectarResposta(store, email, fila)
+
+    expect(r.respostas).toBe(0)
+    expect(r.ignoradas).toBe(1)
+    expect(fila.pendentes()).toBe(0) // não encaminha ao closer
+    const atualizado = await store.buscarLead(lead.id)
+    expect(atualizado?.estagio).toBe('follow_up') // segue na esteira
+  })
+
+  it('mensagem POSTERIOR ao último contato continua sendo resposta', async () => {
+    const lead = makeLead({
+      estagio: 'follow_up',
+      contato_email: 'ana@acme.com.br',
+      ultimo_contato: SEMANA_PASSADA,
+    })
+    const store = new MemoryStore([lead])
+    email.injetar(msg({ de: 'ana@acme.com.br', em: new Date() }))
+
+    const r = await detectarResposta(store, email, fila)
+
+    expect(r.respostas).toBe(1)
+    expect(fila.pendentes()).toBe(1)
+  })
+
+  it('sem último contato registrado, não bloqueia — perder resposta é pior', async () => {
+    const lead = makeLead({
+      estagio: 'follow_up',
+      contato_email: 'ana@acme.com.br',
+      ultimo_contato: undefined,
+    })
+    const store = new MemoryStore([lead])
+    email.injetar(msg({ de: 'ana@acme.com.br', em: new Date(SEMANA_PASSADA) }))
+
+    const r = await detectarResposta(store, email, fila)
+
+    expect(r.respostas).toBe(1)
+  })
+
   it('AUTO-RESPOSTA ignorada (flag e heurística)', async () => {
     const lead = makeLead({ estagio: 'follow_up', contato_email: 'ana@acme.com.br' })
     const store = new MemoryStore([lead])

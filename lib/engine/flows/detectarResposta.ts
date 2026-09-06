@@ -134,6 +134,32 @@ export async function detectarResposta(
       })
     }
 
+    // 3.1) Gate de DATA. A busca varre uma janela de dias e não depende da flag
+    // \Seen, então mensagens antigas voltam em toda passada. Sem este gate, uma
+    // resposta de semanas atrás é reprocessada como se fosse nova: numa campanha
+    // recém-iniciada o contador de "já respondeu neste ciclo" começa zerado, o
+    // lead é encaminhado ao closer de novo e a execução pendente é cancelada
+    // ANTES do e-mail sair — foi o que barrou 2 dos 5 envios em 05/09/2026.
+    //
+    // Regra: uma resposta não pode ser anterior ao que ela responde. A
+    // referência é o início do ciclo da campanha e, fora dela, o último contato
+    // enviado ao lead. Sem nenhuma das duas não há o que comparar, e aí seguimos
+    // processando — perder resposta legítima é pior que reprocessar.
+    const inicioDoCiclo = contextoCampanha?.iniciadoEm ?? lead.ultimo_contato ?? null
+    if (inicioDoCiclo && msg.em) {
+      const chegada = new Date(msg.em).getTime()
+      const referencia = new Date(inicioDoCiclo).getTime()
+      if (Number.isFinite(chegada) && Number.isFinite(referencia) && chegada < referencia) {
+        log.info('Mensagem anterior ao início do ciclo — não é resposta a ele. Ignorada.', {
+          leadId: lead.id,
+          mensagemEm: new Date(msg.em).toISOString(),
+          cicloDesde: new Date(inicioDoCiclo).toISOString(),
+        })
+        ignoradas++
+        continue
+      }
+    }
+
     // 4) Idempotência: uma tentativa anterior pode já ter persistido a resposta
     // e ainda estar aguardando a notificação ao closer. Fora da cadência, só
     // aceitamos um lead ligado a campanha e sem resposta já registrada.
