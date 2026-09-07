@@ -44,6 +44,11 @@ export interface MensagemRecebida {
   // Identificador opaco do provedor. Permite confirmar a leitura somente depois
   // que a resposta foi persistida, sem acoplar o fluxo a mailbox/UID do IMAP.
   idRecebimento?: string
+  // Identidade ESTÁVEL da mensagem (Message-ID, RFC 5322). É a chave de
+  // idempotência da migration 0030: a caixa é varrida por janela de dias, então
+  // a mesma mensagem reaparece em toda passada e só o id evita reprocessá-la.
+  // Cai para mailbox+UID quando o cabeçalho não vem.
+  mensagemId?: string
   de: string // e-mail do remetente
   assunto: string
   corpo: string

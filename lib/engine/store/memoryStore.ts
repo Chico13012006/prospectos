@@ -141,6 +141,21 @@ export class MemoryStore implements Store {
   // que verificam a chamada e a elegibilidade de follow-up.
   async cancelarExecucoesWorkflow(_leadId: string): Promise<void> {}
 
+  // Idempotência por mensagem: mesma semântica do Supabase (só a primeira
+  // reivindicação vence), guardada em memória para os testes.
+  public mensagensProcessadas = new Set<string>()
+
+  async reivindicarMensagem(mensagemId: string): Promise<boolean> {
+    if (!mensagemId) return true
+    if (this.mensagensProcessadas.has(mensagemId)) return false
+    this.mensagensProcessadas.add(mensagemId)
+    return true
+  }
+
+  async liberarMensagem(mensagemId: string): Promise<void> {
+    this.mensagensProcessadas.delete(mensagemId)
+  }
+
   // Lê do mesmo seed que popula a tabela `templates` (mantém os testes offline).
   // Retorna TODAS as variantes (o seed tem 1 por chave) com id sintético estável.
   async buscarTemplateEmail(nicho: string | null, tipo: string): Promise<TemplateEmail[]> {

@@ -18,6 +18,7 @@ function msg(over: Partial<MensagemRecebida> = {}): MensagemRecebida {
     corpo: over.corpo ?? 'Tenho interesse, podemos conversar?',
     automatica: over.automatica,
     em: over.em ?? new Date(),
+    mensagemId: over.mensagemId,
   }
 }
 
@@ -133,6 +134,58 @@ describe('Fluxo 2 — detectarResposta', () => {
     const r = await detectarResposta(store, email, fila)
 
     expect(r.respostas).toBe(1)
+  })
+
+  // Idempotência por MENSAGEM (migration 0030). É a trava que não depende do
+  // estado do lead: processou aquele Message-ID uma vez, nunca mais.
+  it('a MESMA mensagem não é processada duas vezes', async () => {
+    const lead = makeLead({ estagio: 'follow_up', contato_email: 'ana@acme.com.br', ultimo_contato: SEMANA_PASSADA })
+    const store = new MemoryStore([lead])
+    const m = msg({ de: 'ana@acme.com.br', em: new Date(), mensagemId: '<abc@mail.gmail.com>' })
+
+    email.injetar(m)
+    const primeira = await detectarResposta(store, email, fila)
+    email.injetar(m)
+    const segunda = await detectarResposta(store, email, fila)
+
+    expect(primeira.respostas).toBe(1)
+    expect(segunda.respostas).toBe(0)
+    expect(segunda.ignoradas).toBe(1)
+    expect(store.interacoes.filter((i) => i.tipo === 'resposta')).toHaveLength(1)
+    expect(fila.pendentes()).toBe(1) // um único encaminhamento ao closer
+  })
+
+  it('mensagens DIFERENTES do mesmo lead seguem sendo processadas', async () => {
+    const lead = makeLead({ estagio: 'follow_up', contato_email: 'ana@acme.com.br', ultimo_contato: SEMANA_PASSADA })
+    const store = new MemoryStore([lead])
+
+    email.injetar(msg({ de: 'ana@acme.com.br', em: new Date(), mensagemId: '<um@mail>' }))
+    await detectarResposta(store, email, fila)
+    email.injetar(msg({ de: 'ana@acme.com.br', em: new Date(), mensagemId: '<dois@mail>' }))
+    const segunda = await detectarResposta(store, email, fila)
+
+    expect(segunda.ignoradas).toBe(0)
+    expect(store.mensagensProcessadas.size).toBe(2)
+  })
+
+  it('falha no meio devolve a mensagem para a próxima passada', async () => {
+    const lead = makeLead({ estagio: 'follow_up', contato_email: 'ana@acme.com.br', ultimo_contato: SEMANA_PASSADA })
+    const store = new MemoryStore([lead])
+    const original = store.registrarInteracao.bind(store)
+    let falhou = false
+    store.registrarInteracao = async (i) => {
+      if (!falhou) { falhou = true; throw new Error('falha transitória') }
+      return original(i)
+    }
+
+    email.injetar(msg({ de: 'ana@acme.com.br', em: new Date(), mensagemId: '<retry@mail>' }))
+    await expect(detectarResposta(store, email, fila)).rejects.toThrow('falha transitória')
+    // Não pode ficar marcada como processada — senão a resposta some para sempre.
+    expect(store.mensagensProcessadas.has('<retry@mail>')).toBe(false)
+
+    email.injetar(msg({ de: 'ana@acme.com.br', em: new Date(), mensagemId: '<retry@mail>' }))
+    const retry = await detectarResposta(store, email, fila)
+    expect(retry.respostas).toBe(1)
   })
 
   it('AUTO-RESPOSTA ignorada (flag e heurística)', async () => {

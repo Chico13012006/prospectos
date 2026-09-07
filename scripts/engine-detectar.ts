@@ -86,6 +86,10 @@ async function main() {
       console.log(`${C.yel}  [DRY-RUN] NÃO escrito → registrarInteracao:${C.r} tipo=${i.tipo}`)
     },
     async cancelarExecucoesWorkflow(_leadId) { /* dry-run: no-op */ },
+    // Sem dedup persistente aqui: estes runners são de inspeção manual e devem
+    // enxergar a caixa inteira a cada execução.
+    async reivindicarMensagem(_mensagemId) { return true },
+    async liberarMensagem(_mensagemId) { /* no-op */ },
   }
   const store: Store = ensaio ? dryStore : real
 

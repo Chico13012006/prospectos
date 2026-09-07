@@ -88,6 +88,10 @@ async function main() {
       )
     },
     async cancelarExecucoesWorkflow(_leadId) { /* dry-run: no-op */ },
+    // Sem dedup persistente aqui: estes runners são de inspeção manual e devem
+    // enxergar a caixa inteira a cada execução.
+    async reivindicarMensagem(_mensagemId) { return true },
+    async liberarMensagem(_mensagemId) { /* no-op */ },
   }
 
   // Em ENSAIO: store dry-run (não escreve) + provedor simulado (não envia).

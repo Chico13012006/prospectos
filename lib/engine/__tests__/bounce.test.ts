@@ -13,6 +13,7 @@ function msgBounce(over: Partial<MensagemRecebida> = {}): MensagemRecebida {
     corpo: over.corpo ?? 'Your message to contato@acme.com.br could not be delivered.',
     automatica: over.automatica ?? true,
     em: over.em ?? new Date(),
+    mensagemId: over.mensagemId,
   }
 }
 
@@ -113,6 +114,24 @@ describe('detectarResposta — bounce handling', () => {
     const depois = await store.buscarLead(lead.id)
     expect(depois?.bounced).toBe(true)
     expect(depois?.bounced_em).toBe(marcadoEm) // carimbo original preservado
+  })
+
+  it('o MESMO bounce relido não gera nota nova', async () => {
+    const lead = makeLead({ estagio: 'primeiro_contato', contato_email: 'contato@acme.com.br', ultimo_contato: SEMANA_PASSADA })
+    store = new MemoryStore([lead])
+    const b = msgBounce({
+      corpo: 'Your message to contato@acme.com.br could not be delivered.',
+      mensagemId: '<bounce-1@mailer-daemon>',
+    })
+
+    email.injetar(b)
+    await detectarResposta(store, email, fila)
+    email.injetar(b)
+    const segunda = await detectarResposta(store, email, fila)
+
+    expect(segunda.bounces).toBe(0)
+    const notas = store.interacoes.filter((i) => i.descricao?.startsWith('Bounce SMTP detectado'))
+    expect(notas).toHaveLength(1)
   })
 
   it('lead bounced não entra em leadsParaFollowup', async () => {

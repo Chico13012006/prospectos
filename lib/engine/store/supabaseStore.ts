@@ -305,6 +305,43 @@ export class SupabaseStore implements Store {
     }
   }
 
+  // Insert com unique (organizacao_id, mensagem_id): quem conseguir inserir
+  // processa; os demais recebem conflito e pulam. Em caso de erro do banco
+  // devolvemos true — perder uma resposta real é pior que reprocessar.
+  async reivindicarMensagem(mensagemId: string, resultado?: string, leadId?: string | null): Promise<boolean> {
+    if (!mensagemId) return true
+    const { data, error } = await this.db
+      .from('mensagens_processadas')
+      .upsert(
+        {
+          organizacao_id: this.organizacaoId,
+          mensagem_id: mensagemId,
+          resultado: resultado ?? null,
+          lead_id: leadId ?? null,
+        },
+        { onConflict: 'organizacao_id,mensagem_id', ignoreDuplicates: true },
+      )
+      .select('id')
+    if (error) {
+      log.aviso('Não consegui registrar a mensagem processada; seguindo sem dedup.', {
+        mensagemId,
+        erro: error.message,
+      })
+      return true
+    }
+    return (data?.length ?? 0) > 0
+  }
+
+  async liberarMensagem(mensagemId: string): Promise<void> {
+    if (!mensagemId) return
+    const { error } = await this.db
+      .from('mensagens_processadas')
+      .delete()
+      .eq('organizacao_id', this.organizacaoId)
+      .eq('mensagem_id', mensagemId)
+    if (error) log.aviso('Falha ao liberar a mensagem para reprocessamento.', { mensagemId, erro: error.message })
+  }
+
   async cancelarExecucoesWorkflow(leadId: string): Promise<void> {
     // Cancela todas as execuções ativas (em_andamento/aguardando) do lead.
     // Chamado quando um bounce SMTP ou uma resposta real é detectada.

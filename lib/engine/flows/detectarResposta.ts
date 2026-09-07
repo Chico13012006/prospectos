@@ -87,136 +87,158 @@ export async function detectarResposta(
   let bounces = 0
 
   for (const msg of mensagens) {
-    // 1) Auto-resposta: verifica se é bounce antes de tratar como férias/ausência.
-    if (ehAutoResposta(msg)) {
-      if (ehBounce(msg)) {
-        // Bounce SMTP: marcar lead, cancelar cadência, registrar nota.
-        const bouncou = await tratarBounce(store, msg)
-        if (bouncou) bounces++
-        else log.aviso('Bounce não casou com nenhum lead. Ignorado.', { de: msg.de })
+    // IDEMPOTÊNCIA POR MENSAGEM (migration 0030). A caixa é varrida por
+    // janela de dias e sem depender do Seen, então a mesma mensagem volta em
+    // toda passada do monitor. Reivindicar antes de qualquer efeito é o que
+    // impede reprocessar o passado: bounce regravado, resposta antiga tratada
+    // como nova e notificação repetida ao closer nasciam todos daqui.
+    const chaveMensagem = msg.mensagemId ?? msg.idRecebimento ?? ''
+    if (chaveMensagem) {
+      const primeiraVez = await store.reivindicarMensagem(chaveMensagem)
+      if (!primeiraVez) {
+        log.info('Mensagem já processada numa passada anterior. Ignorada.', { de: msg.de })
         ignoradas++
         continue
       }
-      // Auto-reply de ausência: tentar extrair contato alternativo.
-      const sugeriu = await tratarAutoResposta(store, msg, opts)
-      if (sugeriu) contatosAlternativos++
-      else log.aviso('Ignorado (auto-resposta).', { de: msg.de, assunto: msg.assunto })
-      ignoradas++
-      continue
     }
 
-    // 2) Casar com um lead: primeiro pelo e-mail exato; senão pelo domínio.
-    const lead = await casarLead(store, msg.de)
-    if (!lead) {
-      log.aviso('Resposta não casa com nenhum lead do motor. Ignorada.', { de: msg.de })
-      ignoradas++
-      continue
-    }
-
-    // 3) Resolve o contexto antes do gate de estágio. Campanhas de comunicado
-    // podem enviar sem mover o lead para a cadência tradicional; ainda assim a
-    // resposta precisa ser reconhecida e encaminhada ao responsável escolhido.
-    let responsavelCampanha: UsuarioBasico | null = null
-    let contextoCampanha: ContextoCampanhaResposta | null = null
     try {
-      if (store.buscarContextoCampanhaAtiva) {
-        contextoCampanha = await store.buscarContextoCampanhaAtiva(lead.id)
-        responsavelCampanha = contextoCampanha?.responsavel ?? null
-      } else {
-        responsavelCampanha = store.buscarResponsavelCampanhaAtiva
-          ? await store.buscarResponsavelCampanhaAtiva(lead.id)
-          : null
+      // 1) Auto-resposta: verifica se é bounce antes de tratar como férias/ausência.
+      if (ehAutoResposta(msg)) {
+        if (ehBounce(msg)) {
+          // Bounce SMTP: marcar lead, cancelar cadência, registrar nota.
+          const bouncou = await tratarBounce(store, msg)
+          if (bouncou) bounces++
+          else log.aviso('Bounce não casou com nenhum lead. Ignorado.', { de: msg.de })
+          ignoradas++
+          continue
+        }
+        // Auto-reply de ausência: tentar extrair contato alternativo.
+        const sugeriu = await tratarAutoResposta(store, msg, opts)
+        if (sugeriu) contatosAlternativos++
+        else log.aviso('Ignorado (auto-resposta).', { de: msg.de, assunto: msg.assunto })
+        ignoradas++
+        continue
       }
-    } catch (e) {
-      log.aviso('Não foi possível resolver o responsável da campanha; usando o responsável do lead.', {
-        leadId: lead.id,
-        erro: e instanceof Error ? e.message : String(e),
-      })
-    }
 
-    // 3.1) Gate de DATA. A busca varre uma janela de dias e não depende da flag
-    // \Seen, então mensagens antigas voltam em toda passada. Sem este gate, uma
-    // resposta de semanas atrás é reprocessada como se fosse nova: numa campanha
-    // recém-iniciada o contador de "já respondeu neste ciclo" começa zerado, o
-    // lead é encaminhado ao closer de novo e a execução pendente é cancelada
-    // ANTES do e-mail sair — foi o que barrou 2 dos 5 envios em 05/09/2026.
-    //
-    // Regra: uma resposta não pode ser anterior ao que ela responde. A
-    // referência é o início do ciclo da campanha e, fora dela, o último contato
-    // enviado ao lead. Sem nenhuma das duas não há o que comparar, e aí seguimos
-    // processando — perder resposta legítima é pior que reprocessar.
-    const inicioDoCiclo = contextoCampanha?.iniciadoEm ?? lead.ultimo_contato ?? null
-    if (inicioDoCiclo && msg.em) {
-      const chegada = new Date(msg.em).getTime()
-      const referencia = new Date(inicioDoCiclo).getTime()
-      if (Number.isFinite(chegada) && Number.isFinite(referencia) && chegada < referencia) {
-        log.info('Mensagem anterior ao início do ciclo — não é resposta a ele. Ignorada.', {
+      // 2) Casar com um lead: primeiro pelo e-mail exato; senão pelo domínio.
+      const lead = await casarLead(store, msg.de)
+      if (!lead) {
+        log.aviso('Resposta não casa com nenhum lead do motor. Ignorada.', { de: msg.de })
+        ignoradas++
+        continue
+      }
+
+      // 3) Resolve o contexto antes do gate de estágio. Campanhas de comunicado
+      // podem enviar sem mover o lead para a cadência tradicional; ainda assim a
+      // resposta precisa ser reconhecida e encaminhada ao responsável escolhido.
+      let responsavelCampanha: UsuarioBasico | null = null
+      let contextoCampanha: ContextoCampanhaResposta | null = null
+      try {
+        if (store.buscarContextoCampanhaAtiva) {
+          contextoCampanha = await store.buscarContextoCampanhaAtiva(lead.id)
+          responsavelCampanha = contextoCampanha?.responsavel ?? null
+        } else {
+          responsavelCampanha = store.buscarResponsavelCampanhaAtiva
+            ? await store.buscarResponsavelCampanhaAtiva(lead.id)
+            : null
+        }
+      } catch (e) {
+        log.aviso('Não foi possível resolver o responsável da campanha; usando o responsável do lead.', {
           leadId: lead.id,
-          mensagemEm: new Date(msg.em).toISOString(),
-          cicloDesde: new Date(inicioDoCiclo).toISOString(),
+          erro: e instanceof Error ? e.message : String(e),
+        })
+      }
+
+      // 3.1) Gate de DATA. A busca varre uma janela de dias e não depende da flag
+      // \Seen, então mensagens antigas voltam em toda passada. Sem este gate, uma
+      // resposta de semanas atrás é reprocessada como se fosse nova: numa campanha
+      // recém-iniciada o contador de "já respondeu neste ciclo" começa zerado, o
+      // lead é encaminhado ao closer de novo e a execução pendente é cancelada
+      // ANTES do e-mail sair — foi o que barrou 2 dos 5 envios em 05/09/2026.
+      //
+      // Regra: uma resposta não pode ser anterior ao que ela responde. A
+      // referência é o início do ciclo da campanha e, fora dela, o último contato
+      // enviado ao lead. Sem nenhuma das duas não há o que comparar, e aí seguimos
+      // processando — perder resposta legítima é pior que reprocessar.
+      const inicioDoCiclo = contextoCampanha?.iniciadoEm ?? lead.ultimo_contato ?? null
+      if (inicioDoCiclo && msg.em) {
+        const chegada = new Date(msg.em).getTime()
+        const referencia = new Date(inicioDoCiclo).getTime()
+        if (Number.isFinite(chegada) && Number.isFinite(referencia) && chegada < referencia) {
+          log.info('Mensagem anterior ao início do ciclo — não é resposta a ele. Ignorada.', {
+            leadId: lead.id,
+            mensagemEm: new Date(msg.em).toISOString(),
+            cicloDesde: new Date(inicioDoCiclo).toISOString(),
+          })
+          ignoradas++
+          continue
+        }
+      }
+
+      // 4) Idempotência: uma tentativa anterior pode já ter persistido a resposta
+      // e ainda estar aguardando a notificação ao closer. Fora da cadência, só
+      // aceitamos um lead ligado a campanha e sem resposta já registrada.
+      const retomandoEncaminhamento = lead.proxima_acao === 'aguardando_closer'
+      const emCadencia = ESTAGIOS_EM_CADENCIA.includes(lead.estagio as never)
+      const respostasNesteCiclo = contextoCampanha?.iniciadoEm
+        ? await store.contarInteracoesDesde(lead.id, 'resposta', contextoCampanha.iniciadoEm)
+        : await store.contarInteracoes(lead.id, 'resposta')
+      const respostaCampanhaPendente = !emCadencia
+        && !retomandoEncaminhamento
+        && !!contextoCampanha
+        && respostasNesteCiclo === 0
+      if (!emCadencia && !retomandoEncaminhamento && !respostaCampanhaPendente) {
+        log.info('Lead já havia respondido/saído da esteira. Sem nova ação.', {
+          leadId: lead.id,
+          estagio: lead.estagio,
         })
         ignoradas++
         continue
       }
-    }
 
-    // 4) Idempotência: uma tentativa anterior pode já ter persistido a resposta
-    // e ainda estar aguardando a notificação ao closer. Fora da cadência, só
-    // aceitamos um lead ligado a campanha e sem resposta já registrada.
-    const retomandoEncaminhamento = lead.proxima_acao === 'aguardando_closer'
-    const emCadencia = ESTAGIOS_EM_CADENCIA.includes(lead.estagio as never)
-    const respostasNesteCiclo = contextoCampanha?.iniciadoEm
-      ? await store.contarInteracoesDesde(lead.id, 'resposta', contextoCampanha.iniciadoEm)
-      : await store.contarInteracoes(lead.id, 'resposta')
-    const respostaCampanhaPendente = !emCadencia
-      && !retomandoEncaminhamento
-      && !!contextoCampanha
-      && respostasNesteCiclo === 0
-    if (!emCadencia && !retomandoEncaminhamento && !respostaCampanhaPendente) {
-      log.info('Lead já havia respondido/saído da esteira. Sem nova ação.', {
+      // 5) Resposta real → PAUSAR a cadência na hora e registrar.
+      // Score dinâmico (item 2.8): respondeu + bônus por velocidade (tempo entre
+      // o último contato enviado e esta resposta).
+      if (!retomandoEncaminhamento) {
+        // Registra antes de mudar o estágio: se a persistência falhar, a mensagem
+        // continua não lida e uma nova tentativa não perde o conteúdo da resposta.
+        await store.registrarInteracao({
+          lead_id: lead.id,
+          tipo: 'resposta',
+          canal: 'email',
+          descricao: msg.corpo.slice(0, 2000),
+          origem_acao: 'ia',
+          responsavel_id: lead.responsavel_id ?? null,
+        })
+        const horas = horasEntre(lead.ultimo_contato, msg.em)
+        await store.atualizarLead(lead.id, {
+          estagio: 'interessado',
+          proxima_acao: 'aguardando_closer',
+          proxima_acao_data: null,
+          score: calcularScore({ respondeu: true, horasAteResposta: horas }),
+        })
+        respostas++
+      } else {
+        log.info('Retomando notificação pendente ao closer.', { leadId: lead.id })
+      }
+      // O estágio tira o lead da cadência legada; o cancelamento explícito faz o
+      // mesmo para workflows persistentes. Também é repetido no retry, pois é
+      // idempotente e pode ter sido o ponto da falha anterior.
+      await store.cancelarExecucoesWorkflow(lead.id)
+      log.ok('RESPOSTA detectada — cadência pausada. Encaminhando ao closer.', {
         leadId: lead.id,
-        estagio: lead.estagio,
+        empresa: lead.empresa,
       })
-      ignoradas++
-      continue
-    }
 
-    // 5) Resposta real → PAUSAR a cadência na hora e registrar.
-    // Score dinâmico (item 2.8): respondeu + bônus por velocidade (tempo entre
-    // o último contato enviado e esta resposta).
-    if (!retomandoEncaminhamento) {
-      // Registra antes de mudar o estágio: se a persistência falhar, a mensagem
-      // continua não lida e uma nova tentativa não perde o conteúdo da resposta.
-      await store.registrarInteracao({
-        lead_id: lead.id,
-        tipo: 'resposta',
-        canal: 'email',
-        descricao: msg.corpo.slice(0, 2000),
-        origem_acao: 'ia',
-        responsavel_id: lead.responsavel_id ?? null,
-      })
-      const horas = horasEntre(lead.ultimo_contato, msg.em)
-      await store.atualizarLead(lead.id, {
-        estagio: 'interessado',
-        proxima_acao: 'aguardando_closer',
-        proxima_acao_data: null,
-        score: calcularScore({ respondeu: true, horasAteResposta: horas }),
-      })
-      respostas++
-    } else {
-      log.info('Retomando notificação pendente ao closer.', { leadId: lead.id })
+      // 5) Enfileirar o Fluxo 3 (direcionar ao closer).
+      fila.enfileirar('direcionar_closer', { leadId: lead.id, textoResposta: msg.corpo, responsavelCampanha, contextoCampanha })
+    } catch (erro) {
+      // Falha no meio do processamento: devolve a mensagem para a próxima
+      // passada, senão ela ficaria marcada como tratada sem ter sido.
+      if (chaveMensagem) await store.liberarMensagem(chaveMensagem)
+      throw erro
     }
-    // O estágio tira o lead da cadência legada; o cancelamento explícito faz o
-    // mesmo para workflows persistentes. Também é repetido no retry, pois é
-    // idempotente e pode ter sido o ponto da falha anterior.
-    await store.cancelarExecucoesWorkflow(lead.id)
-    log.ok('RESPOSTA detectada — cadência pausada. Encaminhando ao closer.', {
-      leadId: lead.id,
-      empresa: lead.empresa,
-    })
-
-    // 5) Enfileirar o Fluxo 3 (direcionar ao closer).
-    fila.enfileirar('direcionar_closer', { leadId: lead.id, textoResposta: msg.corpo, responsavelCampanha, contextoCampanha })
   }
 
   // Só confirma a leitura depois que todas as alterações do lote terminaram.

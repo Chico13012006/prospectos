@@ -241,6 +241,9 @@ export class GmailProvider implements EmailProvider {
         if (m.uid) this.recebimentosPendentes.set(idRecebimento, { mailbox, uid: m.uid })
         resultado.push({
           idRecebimento,
+          // Message-ID é global e sobrevive a mudança de UIDVALIDITY do IMAP;
+          // sem ele, mailbox+UID ainda distingue a mensagem nesta caixa.
+          mensagemId: parsed.messageId?.trim() || idRecebimento,
           de,
           assunto: parsed.subject ?? '',
           corpo: corpoTexto(parsed),

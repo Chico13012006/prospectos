@@ -50,4 +50,11 @@ export interface Store {
   // Cancela todas as workflow_execucoes ativas (em_andamento/aguardando) do lead
   // quando há bounce OU resposta real, impedindo novos passos persistentes.
   cancelarExecucoesWorkflow(leadId: string): Promise<void>
+  // Idempotência por mensagem (migration 0030). Reivindica a mensagem para
+  // processamento: devolve true só na PRIMEIRA vez. É um insert com unique, então
+  // duas passadas concorrentes não processam a mesma mensagem duas vezes.
+  reivindicarMensagem(mensagemId: string, resultado?: string, leadId?: string | null): Promise<boolean>
+  // Devolve a mensagem à fila quando o processamento falhou no meio — sem isso
+  // uma falha transitória faria a mensagem ser descartada para sempre.
+  liberarMensagem(mensagemId: string): Promise<void>
 }
