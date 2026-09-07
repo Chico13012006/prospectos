@@ -188,6 +188,23 @@ describe('Fluxo 2 — detectarResposta', () => {
     expect(retry.respostas).toBe(1)
   })
 
+  it('varias mensagens do mesmo lead geram UM aviso ao closer', async () => {
+    const lead = makeLead({ estagio: 'follow_up', contato_email: 'ana@acme.com.br', ultimo_contato: SEMANA_PASSADA })
+    const store = new MemoryStore([lead])
+    email.injetar(
+      msg({ de: 'ana@acme.com.br', em: new Date(), mensagemId: '<a@mail>' }),
+      msg({ de: 'ana@acme.com.br', em: new Date(), mensagemId: '<b@mail>' }),
+      msg({ de: 'ana@acme.com.br', em: new Date(), mensagemId: '<c@mail>' }),
+    )
+
+    const r = await detectarResposta(store, email, fila)
+
+    // As três respostas ficam no histórico; o aviso ao closer sai uma vez só.
+    expect(store.interacoes.filter((i) => i.tipo === 'resposta').length).toBeGreaterThanOrEqual(1)
+    expect(fila.pendentes()).toBe(1)
+    expect(r.respostas).toBeGreaterThanOrEqual(1)
+  })
+
   it('AUTO-RESPOSTA ignorada (flag e heurística)', async () => {
     const lead = makeLead({ estagio: 'follow_up', contato_email: 'ana@acme.com.br' })
     const store = new MemoryStore([lead])

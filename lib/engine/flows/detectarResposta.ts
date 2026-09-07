@@ -81,6 +81,12 @@ export async function detectarResposta(
     return { respostas: 0, ignoradas: 0, contatosAlternativos: 0, bounces: 0 }
   }
 
+  // Um encaminhamento ao closer por lead POR PASSADA. Sem isto, várias
+  // mensagens antigas distintas do mesmo lead no mesmo lote viram várias
+  // notificações — foi assim que o responsável recebeu 15 avisos do mesmo
+  // contato em 07/09/2026. As respostas seguem todas registradas no histórico;
+  // o que deduplicamos é só o aviso. A primeira do lote é a que notifica.
+  const closerEnfileirado = new Set<string>()
   let respostas = 0
   let ignoradas = 0
   let contatosAlternativos = 0
@@ -231,8 +237,13 @@ export async function detectarResposta(
         empresa: lead.empresa,
       })
 
-      // 5) Enfileirar o Fluxo 3 (direcionar ao closer).
-      fila.enfileirar('direcionar_closer', { leadId: lead.id, textoResposta: msg.corpo, responsavelCampanha, contextoCampanha })
+      // 5) Enfileirar o Fluxo 3 (direcionar ao closer), uma vez por lead.
+      if (closerEnfileirado.has(lead.id)) {
+        log.info('Closer já avisado deste lead nesta passada; não duplico o aviso.', { leadId: lead.id })
+      } else {
+        closerEnfileirado.add(lead.id)
+        fila.enfileirar('direcionar_closer', { leadId: lead.id, textoResposta: msg.corpo, responsavelCampanha, contextoCampanha })
+      }
     } catch (erro) {
       // Falha no meio do processamento: devolve a mensagem para a próxima
       // passada, senão ela ficaria marcada como tratada sem ter sido.
