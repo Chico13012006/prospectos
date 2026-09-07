@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   Plus, Play, Pause, CheckCircle2, Megaphone, Users, MessageSquare, Coins,
   Search, FileSpreadsheet, PencilLine, ArrowRight, Activity, Info,
-  CalendarDays,
+  CalendarDays, AlertTriangle,
 } from 'lucide-react';
 import ImportarLeadsModal from '@/components/leads/ImportarLeadsModal';
 import { type Campanha, STATUS_BADGE, STATUS_LABEL, resumoPublico } from './tiposCampanha';
@@ -171,19 +171,32 @@ export default function CampanhasPanel() {
                 <tr><td colSpan={8} className="px-5 py-10 text-center text-slate-500 text-sm">
                   Nenhuma campanha {filtro && `(${STATUS_LABEL[filtro] ?? filtro})`}. Crie a primeira em <b className="text-slate-300">Nova campanha</b>.
                 </td></tr>
-              ) : filtrados.map((c) => (
+              ) : filtrados.map((c) => {
+                const resumo = c.resumoExecucoes;
+                const falha = (resumo?.canceladas ?? 0) > 0 || (resumo?.erros ?? 0) > 0;
+                const pendentes = (resumo?.emAndamento ?? 0) + (resumo?.aguardando ?? 0);
+                const aguardandoResposta = c.status === 'ativa' && c.dry_run === false
+                  && (resumo?.total ?? 0) > 0 && pendentes === 0 && !falha;
+                return (
                 <tr key={c.id} onClick={() => router.push(`/automacao/campanhas/${c.id}`)}
-                  className="border-b border-[#2a3147] last:border-0 hover:bg-[#0f1117] transition-colors cursor-pointer">
+                  className={`border-b last:border-0 hover:bg-[#0f1117] transition-colors cursor-pointer ${falha ? 'border-red-500/25 bg-red-500/[0.04]' : 'border-[#2a3147]'}`}>
                   <td className="px-5 py-3">
-                    <div className="font-medium text-slate-100">{c.nome}</div>
-                    <div className="text-xs text-slate-500">{c.tipo ?? 'campanha'}{c.meta_leads != null && ` · meta ${c.meta_leads}`}</div>
+                    <div className="flex items-center gap-2 font-medium text-slate-100">
+                      {falha && <AlertTriangle size={14} className="shrink-0 text-red-400" />}
+                      {c.nome}
+                    </div>
+                    <div className={`text-xs ${falha ? 'text-red-300/80' : 'text-slate-500'}`}>
+                      {resumo?.total
+                        ? `${resumo.emailsEnviados}/${resumo.total} enviados · ${resumo.canceladas} cancelados · ${resumo.erros} erros`
+                        : c.tipo ?? 'campanha'}
+                    </div>
                   </td>
                   <td className="px-2 py-3 text-xs text-slate-400 max-w-[160px] truncate">{resumoPublico(c.publico)}</td>
+                  <td className="px-2 py-3 text-right text-sm font-semibold text-slate-200">{resumo ? resumo.respostas : NC}</td>
                   <td className="px-2 py-3 text-right">{NC}</td>
                   <td className="px-2 py-3 text-right">{NC}</td>
                   <td className="px-2 py-3 text-right">{NC}</td>
-                  <td className="px-2 py-3 text-right">{NC}</td>
-                  <td className="px-2 py-3"><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${STATUS_BADGE[c.status] ?? STATUS_BADGE.rascunho}`}>{STATUS_LABEL[c.status] ?? c.status}</span></td>
+                  <td className="px-2 py-3"><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${falha ? 'bg-red-500/15 text-red-300' : aguardandoResposta ? 'bg-indigo-500/15 text-indigo-300' : STATUS_BADGE[c.status] ?? STATUS_BADGE.rascunho}`}>{falha ? 'Atenção necessária' : aguardandoResposta ? 'Aguardando respostas' : STATUS_LABEL[c.status] ?? c.status}</span></td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1.5">
                       {c.status === 'rascunho' && (
@@ -208,7 +221,8 @@ export default function CampanhasPanel() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

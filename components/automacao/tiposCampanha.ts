@@ -117,6 +117,16 @@ export interface Campanha {
   concluida_em: string | null;
   criado_em: string;
   atualizado_em: string;
+  resumoExecucoes?: {
+    total: number;
+    emAndamento: number;
+    aguardando: number;
+    concluidas: number;
+    canceladas: number;
+    erros: number;
+    emailsEnviados: number;
+    respostas: number;
+  };
 }
 
 export const STATUS_BADGE: Record<string, string> = {

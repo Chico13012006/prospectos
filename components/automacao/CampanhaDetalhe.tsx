@@ -27,6 +27,10 @@ import { campanhaEhDisparoUnico } from '@/lib/campanhas/configuracaoGuiada';
 // execuções, respostas e oportunidades por campanha. NUNCA estima um valor.
 
 type Aba = 'geral' | 'empresas' | 'decisores' | 'mensagens' | 'resultados';
+interface ResumoExecucoes {
+  total: number; emAndamento: number; aguardando: number; concluidas: number;
+  canceladas: number; erros: number; emailsEnviados: number; respostas: number;
+}
 const ABAS: { id: Aba; label: string; Icon: typeof Building2 }[] = [
   { id: 'geral', label: 'Visão geral', Icon: ClipboardList },
   { id: 'empresas', label: 'Empresas', Icon: Building2 },
@@ -60,6 +64,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
   const [confirmacaoTexto, setConfirmacaoTexto] = useState('');
   const [erroAcao, setErroAcao] = useState<string | null>(null);
   const [envioRealDisponivel, setEnvioRealDisponivel] = useState(false);
+  const [resumoExecucoes, setResumoExecucoes] = useState<ResumoExecucoes | null>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -70,6 +75,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
       setContextoResumo(d.resumoOperacional ?? { remetente: null, responsavel: null, workflow: null });
       setPreviaPublico(d.previaPublico ?? null);
       setEnvioRealDisponivel(d.envioRealDisponivel === true);
+      setResumoExecucoes(d.resumoExecucoes ?? null);
       setEstado('ok');
     } catch { setEstado('erro'); }
   }, [id]);
@@ -78,9 +84,14 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
 
   async function transicionar(status: string) {
     setAgindo(true);
+    setErroAcao(null);
     try {
-      await fetch(`/api/campanhas/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+      const resposta = await fetch(`/api/campanhas/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível atualizar a campanha.');
       await carregar();
+    } catch (e) {
+      setErroAcao(e instanceof Error ? e.message : 'Não foi possível atualizar a campanha.');
     } finally { setAgindo(false); }
   }
 
@@ -157,6 +168,10 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
   const disparoUnico = campanhaEhDisparoUnico(c.tipo) || pub.operacao?.modoEnvio === 'disparo_unico';
 
   const emEnsaio = c.dry_run !== false;
+  const execucoesAtivas = (resumoExecucoes?.emAndamento ?? 0) + (resumoExecucoes?.aguardando ?? 0);
+  const temFalhaOperacional = (resumoExecucoes?.canceladas ?? 0) > 0 || (resumoExecucoes?.erros ?? 0) > 0;
+  const aguardandoRespostas = disparoUnico && c.status === 'ativa' && !emEnsaio
+    && (resumoExecucoes?.total ?? 0) > 0 && execucoesAtivas === 0 && !temFalhaOperacional;
   const publicoOperacional = previaPublico
     ? `${previaPublico.elegiveis} elegíveis de ${previaPublico.totalSelecionado} selecionados — ${formatarPublicoOperacional(c.publico)}`
     : formatarPublicoOperacional(c.publico);
@@ -204,10 +219,12 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
           )}
         </div>
       ) : (
-        <div className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${c.status === 'ativa' ? 'border-green-500/25 bg-green-500/10 text-green-300' : 'border-slate-500/25 bg-slate-500/10 text-slate-300'}`}>
+        <div className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${aguardandoRespostas ? 'border-indigo-500/25 bg-indigo-500/10 text-indigo-300' : c.status === 'ativa' ? 'border-green-500/25 bg-green-500/10 text-green-300' : 'border-slate-500/25 bg-slate-500/10 text-slate-300'}`}>
           {c.status === 'ativa' ? <CheckCircle2 size={15} className="shrink-0" /> : <Info size={15} className="shrink-0" />}
           {c.status === 'ativa' ? (
-            disparoUnico
+            aguardandoRespostas
+              ? <span><b>Aguardando respostas</b> — todos os envios saíram da fila, mas a campanha permanece aberta para acompanhar os retornos.</span>
+              : disparoUnico
               ? <span><b>Disparo em processamento</b> — a fila envia um contato a cada 2 minutos, com cópia para o responsável; não há recorrência.</span>
               : <span><b>Envio real ativo</b> — a mensagem inicial entra na fila imediatamente, com intervalo de 2 minutos e cópia para o responsável.</span>
           ) : c.status === 'pausada' ? (
@@ -219,6 +236,18 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
           ) : (
             <span><b>Envio real configurado</b> — publique a campanha para iniciar o processamento.</span>
           )}
+        </div>
+      )}
+
+      {temFalhaOperacional && resumoExecucoes && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <AlertTriangle size={17} className="mt-0.5 shrink-0 text-red-400" />
+          <div>
+            <div className="font-semibold">Campanha com falha operacional — não está concluída</div>
+            <div className="mt-1 text-xs text-red-300/90">
+              {resumoExecucoes.canceladas} execução(ões) cancelada(s) e {resumoExecucoes.erros} com erro. Foram enviados {resumoExecucoes.emailsEnviados} de {resumoExecucoes.total} e-mail(s). Revise as execuções antes de concluir manualmente.
+            </div>
+          </div>
         </div>
       )}
 
@@ -343,7 +372,9 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
           </div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-slate-100">{c.nome}</h1>
-            <span className={`text-[11px] px-2 py-0.5 rounded-full ${STATUS_BADGE[c.status] ?? STATUS_BADGE.rascunho}`}>{STATUS_LABEL[c.status] ?? c.status}</span>
+            <span className={`text-[11px] px-2 py-0.5 rounded-full ${temFalhaOperacional ? 'bg-red-500/15 text-red-300' : aguardandoRespostas ? 'bg-indigo-500/15 text-indigo-300' : STATUS_BADGE[c.status] ?? STATUS_BADGE.rascunho}`}>
+              {temFalhaOperacional ? 'Atenção necessária' : aguardandoRespostas ? 'Aguardando respostas' : STATUS_LABEL[c.status] ?? c.status}
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -358,7 +389,8 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
             </button>
           )}
           {(ACOES[c.status] ?? []).map(({ para, label, Icon }) => (
-            <button key={para} onClick={() => transicionar(para)} disabled={agindo}
+            <button key={para} onClick={() => transicionar(para)} disabled={agindo || (para === 'concluida' && temFalhaOperacional)}
+              title={para === 'concluida' && temFalhaOperacional ? 'Resolva as execuções canceladas ou com erro antes de concluir.' : undefined}
               className="text-sm px-3 py-2 rounded-lg border border-[#2a3147] text-slate-200 hover:bg-[#0f1117] disabled:opacity-40 inline-flex items-center gap-1">
               <Icon size={14} /> {label}
             </button>
@@ -422,6 +454,9 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
               <h3 className="font-semibold text-slate-200 text-sm mb-3">Ciclo</h3>
               <div className="space-y-2 text-sm">
                 <Linha k="Status" v={STATUS_LABEL[c.status] ?? c.status} />
+                {resumoExecucoes && <Linha k="E-mails enviados" v={`${resumoExecucoes.emailsEnviados} de ${resumoExecucoes.total}`} />}
+                {resumoExecucoes && <Linha k="Respostas" v={String(resumoExecucoes.respostas)} />}
+                {resumoExecucoes && <Linha k="Canceladas / erros" v={`${resumoExecucoes.canceladas} / ${resumoExecucoes.erros}`} />}
                 <Linha k="Público" v={resumoPublico(c.publico)} />
                 <Linha k="Cadência" v={contextoResumo.workflow?.nome ?? (c.workflow_id ? 'workflow vinculado' : '— (sem workflow)')} />
                 <Linha k="Criada em" v={fmtData(c.criado_em)} />

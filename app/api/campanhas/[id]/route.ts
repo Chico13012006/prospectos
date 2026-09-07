@@ -5,9 +5,10 @@ import { exigirPermissao, resolverAcesso } from '@/lib/rbac/servidor'
 import { atualizarCampanha, buscarCampanha } from '@/lib/campanhas/repository'
 import { buscarContextoResumoOperacional } from '@/lib/campanhas/resumoOperacionalServidor'
 import { materializarCampanhaGuiada } from '@/lib/campanhas/materializarServidor'
-import { aplicarRegraPublicoPorTipo, normalizarPublicoCampanha } from '@/lib/campanhas/configuracaoGuiada'
+import { aplicarRegraPublicoPorTipo, campanhaEhDisparoUnico, normalizarPublicoCampanha } from '@/lib/campanhas/configuracaoGuiada'
 import { buscarPreviaPublicoCampanha, previaParaCliente } from '@/lib/campanhas/publicoServidor'
 import { engineConfig } from '@/lib/engine/config'
+import { buscarResumoExecucoesCampanha } from '@/lib/campanhas/resumoExecucoesServidor'
 
 export const runtime = 'nodejs'
 
@@ -26,7 +27,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       ? campanha.publico as Record<string, unknown>
       : {}
     const temSelecaoGuiada = publicoBruto.selecao && typeof publicoBruto.selecao === 'object'
-    const [resumoOperacional, previaPublico] = await Promise.all([
+    const [resumoOperacional, previaPublico, resumoExecucoes] = await Promise.all([
       buscarContextoResumoOperacional(admin, org, campanha),
       temSelecaoGuiada
         ? buscarPreviaPublicoCampanha(
@@ -36,11 +37,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             campanha.workflow_id,
           ).then(previaParaCliente)
         : Promise.resolve(null),
+      buscarResumoExecucoesCampanha(admin, org, id),
     ])
     return NextResponse.json({
       campanha,
       resumoOperacional,
       previaPublico,
+      resumoExecucoes,
       envioRealDisponivel: !!resumoOperacional.remetente && !engineConfig.modoEnsaio,
     })
   } catch (e) {
@@ -57,6 +60,33 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const atual = await buscarCampanha(admin, org, id)
     if (!atual) return NextResponse.json({ erro: 'Campanha não encontrada' }, { status: 404 })
+
+    if (b.status === 'concluida') {
+      const resumo = await buscarResumoExecucoesCampanha(admin, org, id)
+      const ativas = resumo.emAndamento + resumo.aguardando
+      if (ativas > 0) {
+        return NextResponse.json({ erro: `A campanha ainda possui ${ativas} execução(ões) pendente(s).` }, { status: 409 })
+      }
+      if (resumo.canceladas > 0 || resumo.erros > 0) {
+        return NextResponse.json(
+          { erro: `Resolva as execuções antes de concluir: ${resumo.canceladas} cancelada(s) e ${resumo.erros} com erro.` },
+          { status: 409 },
+        )
+      }
+      const publico = atual.publico && typeof atual.publico === 'object'
+        ? atual.publico as Record<string, unknown>
+        : {}
+      const operacao = publico.operacao && typeof publico.operacao === 'object'
+        ? publico.operacao as Record<string, unknown>
+        : {}
+      const disparoUnico = operacao.modoEnvio === 'disparo_unico' || campanhaEhDisparoUnico(atual.tipo)
+      if (disparoUnico && resumo.total > 0 && resumo.respostas === 0) {
+        return NextResponse.json(
+          { erro: 'O disparo terminou, mas ainda não recebeu respostas. Mantenha a campanha em acompanhamento.' },
+          { status: 409 },
+        )
+      }
+    }
 
     if (b.publico && typeof b.publico === 'object') {
       if (atual.status !== 'rascunho') {

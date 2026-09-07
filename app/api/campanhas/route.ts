@@ -5,6 +5,7 @@ import { resolverAcesso, exigirPermissao } from '@/lib/rbac/servidor'
 import { listarCampanhas, criarCampanha } from '@/lib/campanhas/repository'
 import { aplicarRegraPublicoPorTipo, normalizarPublicoCampanha } from '@/lib/campanhas/configuracaoGuiada'
 import { materializarCampanhaGuiada } from '@/lib/campanhas/materializarServidor'
+import { buscarResumosExecucoesCampanhas } from '@/lib/campanhas/resumoExecucoesServidor'
 
 export const runtime = 'nodejs'
 
@@ -17,7 +18,11 @@ export async function GET(req: Request) {
   const { admin, org } = acc.acesso
   const status = new URL(req.url).searchParams.get('status') ?? undefined
   try {
-    return NextResponse.json({ campanhas: await listarCampanhas(admin, org, { status }) })
+    const campanhas = await listarCampanhas(admin, org, { status })
+    const resumos = await buscarResumosExecucoesCampanhas(admin, org, campanhas.map((campanha) => campanha.id))
+    return NextResponse.json({
+      campanhas: campanhas.map((campanha) => ({ ...campanha, resumoExecucoes: resumos[campanha.id] })),
+    })
   } catch (e) {
     return NextResponse.json({ erro: e instanceof Error ? e.message : 'Erro' }, { status: 400 })
   }
