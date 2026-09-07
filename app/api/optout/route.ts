@@ -49,7 +49,11 @@ export async function POST(req: NextRequest) {
   }
 
   const admin = createSupabaseAdminClient();
-  const { data: lead } = await admin.from('leads').select('id, optout').eq('id', leadId).maybeSingle();
+  const { data: lead } = await admin
+    .from('leads')
+    .select('id, optout, organizacao_id')
+    .eq('id', leadId)
+    .maybeSingle();
   if (!lead) {
     return pagina('Não encontrado', '<h1 style="font-size:18px">Contato não encontrado</h1>', 404);
   }
@@ -64,7 +68,11 @@ export async function POST(req: NextRequest) {
         proxima_acao: null,
         proxima_acao_data: null,
       })
-      .eq('id', leadId);
+      .eq('id', leadId)
+      // Regra do projeto: escrita com acesso administrativo filtra a organização
+      // INCLUSIVE em operação por id. O token assinado já prova o lead, mas nenhum
+      // caminho deve depender desse raciocínio para não vazar entre clientes.
+      .eq('organizacao_id', lead.organizacao_id);
     if (error) {
       console.error('[optout] falha ao atualizar lead:', error);
       return pagina('Erro', '<h1 style="font-size:18px">Não foi possível concluir</h1><p style="color:#94a3b8;font-size:14px">Tente novamente em instantes.</p>', 500);
