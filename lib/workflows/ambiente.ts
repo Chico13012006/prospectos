@@ -62,7 +62,7 @@ export interface AmbienteWorkflow {
   // Ação 'criar_tarefa'/'criar_tarefa_ligacao': registra a tarefa como interação
   // de sistema no lead, com responsável. Sem responsavelId → cai no responsável
   // do próprio lead (lead.responsavel_id).
-  criarTarefa(leadId: string, titulo: string, responsavelId?: string | null): Promise<void>
+  criarTarefa(leadId: string, titulo: string, responsavelId?: string | null, chave?: string | null): Promise<void>
   // Ação 'criar_oportunidade' (Fase 6): abre um deal em `oportunidades` a partir
   // do lead (empresa/responsável herdados). No-op em simulação. Liga o motor de
   // workflows às Oportunidades (Fase 5) sem tocar no fluxo de cadência do motor.
@@ -370,8 +370,17 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     return { enviado: true, assunto }
   }
 
-  async criarTarefa(leadId: string, titulo: string, responsavelId?: string | null): Promise<void> {
+  async criarTarefa(leadId: string, titulo: string, responsavelId?: string | null, chave?: string | null): Promise<void> {
     if (this.simular) return
+    // Mesma trava do envio: o resume pode repetir a ação, e sem isto o
+    // responsável vê tarefa, notificação e nota duplicadas no painel.
+    if (chave) {
+      const primeiraVez = await this.motor.store.reivindicarMensagem(`tarefa:${chave}`, 'tarefa', leadId)
+      if (!primeiraVez) {
+        log.aviso('Tarefa já criada para este passo — não duplico.', { leadId, chave })
+        return
+      }
+    }
     // Buscamos o lead também para o fallback de responsável E para o corpo da
     // notificação (empresa/contato).
     const lead = await this.motor.store.buscarLead(leadId)

@@ -173,13 +173,29 @@ export async function processarRenovacoes(
       tarefas++
       notificacoes++
       if (!dryRun) {
-        const { data: tarefa } = await db.from('tarefas').insert({
+        const { data: tarefa, error: erroTarefa } = await db.from('tarefas').insert({
           organizacao_id: org, servico_id: svc?.id ?? null, empresa_id: empresaId, lead_id: lead?.id ?? null,
           tipo: 'renovacao', titulo: `Iniciar renovação — ${nomeEmp}`,
           responsavel_id: responsavelId, prioridade: 'alta',
           prazo_em: `${validade.vencimentoEm}T00:00:00.000Z`, origem: 'renovacao',
           motivo: `Entrou na janela de renovação (vence em ${dias ?? '?'} dias; fonte: ${validade.fonte === 'servico' ? 'serviço recorrente' : 'validade legada do lead'})`,
         }).select('id').single()
+
+        // Com os índices da migration 0031, uma corrida entre duas execuções
+        // vira violação de unicidade em vez de tarefa duplicada. Aqui isso é
+        // sucesso do ponto de vista do negócio: a tarefa do ciclo já existe.
+        if (erroTarefa) {
+          if (erroTarefa.code === '23505') {
+            tarefas--
+            notificacoes--
+            duplicacoesEvitadas++
+            log.info('Tarefa de renovação já existia (corrida) — nada duplicado.', {
+              org, empresa: nomeEmp, vencimento: validade.vencimentoEm,
+            })
+            continue
+          }
+          throw erroTarefa
+        }
 
         await db.from('notificacoes').insert({
           organizacao_id: org, canal: 'app', titulo: `Renovação: ${nomeEmp}`,

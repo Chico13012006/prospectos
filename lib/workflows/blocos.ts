@@ -133,7 +133,8 @@ export const acaoCriarTarefa: Acao = {
     if (!ctx.leadId) throw new Error("ação 'criar_tarefa' exige um lead")
     const titulo = String(ctx.config.titulo ?? 'Tarefa do workflow')
     const responsavelId = String(ctx.config.responsavel_id ?? '') || undefined
-    await ctx.ambiente.criarTarefa(ctx.leadId, titulo, responsavelId)
+    const chaveTarefa = ctx.execucao?.id && ctx.blocoId ? `${ctx.execucao.id}:${ctx.blocoId}` : null
+    await ctx.ambiente.criarTarefa(ctx.leadId, titulo, responsavelId, chaveTarefa)
     await ctx.log('tarefa_criada', { titulo, responsavelId: responsavelId ?? null })
     return { tipo: 'continuar' }
   },
