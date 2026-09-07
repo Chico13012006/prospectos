@@ -44,8 +44,10 @@ class AmbienteFake implements AmbienteWorkflow {
   }
   async leadRespondeu(leadId: string) { return this.respondeu.has(leadId) }
   async lerCampoLead(leadId: string, campo: string) { return this.campos[leadId]?.[campo] ?? null }
-  async enviarEmailTemplate(leadId: string, template: string) {
+  chavesEnvio: (string | null | undefined)[] = []
+  async enviarEmailTemplate(leadId: string, template: string, _campanhaId?: string | null, chaveEnvio?: string | null) {
     if (this.falharEmail) throw new Error('provedor indisponível')
+    this.chavesEnvio.push(chaveEnvio)
     this.emails.push({ leadId, template }); return { enviado: true, assunto: 'assunto' }
   }
   async notificarFalhaExecucao(execucao: { id: string }, mensagem: string) {
@@ -82,6 +84,27 @@ describe('executor de workflows', () => {
     expect(await processarEnrollment(store, registro, amb)).toBe(2)
     expect(await processarEnrollment(store, registro, amb)).toBe(0) // não reinscreve
     expect(await store.existeExecucaoParaLead(wfId, 'lead-1')).toBe(true)
+  })
+
+  // O executor é at-least-once: uma ação pode repetir no resume. Quem tem efeito
+  // externo irreversível (e-mail) precisa de uma chave estável para não repetir.
+  it('envio recebe chave estável de execução + bloco', async () => {
+    const store = new MemoryWorkflowStore()
+    const amb = new AmbienteFake()
+    amb.alvos = ['lead-1']
+    await publicarWorkflow(store, {
+      gatilho,
+      condicoes: [],
+      acoes: [{ id: 'email-0', tipo: 'enviar_email', config: { template: 'follow_up_1' } }],
+    })
+    await processarEnrollment(store, registro, amb)
+    await processarTudo(store, registro, amb)
+
+    expect(amb.emails).toHaveLength(1)
+    const [chave] = amb.chavesEnvio
+    expect(chave).toBeTruthy()
+    // Identifica a execução E o bloco — id estável, não índice de passo.
+    expect(String(chave)).toContain(':email-0')
   })
 
   it('gate de condição barra o pipeline (concluído sem ação)', async () => {

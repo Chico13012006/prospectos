@@ -58,7 +58,7 @@ export interface AmbienteWorkflow {
   // simular / campanhas.dry_run). Devolve o assunto para o log da execução.
   // campanhaId: se fornecido, verifica campanhas.dry_run antes do envio real
   // (gate independente do MODO_ENSAIO global — segurança por campanha).
-  enviarEmailTemplate(leadId: string, templateTipo: string, campanhaId?: string | null): Promise<{ enviado: boolean; assunto: string }>
+  enviarEmailTemplate(leadId: string, templateTipo: string, campanhaId?: string | null, chaveEnvio?: string | null): Promise<{ enviado: boolean; assunto: string }>
   // Ação 'criar_tarefa'/'criar_tarefa_ligacao': registra a tarefa como interação
   // de sistema no lead, com responsável. Sem responsavelId → cai no responsável
   // do próprio lead (lead.responsavel_id).
@@ -226,7 +226,7 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     return data ? (data as unknown as Record<string, unknown>)[campo] ?? null : null
   }
 
-  async enviarEmailTemplate(leadId: string, templateTipo: string, campanhaId?: string | null): Promise<{ enviado: boolean; assunto: string }> {
+  async enviarEmailTemplate(leadId: string, templateTipo: string, campanhaId?: string | null, chaveEnvio?: string | null): Promise<{ enviado: boolean; assunto: string }> {
     const lead = await this.motor.store.buscarLead(leadId)
     if (!lead) throw new Error(`lead ${leadId} não encontrado`)
     const nicho = normalizarNicho(lead.segmento)
@@ -309,7 +309,22 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       : undefined
     const html = montarEmailCampanhaHtml(corpo, { responsavelNome, nomeServico }, htmlPersonalizado)
 
+    // TRAVA DE REENVIO. O executor é at-least-once: se cair entre o efeito e a
+    // gravação do passo, a ação repete no resume. Aqui isso significaria o mesmo
+    // e-mail duas vezes para um cliente real. A chave é execução+bloco, então
+    // ciclos diferentes (ex.: renovação semestral) têm execuções distintas e
+    // seguem enviando normalmente. Sem chave, o comportamento é o de antes.
+    // Fica depois de TODOS os gates para não consumir a chave num envio bloqueado.
+    if (chaveEnvio) {
+      const primeiraVez = await this.motor.store.reivindicarMensagem(`envio:${chaveEnvio}`, 'envio', leadId)
+      if (!primeiraVez) {
+        log.aviso('Envio já realizado para este passo — não reenvio.', { leadId, templateTipo, chaveEnvio })
+        return { enviado: false, assunto }
+      }
+    }
+
     // Envio real: usa a conta da org (emailProvider) se configurada; senão a padrão.
+    try {
     if (campanhaId) {
       await enviarEmailCampanhaComCopia(emailProvider, {
         para: lead.contato_email,
@@ -322,6 +337,12 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       })
     } else {
       await emailProvider.enviar(lead.contato_email, assunto, corpo, html)
+    }
+    } catch (erro) {
+      // Falha de SMTP não pode bloquear o passo para sempre: devolve a chave
+      // para a próxima tentativa da fila.
+      if (chaveEnvio) await this.motor.store.liberarMensagem(`envio:${chaveEnvio}`)
+      throw erro
     }
     await this.motor.store.registrarInteracao({
       lead_id: leadId,

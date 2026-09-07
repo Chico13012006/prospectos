@@ -25,6 +25,7 @@ function ctxDe(
   ambiente: AmbienteWorkflow,
   execucao: import('./types').WorkflowExecucao,
   config: Record<string, unknown>,
+  blocoId?: string,
 ): CtxExec {
   return {
     ambiente,
@@ -33,6 +34,10 @@ function ctxDe(
     execucao,
     leadId: execucao.lead_id,
     config,
+    // Id do bloco na definição — estável e único na versão. Junto com a
+    // execução, forma a chave que impede reenviar o mesmo passo se a fila
+    // repetir a ação (o executor é at-least-once por desenho).
+    blocoId,
     log: (tipo, detalhe) => store.registrarEvento({ execucao_id: execucao.id, tipo, detalhe: detalhe ?? null }),
   }
 }
@@ -113,7 +118,7 @@ export async function processarExecucao(
         throw new Error(`limite de passos excedido (${MAX_PASSOS}) — possível laço de ramificação`)
 
       const bloco = def.acoes[passo]
-      const res = await registro.obterAcao(bloco.tipo).executar(ctxDe(store, registro, ambiente, ex, bloco.config ?? {}))
+      const res = await registro.obterAcao(bloco.tipo).executar(ctxDe(store, registro, ambiente, ex, bloco.config ?? {}, bloco.id))
       await log('acao_executada', { passo, acao: bloco.tipo })
 
       if (res.tipo === 'esperar') {

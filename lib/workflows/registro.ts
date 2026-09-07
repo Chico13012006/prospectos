@@ -23,6 +23,10 @@ export interface CtxExec {
   registro: RegistroWorkflows
   execucao: WorkflowExecucao
   leadId: string | null
+  // Id estável do bloco em execução. Com a execução, forma a chave que impede
+  // repetir um efeito externo quando a fila reentrega a ação — o executor é
+  // at-least-once por desenho, então quem tem efeito irreversível precisa disso.
+  blocoId?: string
   config: Record<string, unknown>
   // Registra um evento no log da execução (workflow_execucao_eventos).
   log(tipo: string, detalhe?: Record<string, unknown>): Promise<void>
