@@ -11,6 +11,11 @@ import {
 import ImportarLeadsModal from '@/components/leads/ImportarLeadsModal';
 import { type Campanha, STATUS_BADGE, STATUS_LABEL, resumoPublico } from './tiposCampanha';
 import { campanhaEhDisparoUnico } from '@/lib/campanhas/configuracaoGuiada';
+import {
+  aguardandoRespostasDoDisparo,
+  execucoesPendentes,
+  temFalhaOperacional,
+} from '@/lib/campanhas/situacaoDisparo';
 
 // Painel principal da aba Campanhas (mockup 01): KPIs, filtros, tabela densa,
 // "Próximas ações" e "Desempenho recente". Dado REAL de /api/campanhas. Métricas
@@ -173,10 +178,14 @@ export default function CampanhasPanel() {
                 </td></tr>
               ) : filtrados.map((c) => {
                 const resumo = c.resumoExecucoes;
-                const falha = (resumo?.canceladas ?? 0) > 0 || (resumo?.erros ?? 0) > 0;
-                const pendentes = (resumo?.emAndamento ?? 0) + (resumo?.aguardando ?? 0);
-                const aguardandoResposta = c.status === 'ativa' && c.dry_run === false
-                  && (resumo?.total ?? 0) > 0 && pendentes === 0 && !falha;
+                const falha = temFalhaOperacional(resumo);
+                const pendentes = execucoesPendentes(resumo);
+                const aguardandoResposta = aguardandoRespostasDoDisparo({
+                  disparoUnico: campanhaEhDisparoUnico(c.tipo),
+                  status: c.status,
+                  emEnsaio: c.dry_run !== false,
+                  resumo,
+                });
                 return (
                 <tr key={c.id} onClick={() => router.push(`/automacao/campanhas/${c.id}`)}
                   className={`border-b last:border-0 hover:bg-[#0f1117] transition-colors cursor-pointer ${falha ? 'border-red-500/25 bg-red-500/[0.04]' : 'border-[#2a3147]'}`}>

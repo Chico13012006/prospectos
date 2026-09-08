@@ -21,6 +21,11 @@ import {
 import { DIAS_CAMPANHA, normalizarDiasCampanha, type DiaCampanha } from '@/lib/campanhas/agenda';
 import { descreverCadencia, rotuloDoDia, rotuloDaEspera } from '@/lib/campanhas/cadenciaLegivel';
 import { campanhaEhDisparoUnico } from '@/lib/campanhas/configuracaoGuiada';
+import {
+  aguardandoRespostasDoDisparo,
+  execucoesPendentes,
+  temFalhaOperacional as calcularFalhaOperacional,
+} from '@/lib/campanhas/situacaoDisparo';
 
 // Detalhe de campanha com abas internas. Visão geral/Empresas/Decisores/Mensagens
 // mostram o que REALMENTE persiste (colunas + publico jsonb + workflow vinculado).
@@ -203,10 +208,11 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
   const disparoUnico = campanhaEhDisparoUnico(c.tipo) || pub.operacao?.modoEnvio === 'disparo_unico';
 
   const emEnsaio = c.dry_run !== false;
-  const execucoesAtivas = (resumoExecucoes?.emAndamento ?? 0) + (resumoExecucoes?.aguardando ?? 0);
-  const temFalhaOperacional = (resumoExecucoes?.canceladas ?? 0) > 0 || (resumoExecucoes?.erros ?? 0) > 0;
-  const aguardandoRespostas = disparoUnico && c.status === 'ativa' && !emEnsaio
-    && (resumoExecucoes?.total ?? 0) > 0 && execucoesAtivas === 0 && !temFalhaOperacional;
+  const execucoesAtivas = execucoesPendentes(resumoExecucoes);
+  const temFalhaOperacional = calcularFalhaOperacional(resumoExecucoes);
+  const aguardandoRespostas = aguardandoRespostasDoDisparo({
+    disparoUnico, status: c.status, emEnsaio, resumo: resumoExecucoes,
+  });
   const publicoOperacional = previaPublico
     ? `${previaPublico.elegiveis} elegíveis de ${previaPublico.totalSelecionado} selecionados — ${formatarPublicoOperacional(c.publico)}`
     : formatarPublicoOperacional(c.publico);
