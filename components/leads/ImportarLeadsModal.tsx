@@ -14,13 +14,13 @@ type Resumo = {
   jaExistentes: number
   novos: number
   nichos: Array<{ nicho: string; leads: number; templateAtivo: boolean }>
+  semSegmento: number
 }
 const MOTIVO_LABEL: Record<string, string> = {
   sem_nome: 'sem nome',
   sem_email: 'sem e-mail',
   email_invalido: 'e-mail inválido',
   sem_empresa: 'sem empresa',
-  sem_segmento: 'sem nicho/segmento',
 }
 
 function rotuloNicho(nicho: string): string {
@@ -133,6 +133,12 @@ export default function ImportarLeadsModal({
                 {resumo.jaExistentes > 0 && <div className="flex justify-between"><span className="text-slate-400">Já existem na base</span><span className="text-slate-300 tabular-nums">{resumo.jaExistentes}</span></div>}
                 {pulosTexto && <div className="flex justify-between gap-3"><span className="text-slate-400">Puladas</span><span className="text-amber-300/80 text-right">{pulosTexto}</span></div>}
                 <div className="flex justify-between pt-1 border-t border-[#2a3147] mt-1"><span className="text-slate-200 font-medium">A inserir</span><span className="text-emerald-400 font-semibold tabular-nums">{resumo.novos}</span></div>
+                {resumo.semSegmento > 0 && (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-400">Sem segmento</span>
+                    <span className="text-amber-300/80 tabular-nums">{resumo.semSegmento}</span>
+                  </div>
+                )}
                 {resumo.nichos.length > 0 && (
                   <div className="pt-2 mt-2 border-t border-[#2a3147] space-y-1.5">
                     <p className="text-xs font-medium text-slate-400">Nichos dos novos leads</p>
@@ -150,6 +156,14 @@ export default function ImportarLeadsModal({
                       </p>
                     )}
                   </div>
+                )}
+                {resumo.semSegmento > 0 && (
+                  <p className="pt-2 mt-2 border-t border-[#2a3147] text-xs leading-5 text-amber-300/80">
+                    {resumo.semSegmento} lead{resumo.semSegmento === 1 ? '' : 's'} sem segmento na planilha.
+                    {resumo.semSegmento === 1 ? ' Ele entra' : ' Eles entram'} na base normalmente, mas o motor
+                    não escolhe a mensagem de primeiro contato sem segmento — classifique depois na ficha do lead
+                    para {resumo.semSegmento === 1 ? 'ele entrar' : 'eles entrarem'} na esteira.
+                  </p>
                 )}
               </div>
             )}

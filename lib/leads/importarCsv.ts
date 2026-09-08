@@ -68,7 +68,13 @@ export interface LeadPadrao {
   contato_nome: string
   contato_email: string
   empresa: string
-  segmento: string
+  // Opcional NA IMPORTAÇÃO — planilha de origem externa raramente traz nicho, e
+  // recusar a linha por isso jogava fora um contato válido. O cadastro MANUAL
+  // continua exigindo, porque ali a pessoa tem a informação à mão.
+  // Sem segmento o motor não escolhe template e não faz o primeiro contato:
+  // o lead entra na base, mas fica parado até alguém classificar. A prévia
+  // avisa quantos estão nessa situação (`semSegmento` em ResultadoPlanilha).
+  segmento: string | null
   origem: string
   contato_telefone: string | null
   contato_cargo: string | null
@@ -76,11 +82,15 @@ export interface LeadPadrao {
   estado: string | null
 }
 
-export type MotivoPulo = 'sem_nome' | 'sem_email' | 'email_invalido' | 'sem_empresa' | 'sem_segmento'
+export type MotivoPulo = 'sem_nome' | 'sem_email' | 'email_invalido' | 'sem_empresa'
 export interface LinhaPulada { linha: number; motivo: MotivoPulo }
 export interface ResultadoPlanilha {
   validos: LeadPadrao[]
   pulados: LinhaPulada[]
+  // Quantos dos válidos entram sem segmento. Não impede a importação — existe
+  // para a prévia dizer na cara que esses ficarão parados até serem
+  // classificados, em vez de sumirem silenciosamente da esteira.
+  semSegmento: number
   totalLinhas: number
 }
 
@@ -117,8 +127,8 @@ function mapearColunas(headers: string[]): Partial<Record<keyof LeadPadrao, stri
   return mapa
 }
 
-// Uma linha do CSV padrão → lead válido OU motivo de pulo. Regras de 2.2:
-// pula quem não tem nome, e-mail VÁLIDO ou empresa.
+// Uma linha do CSV padrão → lead válido OU motivo de pulo. Pula quem não tem
+// nome, e-mail VÁLIDO ou empresa. Segmento ausente NÃO pula: entra como null.
 export function mapearLeadPadrao(
   row: Record<string, string>,
   colunas: Partial<Record<keyof LeadPadrao, string>>,
@@ -138,8 +148,8 @@ export function mapearLeadPadrao(
   const empresa = get('empresa')
   if (!empresa) return { motivo: 'sem_empresa' }
 
+  // Ausente é aceito: vira null e o lead entra sem classificação.
   const segmento = normalizarNicho(get('segmento'))
-  if (!segmento) return { motivo: 'sem_segmento' }
 
   const telefone = get('contato_telefone').replace(/[^\d+]/g, '') || null
 
@@ -198,7 +208,8 @@ export function processarPlanilhaPadrao(content: string): ResultadoPlanilha {
     if ('lead' in r) validos.push(r.lead)
     else pulados.push({ linha: i + 2, motivo: r.motivo })
   })
-  return { validos, pulados, totalLinhas: rows.length }
+  const semSegmento = validos.filter((lead) => !lead.segmento).length
+  return { validos, pulados, semSegmento, totalLinhas: rows.length }
 }
 
 // Dedupe interna do arquivo por e-mail (o 1º ganha). Genérica: serve tanto pro

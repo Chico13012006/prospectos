@@ -83,6 +83,11 @@ export async function POST(req: NextRequest) {
       jaExistentes,
       novos: novos.length,
       nichos,
+      // Contado sobre os que REALMENTE entram (novos), não sobre o arquivo
+      // inteiro: é esse o número que descreve o estado da base depois da
+      // importação. Segmento é opcional aqui, mas sem ele o motor não escolhe
+      // template e o lead fica parado — a prévia diz isso em voz alta.
+      semSegmento: novos.filter((lead) => !lead.segmento).length,
     }
 
     if (modo !== 'confirmar') {

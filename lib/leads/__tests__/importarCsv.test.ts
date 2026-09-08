@@ -63,20 +63,51 @@ describe('processarPlanilhaPadrao', () => {
     })
   })
 
-  it('pula linhas sem nome, e-mail válido, empresa ou nicho', () => {
+  it('pula linhas sem nome, e-mail válido ou empresa', () => {
     const csv = 'nome;email;empresa;nicho\n' +
       ';a@x.com;Acme;Varejo\n' +          // sem_nome
       'B;;Acme;Varejo\n' +                // sem_email
       'C;invalido;Acme;Varejo\n' +        // email_invalido
       'D;d@x.com;;Varejo\n' +             // sem_empresa
-      'E;e@x.com;Acme;\n' +               // sem_segmento
       'F;f@x.com;Acme;Varejo'             // válido
     const { validos, pulados } = processarPlanilhaPadrao(csv)
     expect(validos).toHaveLength(1)
     expect(validos[0].contato_email).toBe('f@x.com')
     expect(pulados.map((p) => p.motivo).sort()).toEqual(
-      ['email_invalido', 'sem_email', 'sem_empresa', 'sem_nome', 'sem_segmento'],
+      ['email_invalido', 'sem_email', 'sem_empresa', 'sem_nome'],
     )
+  })
+
+  it('importa lead SEM segmento — a planilha externa raramente traz nicho', () => {
+    const csv = 'nome;email;empresa;nicho\n' +
+      'Sem nicho;sem@x.com;Acme;\n' +
+      'Com nicho;com@x.com;Acme;Varejo'
+    const { validos, pulados, semSegmento } = processarPlanilhaPadrao(csv)
+
+    expect(pulados).toHaveLength(0)
+    expect(validos).toHaveLength(2)
+    expect(validos.find((l) => l.contato_email === 'sem@x.com')?.segmento).toBeNull()
+    expect(validos.find((l) => l.contato_email === 'com@x.com')?.segmento).toBe('varejo')
+    // A prévia precisa do número para avisar que esses ficam fora da esteira.
+    expect(semSegmento).toBe(1)
+  })
+
+  it('planilha sem NENHUMA coluna de nicho importa tudo', () => {
+    const { validos, pulados, semSegmento } = processarPlanilhaPadrao(
+      'nome;email;empresa\nA;a@x.com;Acme\nB;b@x.com;Beta',
+    )
+    expect(pulados).toHaveLength(0)
+    expect(validos).toHaveLength(2)
+    expect(semSegmento).toBe(2)
+  })
+
+  it('resumo de nichos ignora quem não tem segmento, sem quebrar', () => {
+    const { validos } = processarPlanilhaPadrao(
+      'nome;email;empresa;nicho\nA;a@x.com;Acme;\nB;b@x.com;Beta;Varejo',
+    )
+    expect(resumirNichosImportacao(validos, ['varejo'])).toEqual([
+      { nicho: 'varejo', leads: 1, templateAtivo: true },
+    ])
   })
 
   it('usa origem padrão quando a coluna Origem falta/está vazia', () => {
