@@ -15,6 +15,28 @@ export const TIPOS_CAMPANHA = [
 
 export type TipoCampanhaGuiada = (typeof TIPOS_CAMPANHA)[number]['id']
 
+// Comunicado é o único objetivo que não mexe com a esteira: manda uma mensagem
+// e acaba. Prospecção, follow-up, reativação e renovação inscrevem o lead numa
+// cadência, movem estágio e disputam o limite diário de envio — por isso ficam
+// atrás da permissão `campaigns.tipos.avancados`.
+//
+// Puro de propósito: a mesma regra decide o que a API aceita e o que o wizard
+// oferece, para a tela não prometer um objetivo que o servidor recusaria.
+const TIPOS_SEM_PERMISSAO_AVANCADA = new Set<string>(['novidade_clientes'])
+
+export function tipoCampanhaExigeAvancado(tipo: string | null | undefined): boolean {
+  if (!tipo) return false
+  return !TIPOS_SEM_PERMISSAO_AVANCADA.has(tipo)
+}
+
+export function podeUsarTipoCampanha(tipo: string | null | undefined, temAvancado: boolean): boolean {
+  return temAvancado || !tipoCampanhaExigeAvancado(tipo)
+}
+
+export function tiposCampanhaDisponiveis(temAvancado: boolean) {
+  return TIPOS_CAMPANHA.filter((item) => podeUsarTipoCampanha(item.id, temAvancado))
+}
+
 // Somente comunicados gerais terminam após uma mensagem. Renovação é uma
 // automação contínua: o cron inscreve cada novo ciclo de vencimento e o
 // workflow faz os follow-ups configurados até a resposta.

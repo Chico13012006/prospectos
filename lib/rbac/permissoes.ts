@@ -8,6 +8,10 @@ export const PERMISSOES = [
   'campaigns.manage',
   'campaigns.approve',
   'campaigns.operate',
+  // Criar campanha de qualquer objetivo. Sem ela, quem tem `campaigns.manage`
+  // só cria comunicado — prospecção, follow-up, reativação e renovação mexem
+  // com a esteira do motor e ficam com quem administra.
+  'campaigns.tipos.avancados',
   'workflows.view',
   'workflows.manage',
   'workflows.publish',

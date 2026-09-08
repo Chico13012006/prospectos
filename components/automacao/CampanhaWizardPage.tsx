@@ -41,7 +41,8 @@ import {
   modeloEmailRespostaCampanha,
   normalizarPublicoCampanha,
   regraPublicoCampanha,
-  TIPOS_CAMPANHA,
+  podeUsarTipoCampanha,
+  tiposCampanhaDisponiveis,
   VARIAVEIS_EMAIL_RESPOSTA,
   validarCampanhaGuiada,
 } from '@/lib/campanhas/configuracaoGuiada'
@@ -136,6 +137,22 @@ export default function CampanhaWizardPage({
   inicial?: InicialCampanha
 }) {
   const router = useRouter()
+  // `null` = ainda não sei. O grid de objetivos só aparece depois da resposta,
+  // para a tela nunca oferecer um objetivo que a API recusaria.
+  const [temTiposAvancados, setTemTiposAvancados] = useState<boolean | null>(null)
+  useEffect(() => {
+    let cancelado = false
+    fetch('/api/rbac/permissoes')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelado) return
+        const minhas: string[] = Array.isArray(d?.minhas) ? d.minhas : []
+        setTemTiposAvancados(minhas.includes('campaigns.tipos.avancados'))
+      })
+      .catch(() => { if (!cancelado) setTemTiposAvancados(false) })
+    return () => { cancelado = true }
+  }, [])
+
   const tipoInicial = campanha?.tipo ?? inicial?.tipo ?? 'prospeccao'
   const [etapa, setEtapa] = useState(0)
   const [campanhaId, setCampanhaId] = useState(campanha?.id ?? '')
@@ -337,6 +354,19 @@ export default function CampanhaWizardPage({
       }, novoTipo)
     })
   }
+
+  // Campanha NOVA nasce em 'prospeccao'. Quem não tem os objetivos avançados
+  // cairia num tipo que a API recusa, então troco para o primeiro permitido
+  // assim que as permissões chegam. Campanha existente não é mexida.
+  useEffect(() => {
+    if (temTiposAvancados === null || campanha) return
+    if (podeUsarTipoCampanha(tipo, temTiposAvancados)) return
+    const primeiro = tiposCampanhaDisponiveis(temTiposAvancados)[0]
+    if (primeiro) alterarTipo(primeiro.id)
+    // alterarTipo depende de estado que muda a cada render; a guarda acima já
+    // impede repetição, então basta reagir à chegada da permissão.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [temTiposAvancados, campanha, tipo])
 
   function selecionarEmpresa(chave: string, selecionar: boolean) {
     const excluidas = new Set(publico.selecao?.excluirEmpresas ?? [])
@@ -635,8 +665,16 @@ export default function CampanhaWizardPage({
           <section className={card}>
             <h2 className="mb-1 font-semibold text-slate-100">Qual é o objetivo?</h2>
             <p className="mb-5 text-sm text-slate-500">O tipo organiza a campanha; ele não cria métricas nem altera o motor.</p>
+            {temTiposAvancados === null ? (
+              <p className="text-sm text-slate-500">Carregando os objetivos disponíveis para o seu acesso…</p>
+            ) : !podeUsarTipoCampanha(tipo, temTiposAvancados) ? (
+              <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-4 text-sm text-amber-300">
+                Esta campanha tem o objetivo <b>{labelTipoCampanha(tipo)}</b>, que o seu acesso não gerencia.
+                Peça a um administrador para editá-la.
+              </div>
+            ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {TIPOS_CAMPANHA.map((item) => {
+              {tiposCampanhaDisponiveis(temTiposAvancados).map((item) => {
                 const Icone = ICONES_OBJETIVO[item.id]
                 return (
                   <button key={item.id} type="button" onClick={() => alterarTipo(item.id)} className={`group flex min-h-24 items-start gap-3 rounded-xl border p-4 text-left transition-all ${tipo === item.id ? 'border-indigo-400 bg-gradient-to-br from-indigo-500/20 to-violet-500/10 shadow-[0_0_28px_rgba(99,102,241,.12)]' : 'border-[#2a3147] bg-[#11151f] hover:border-[#46506d] hover:bg-[#151a27]'}`}>
@@ -650,6 +688,7 @@ export default function CampanhaWizardPage({
                 )
               })}
             </div>
+            )}
             <div className="mt-5 grid gap-4 lg:grid-cols-3">
               <div>
                 <label className={label}>Nome da campanha</label>

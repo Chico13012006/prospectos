@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server'
 import { resolverAcesso, exigirPermissao } from '@/lib/rbac/servidor'
 import { listarCampanhas, criarCampanha } from '@/lib/campanhas/repository'
-import { aplicarRegraPublicoPorTipo, normalizarPublicoCampanha } from '@/lib/campanhas/configuracaoGuiada'
+import { aplicarRegraPublicoPorTipo, normalizarPublicoCampanha, podeUsarTipoCampanha } from '@/lib/campanhas/configuracaoGuiada'
 import { materializarCampanhaGuiada } from '@/lib/campanhas/materializarServidor'
 import { buscarResumosExecucoesCampanhas } from '@/lib/campanhas/resumoExecucoesServidor'
 
@@ -38,6 +38,14 @@ export async function POST(req: Request) {
   }
   try {
     const tipo = typeof b.tipo === 'string' ? b.tipo : null
+    // Objetivo que mexe com a esteira exige permissão própria. Vem do corpo,
+    // então é checado aqui e não só escondido no wizard.
+    if (!podeUsarTipoCampanha(tipo, acc.acesso.permissoes.has('campaigns.tipos.avancados'))) {
+      return NextResponse.json(
+        { erro: 'Seu acesso permite criar apenas campanhas de comunicado. Peça a um administrador para os demais objetivos.' },
+        { status: 403 },
+      )
+    }
     const publico = aplicarRegraPublicoPorTipo(normalizarPublicoCampanha(b.publico), tipo)
     const nova = await criarCampanha(admin, org, {
       nome: b.nome.trim(),

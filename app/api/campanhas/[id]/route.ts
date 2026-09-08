@@ -5,7 +5,12 @@ import { exigirPermissao, resolverAcesso } from '@/lib/rbac/servidor'
 import { atualizarCampanha, buscarCampanha } from '@/lib/campanhas/repository'
 import { buscarContextoResumoOperacional } from '@/lib/campanhas/resumoOperacionalServidor'
 import { materializarCampanhaGuiada } from '@/lib/campanhas/materializarServidor'
-import { aplicarRegraPublicoPorTipo, campanhaEhDisparoUnico, normalizarPublicoCampanha } from '@/lib/campanhas/configuracaoGuiada'
+import {
+  aplicarRegraPublicoPorTipo,
+  campanhaEhDisparoUnico,
+  normalizarPublicoCampanha,
+  podeUsarTipoCampanha,
+} from '@/lib/campanhas/configuracaoGuiada'
 import { buscarPreviaPublicoCampanha, previaParaCliente } from '@/lib/campanhas/publicoServidor'
 import { engineConfig } from '@/lib/engine/config'
 import { buscarResumoExecucoesCampanha } from '@/lib/campanhas/resumoExecucoesServidor'
@@ -96,6 +101,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         )
       }
       const tipo = typeof b.tipo === 'string' ? b.tipo : atual.tipo
+      // `tipo` não é gravado por esta rota, mas ESCOLHE a regra de público
+      // aplicada. Sem esta checagem, quem só pode comunicado mandaria
+      // tipo='prospeccao' no corpo e herdaria a regra de público da prospecção.
+      if (!podeUsarTipoCampanha(tipo, acc.acesso.permissoes.has('campaigns.tipos.avancados'))) {
+        return NextResponse.json(
+          { erro: 'Seu acesso permite apenas campanhas de comunicado.' },
+          { status: 403 },
+        )
+      }
       const publico = aplicarRegraPublicoPorTipo(normalizarPublicoCampanha(b.publico), tipo)
       const materializada = await materializarCampanhaGuiada(
         admin,

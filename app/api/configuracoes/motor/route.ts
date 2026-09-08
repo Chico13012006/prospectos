@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
 import { invalidarCacheConfig } from '@/lib/engine/config';
+import { exigirPermissao } from '@/lib/rbac/servidor';
 
 // Organização do usuário logado (fonte de verdade: perfis.organizacao_id).
 // service_role bypassa RLS, então o filtro por org no resto da rota é o que
@@ -74,9 +75,13 @@ export async function GET() {
 // POST — grava a config (upsert por organizacao_id) e invalida o cache do motor.
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createSupabaseServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 });
+    // Estes parâmetros governam o motor da organização inteira: quantos e-mails
+    // saem por dia, o intervalo entre follow-ups e o closer de fallback. Escrita
+    // exige `workspace.configure` — antes bastava estar logado, então qualquer
+    // membro podia mudar a cadência de todo mundo.
+    const acc = await exigirPermissao('workspace.configure');
+    if ('erro' in acc) return acc.erro;
+    const user = acc.acesso.user;
 
     const body = await req.json();
     const {

@@ -24,11 +24,48 @@ const ABAS: Aba[] = ['objetivos', 'motor', 'processo', 'personalizacao'];
 function Inner() {
   const searchParams = useSearchParams();
   const [aba, setAba] = useState<Aba>('objetivos');
+  // Esconder o item na sidebar não basta: a URL é acessível direto. `null`
+  // enquanto carrega, para não piscar "sem permissão" para quem tem.
+  const [podeConfigurar, setPodeConfigurar] = useState<boolean | null>(null);
 
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab && (ABAS as string[]).includes(tab)) setAba(tab as Aba);
   }, [searchParams]);
+
+  useEffect(() => {
+    let ativo = true;
+    fetch('/api/rbac/permissoes')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!ativo) return;
+        const minhas: string[] = Array.isArray(d?.minhas) ? d.minhas : [];
+        setPodeConfigurar(minhas.includes('workspace.configure'));
+      })
+      .catch(() => { if (ativo) setPodeConfigurar(false); });
+    return () => { ativo = false; };
+  }, []);
+
+  if (podeConfigurar === null) {
+    return <div className="p-6 text-sm text-slate-500">Carregando…</div>;
+  }
+  if (!podeConfigurar) {
+    return (
+      <div className="p-6">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-10 text-center">
+          <Settings size={22} className="mx-auto text-slate-500" />
+          <h1 className="mt-3 text-lg font-semibold text-slate-200">Configurações do workspace</h1>
+          <p className="mt-1 text-sm text-slate-400">
+            Estas configurações valem para toda a operação — motor de cadência, processo comercial e
+            personalização. O seu acesso não inclui alterá-las.
+          </p>
+          <p className="mt-3 text-xs text-slate-600">
+            Requer a permissão <code className="text-indigo-300">workspace.configure</code>.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const TABS: { id: Aba; label: string; Icon: typeof Sliders }[] = [
     { id: 'objetivos', label: 'Objetivos da operação', Icon: Target },

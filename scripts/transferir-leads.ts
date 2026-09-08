@@ -54,8 +54,9 @@ async function main() {
     const achar = async (email: string): Promise<Usuario> => {
       const r = await c.query<Usuario>(
         `select id, nome, email, organizacao_id from usuarios where lower(email) = $1`, [email])
-      if (r.rowCount === 0) throw new Error(`Nenhum usuário com e-mail ${email}.`)
-      if (r.rowCount > 1) throw new Error(`Mais de um usuário com e-mail ${email} — resolva a duplicidade antes.`)
+      const achados = r.rowCount ?? 0
+      if (achados === 0) throw new Error(`Nenhum usuário com e-mail ${email}.`)
+      if (achados > 1) throw new Error(`Mais de um usuário com e-mail ${email} — resolva a duplicidade antes.`)
       return r.rows[0]
     }
 

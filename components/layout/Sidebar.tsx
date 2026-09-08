@@ -48,6 +48,10 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [perfil, setPerfil] = useState<PerfilSidebar | null>(null);
+  // Configurações governa o workspace inteiro (motor, pipelines, personalização).
+  // Sem `workspace.configure` o item nem aparece — a página e as APIs recusam de
+  // qualquer forma, isto só evita oferecer um caminho que termina em erro.
+  const [podeConfigurar, setPodeConfigurar] = useState(false);
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + '/');
@@ -63,6 +67,14 @@ export default function Sidebar() {
           email: data.email ?? null,
           avatar_url: data.perfil?.avatar_url ?? null,
         });
+      })
+      .catch(() => {});
+    fetch('/api/rbac/permissoes')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (!ativo) return;
+        const minhas: string[] = Array.isArray(data?.minhas) ? data.minhas : [];
+        setPodeConfigurar(minhas.includes('workspace.configure'));
       })
       .catch(() => {});
     return () => { ativo = false; };
@@ -109,10 +121,12 @@ export default function Sidebar() {
 
       {/* Configurações */}
       <div className="px-3 pb-2 border-t border-white/10 pt-3">
-        <Link href="/configuracoes" className={navItemClasses(isActive('/configuracoes'))}>
-          <Settings size={18} strokeWidth={1.8} />
-          Configurações
-        </Link>
+        {podeConfigurar && (
+          <Link href="/configuracoes" className={navItemClasses(isActive('/configuracoes'))}>
+            <Settings size={18} strokeWidth={1.8} />
+            Configurações
+          </Link>
+        )}
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border-l-[3px] border-transparent w-full text-[#FC8181] hover:bg-red-500/10 mt-0.5"
