@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Clock3,
   FileText,
+  Maximize2,
   Loader2,
   Mail,
   Megaphone,
@@ -46,7 +47,8 @@ import {
   VARIAVEIS_EMAIL_RESPOSTA,
   validarCampanhaGuiada,
 } from '@/lib/campanhas/configuracaoGuiada'
-import { documentoPreviewHtml, montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha'
+import { montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha'
+import PreviaEmailModal from './PreviaEmailModal'
 
 interface TemplateOpcao {
   id: string
@@ -140,6 +142,8 @@ export default function CampanhaWizardPage({
   // `null` = ainda não sei. O grid de objetivos só aparece depois da resposta,
   // para a tela nunca oferecer um objetivo que a API recusaria.
   const [temTiposAvancados, setTemTiposAvancados] = useState<boolean | null>(null)
+  const [previaCliente, setPreviaCliente] = useState(false)
+  const [abaPreviaCliente, setAbaPreviaCliente] = useState<'visual' | 'codigo'>('visual')
   useEffect(() => {
     let cancelado = false
     fetch('/api/rbac/permissoes')
@@ -905,23 +909,24 @@ export default function CampanhaWizardPage({
           <section className={card}>
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h2 className="font-semibold text-slate-100">Prévia da mensagem</h2>
-                <p className="text-xs text-slate-500">Conteúdo que será materializado no template da campanha.</p>
+                <h2 className="font-semibold text-slate-100">Prévia e teste</h2>
+                <p className="text-xs text-slate-500">Confira o e-mail e envie um teste antes de publicar.</p>
               </div>
               <FileText size={18} className="text-indigo-400" />
             </div>
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-800 shadow-xl">
-              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
-                <div><strong>De:</strong> {textoOuNaoConfigurado(publico.operacao?.remetenteEmail)}</div>
-                <div className="mt-1"><strong>Assunto:</strong> {textoOuNaoConfigurado(mensagemInicial.assunto)}</div>
+            <div className="rounded-xl border border-[#30384e] bg-[#0d111b] p-4">
+              <div className="text-xs text-slate-400">
+                <div><span className="text-slate-500">De:</span> {textoOuNaoConfigurado(publico.operacao?.remetenteEmail)}</div>
+                <div className="mt-1"><span className="text-slate-500">Assunto:</span> {textoOuNaoConfigurado(mensagemInicial.assunto)}</div>
               </div>
-              <iframe
-                title="Prévia da mensagem ao cliente"
-                sandbox=""
-                srcDoc={documentoPreviewHtml(htmlMensagemInicial)}
-                className="w-full bg-white"
-                style={{ height: '36rem' }}
-              />
+              <button
+                type="button"
+                onClick={() => { setAbaPreviaCliente('visual'); setPreviaCliente(true) }}
+                className="mt-3 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-500"
+              >
+                <Maximize2 size={15} /> Ver como o cliente recebe
+              </button>
+              <p className="mt-2 text-xs text-slate-600">Abre em janela própria, com rolagem interna.</p>
             </div>
             <button
               type="button"
@@ -955,6 +960,17 @@ export default function CampanhaWizardPage({
             {!carregandoOpcoes && publico.operacao?.remetenteEmail && !testeEmailDisponivel && (
               <p className="mt-3 text-center text-xs text-amber-300">Envio indisponível enquanto o motor estiver em modo ensaio.</p>
             )}
+            <PreviaEmailModal
+              aberto={previaCliente}
+              onFechar={() => setPreviaCliente(false)}
+              titulo="Como o cliente recebe"
+              de={textoOuNaoConfigurado(publico.operacao?.remetenteEmail)}
+              assunto={textoOuNaoConfigurado(mensagemInicial.assunto)}
+              html={htmlMensagemInicial}
+              codigo={mensagemInicial.html}
+              aba={abaPreviaCliente}
+              onAba={setAbaPreviaCliente}
+            />
           </section>
         </div>
       )}

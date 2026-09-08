@@ -1,8 +1,9 @@
 'use client'
 
 import { useId, useRef, useState, type DragEvent } from 'react'
-import { Check, ClipboardPaste, Code2, Eye, FileCode2, Trash2, Upload } from 'lucide-react'
-import { documentoPreviewHtml, extrairTextoHtmlEmail, sanitizarHtmlEmail } from '@/lib/campanhas/emailCampanha'
+import { Check, ClipboardPaste, Code2, Eye, FileCode2, Maximize2, Trash2, Upload } from 'lucide-react'
+import { extrairTextoHtmlEmail, sanitizarHtmlEmail } from '@/lib/campanhas/emailCampanha'
+import PreviaEmailModal from './PreviaEmailModal'
 import { LIMITE_HTML_CAMPANHA } from '@/lib/campanhas/configuracaoGuiada'
 
 export default function HtmlEmailEditor({
@@ -22,7 +23,11 @@ export default function HtmlEmailEditor({
 }) {
   const inputId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
+  // 'visual' aqui significa apenas "sem editor aberto" — a prévia visual mora
+  // no modal, não mais empilhada na página.
   const [aba, setAba] = useState<'visual' | 'codigo' | 'colar'>('visual')
+  const [previaAberta, setPreviaAberta] = useState(false)
+  const [abaPrevia, setAbaPrevia] = useState<'visual' | 'codigo'>('visual')
   const [codigoColado, setCodigoColado] = useState('')
   const [arquivo, setArquivo] = useState<{ nome: string; tamanho: number } | null>(null)
   const [arrastando, setArrastando] = useState(false)
@@ -174,20 +179,33 @@ export default function HtmlEmailEditor({
       )}
 
       {html && aba !== 'colar' && <>
-        <div className="mt-4 flex w-fit rounded-lg border border-[#30384e] bg-[#151924] p-1">
-          <button type="button" onClick={() => setAba('visual')} className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs ${aba === 'visual' ? 'bg-indigo-500/20 text-indigo-200' : 'text-slate-500'}`}><Eye size={14} /> Visual</button>
-          <button type="button" onClick={() => setAba('codigo')} className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs ${aba === 'codigo' ? 'bg-indigo-500/20 text-indigo-200' : 'text-slate-500'}`}><Code2 size={14} /> Código</button>
-          <button type="button" onClick={() => setAba('colar')} className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs text-slate-500"><ClipboardPaste size={14} /> Colar outro</button>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => { setAbaPrevia('visual'); setPreviaAberta(true) }}
+            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-500"
+          >
+            <Maximize2 size={14} /> Ver prévia
+          </button>
+          <button
+            type="button"
+            onClick={() => setAba(aba === 'codigo' ? 'visual' : 'codigo')}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${aba === 'codigo' ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-200' : 'border-[#30384e] text-slate-400 hover:text-slate-200'}`}
+          >
+            <Code2 size={14} /> {aba === 'codigo' ? 'Fechar editor' : 'Editar código'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setAba('colar')}
+            className="inline-flex items-center gap-2 rounded-lg border border-[#30384e] px-3 py-2 text-xs text-slate-400 hover:text-slate-200"
+          >
+            <ClipboardPaste size={14} /> Colar outro
+          </button>
+          <span className="inline-flex items-center gap-1.5 text-xs text-emerald-300/80">
+            <Eye size={13} /> HTML aplicado
+          </span>
         </div>
-        {aba === 'visual' ? (
-          <iframe
-            title="Prévia segura do HTML"
-            sandbox=""
-            srcDoc={documentoPreviewHtml(previewHtml)}
-            className="mt-3 w-full rounded-xl border border-slate-200 bg-white"
-            style={{ height: '36rem' }}
-          />
-        ) : (
+        {aba === 'codigo' && (
           <textarea
             className="mt-3 min-h-80 w-full resize-y rounded-xl border border-[#30384e] bg-[#080b12] p-4 font-mono text-xs leading-5 text-slate-300 focus:border-indigo-500 focus:outline-none"
             value={html}
@@ -203,6 +221,16 @@ export default function HtmlEmailEditor({
           />
         )}
       </>}
+
+      <PreviaEmailModal
+        aberto={previaAberta}
+        onFechar={() => setPreviaAberta(false)}
+        titulo={titulo}
+        html={previewHtml}
+        codigo={html}
+        aba={abaPrevia}
+        onAba={setAbaPrevia}
+      />
     </div>
   )
 }
