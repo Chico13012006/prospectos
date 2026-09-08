@@ -49,6 +49,7 @@ import {
 } from '@/lib/campanhas/configuracaoGuiada'
 import { montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha'
 import PreviaEmailModal from './PreviaEmailModal'
+import ModeloEmailPicker from './ModeloEmailPicker'
 
 interface TemplateOpcao {
   id: string
@@ -892,11 +893,25 @@ export default function CampanhaWizardPage({
                 <label className={label}>Link complementar (opcional)</label>
                 <input type="url" className={input} value={mensagemInicial.link ?? ''} onChange={(e) => atualizarMensagem(null, { link: e.target.value })} placeholder="https://..." />
               </div>
+              <ModeloEmailPicker
+                modeloId={mensagemInicial.modeloId}
+                campos={mensagemInicial.modeloCampos}
+                temHtmlProprio={!!mensagemInicial.html?.trim()}
+                onAplicar={({ modeloId, modeloCampos, html, texto }) => atualizarMensagem(null, {
+                  modeloId,
+                  modeloCampos,
+                  html,
+                  // Só preenche o texto puro enquanto o autor não escreveu o dele:
+                  // o corpo é o fallback de quem lê e-mail sem HTML.
+                  ...(!mensagemInicial.corpo?.trim() || mensagemInicial.modeloId ? { corpo: texto } : {}),
+                })}
+                onLimpar={() => atualizarMensagem(null, { modeloId: undefined, modeloCampos: undefined, html: undefined })}
+              />
               <HtmlEmailEditor
                 html={mensagemInicial.html}
                 previewHtml={htmlMensagemInicial}
-                titulo="HTML do e-mail enviado ao cliente"
-                descricao="Carregue um arquivo HTML/TXT, arraste-o para esta área ou cole o código. A prévia abaixo usa exatamente a versão sanitizada."
+                titulo="Ou use um HTML próprio"
+                descricao="Para quem já tem a peça pronta. Carregue um arquivo HTML/TXT, arraste-o aqui ou cole o código — ele substitui o modelo escolhido acima."
                 onChange={(html, textoAlternativo) => atualizarMensagem(null, {
                   html,
                   ...(!mensagemInicial.corpo?.trim() && textoAlternativo ? { corpo: textoAlternativo } : {}),

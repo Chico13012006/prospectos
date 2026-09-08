@@ -1,4 +1,5 @@
 import type { Publico, MensagemCampanha, FollowupCampanha } from '@/components/automacao/tiposCampanha'
+import type { CamposModeloEmail } from './modelosEmail'
 import type { DefinicaoWorkflow } from '@/lib/workflows/types'
 
 export const LIMITE_CONFIRMACAO_CAMPANHA = 100
@@ -177,6 +178,23 @@ const strings = (valor: unknown): string[] | undefined => {
   return itens.length ? itens : undefined
 }
 
+// Campos do modelo pronto. Allow-list como o resto do normalizador: só os
+// campos conhecidos entram no jsonb, nada do que o cliente mandar a mais.
+function normalizarCamposModelo(raw: unknown): CamposModeloEmail | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const obj = raw as Record<string, unknown>
+  const campos: CamposModeloEmail = {
+    etiqueta: texto(obj.etiqueta),
+    titulo: texto(obj.titulo),
+    paragrafos: texto(obj.paragrafos),
+    ctaTexto: texto(obj.ctaTexto),
+    ctaLink: texto(obj.ctaLink),
+    imagemUrl: texto(obj.imagemUrl),
+    encerramento: texto(obj.encerramento),
+  }
+  return Object.values(campos).some(Boolean) ? campos : undefined
+}
+
 function normalizarMensagem(raw: unknown): MensagemCampanha | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
   const obj = raw as Record<string, unknown>
@@ -188,6 +206,8 @@ function normalizarMensagem(raw: unknown): MensagemCampanha | undefined {
     templateOrigemId: texto(obj.templateOrigemId),
     templateId: texto(obj.templateId),
     templateTipo: texto(obj.templateTipo),
+    modeloId: texto(obj.modeloId),
+    modeloCampos: normalizarCamposModelo(obj.modeloCampos),
   }
   return Object.values(mensagem).some(Boolean) ? mensagem : undefined
 }

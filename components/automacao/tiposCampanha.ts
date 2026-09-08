@@ -2,6 +2,8 @@
 // A fonte da verdade é a tabela `campanhas` (migration 0023): colunas + `publico`
 // jsonb. Nada aqui inventa dado — só molda o que já existe/persiste.
 
+import type { CamposModeloEmail } from '@/lib/campanhas/modelosEmail';
+
 export interface PublicoEmpresas {
   fonte?: string;            // 'base' (real) | 'maps' (externa, não configurada)
   pais?: string;
@@ -47,6 +49,11 @@ export interface MensagemCampanha {
   templateOrigemId?: string;
   templateId?: string;
   templateTipo?: string;
+  // Modelo pronto usado para gerar o `html`. Guardar o id e os campos (e não só
+  // o HTML final) é o que permite reabrir a campanha e continuar editando por
+  // formulário, em vez de cair no HTML cru.
+  modeloId?: string;
+  modeloCampos?: CamposModeloEmail;
 }
 
 // Patch completo para a opção "Escrever do zero". Os `undefined` são
@@ -61,6 +68,8 @@ export function mensagemCampanhaVazia(): MensagemCampanha {
     templateOrigemId: undefined,
     templateId: undefined,
     templateTipo: undefined,
+    modeloId: undefined,
+    modeloCampos: undefined,
   }
 }
 
