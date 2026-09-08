@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import {
   ChevronRight, Loader2, PencilLine, Play, Pause, CheckCircle2, Building2, Users,
-  MessageSquare, BarChart3, ClipboardList, Workflow, TrendingUp, Info, Target, AlertTriangle, Activity, CalendarDays, Clock,
+  MessageSquare, BarChart3, ClipboardList, Workflow, Info, AlertTriangle, Activity, CalendarDays, Clock,
+  Send, CornerUpLeft, UserCheck, XCircle, MailX,
 } from 'lucide-react';
 import { type Campanha, type Publico, STATUS_BADGE, STATUS_LABEL, fmtData, resumoPublico } from './tiposCampanha';
 import {
@@ -23,10 +24,23 @@ import { campanhaEhDisparoUnico } from '@/lib/campanhas/configuracaoGuiada';
 
 // Detalhe de campanha com abas internas. Visão geral/Empresas/Decisores/Mensagens
 // mostram o que REALMENTE persiste (colunas + publico jsonb + workflow vinculado).
-// Resultados mantém "não calculável" enquanto não houver agregação confiável de
-// execuções, respostas e oportunidades por campanha. NUNCA estima um valor.
+// Resultados mostra a linha do tempo por destinatário — envio, resposta e aviso ao
+// closer — composta de execuções, eventos de execução e interações já gravadas.
+// Continua valendo a regra: nada de receita/ROI/oportunidade enquanto não houver
+// vínculo confiável. Métrica que não existe não vira caixa vazia na tela.
 
 type Aba = 'geral' | 'empresas' | 'decisores' | 'mensagens' | 'resultados';
+interface EventoDestinatario { tipo: string; em: string; detalhe?: string | null }
+interface DestinatarioCampanha {
+  execucaoId: string; leadId: string | null; empresa: string; contato: string | null;
+  email: string | null; statusExecucao: string; iniciadoEm: string;
+  enviadoEm: string | null; respondeuEm: string | null; closerAvisadoEm: string | null;
+  eventos: EventoDestinatario[];
+}
+interface LinhaDoTempo {
+  destinatarios: DestinatarioCampanha[];
+  totais: { publico: number; enviados: number; respostas: number; falhas: number; pendentes: number };
+}
 interface ResumoExecucoes {
   total: number; emAndamento: number; aguardando: number; concluidas: number;
   canceladas: number; erros: number; emailsEnviados: number; respostas: number;
@@ -47,7 +61,6 @@ const ACOES: Record<string, { para: string; label: string; Icon: typeof Play }[]
 };
 
 const card = 'bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-5';
-const NC = <span className="text-slate-500">não calculável</span>;
 
 export default function CampanhaDetalhe({ id }: { id: string }) {
   const [c, setC] = useState<Campanha | null>(null);
@@ -65,6 +78,8 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
   const [erroAcao, setErroAcao] = useState<string | null>(null);
   const [envioRealDisponivel, setEnvioRealDisponivel] = useState(false);
   const [resumoExecucoes, setResumoExecucoes] = useState<ResumoExecucoes | null>(null);
+  const [linhaDoTempo, setLinhaDoTempo] = useState<LinhaDoTempo | null>(null);
+  const [erroLinhaDoTempo, setErroLinhaDoTempo] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -81,6 +96,26 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => { carregar(); }, [carregar]);
+
+  // A linha do tempo varre execuções e interações; só busca quando a aba abre.
+  // A flag de cancelamento impede que uma resposta antiga sobrescreva a atual.
+  useEffect(() => {
+    if (aba !== 'resultados') return;
+    let cancelado = false;
+    setErroLinhaDoTempo(null);
+    (async () => {
+      try {
+        const r = await fetch(`/api/campanhas/${id}/linha-do-tempo`);
+        const d = await r.json();
+        if (cancelado) return;
+        if (!r.ok) { setErroLinhaDoTempo(d?.erro || 'Não foi possível carregar o que aconteceu.'); return; }
+        setLinhaDoTempo(d);
+      } catch {
+        if (!cancelado) setErroLinhaDoTempo('Não foi possível carregar o que aconteceu.');
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [aba, id]);
 
   async function transicionar(status: string) {
     setAgindo(true);
@@ -553,71 +588,115 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
 
       {aba === 'resultados' && (
         <div className="space-y-5">
-          <div className="flex items-start gap-2 text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/25 rounded-lg p-3">
-            <Info size={14} className="shrink-0 mt-0.5" />
-            <span><b>Resultados agregados por campanha ainda não são calculáveis nesta tela.</b> As execuções já registram a campanha de origem, mas não existe agregação confiável de entregas, respostas e oportunidades. Até lá, nenhum número é estimado.</span>
-          </div>
+          {erroLinhaDoTempo ? (
+            <div className={`${card} text-center text-sm text-red-300`}>{erroLinhaDoTempo}</div>
+          ) : !linhaDoTempo ? (
+            <div className={`${card} text-center text-sm text-slate-500`}>
+              <Loader2 size={15} className="inline animate-spin mr-2" /> Carregando o que aconteceu…
+            </div>
+          ) : linhaDoTempo.destinatarios.length === 0 ? (
+            <div className={`${card} text-center`}>
+              <p className="text-sm text-slate-400">Esta campanha ainda não inscreveu ninguém.</p>
+              <p className="text-xs text-slate-600 mt-1">
+                Assim que o disparo começar, cada destinatário aparece aqui com o que aconteceu com ele.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <Placar label="Público inscrito" valor={linhaDoTempo.totais.publico} />
+                <Placar label="E-mails enviados" valor={linhaDoTempo.totais.enviados} cor="text-sky-300" />
+                <Placar
+                  label="Responderam"
+                  valor={linhaDoTempo.totais.respostas}
+                  cor="text-green-300"
+                  rodape={linhaDoTempo.totais.enviados
+                    ? `${Math.round((linhaDoTempo.totais.respostas / linhaDoTempo.totais.enviados) * 100)}% de quem recebeu`
+                    : undefined}
+                />
+                <Placar
+                  label="Não saíram"
+                  valor={linhaDoTempo.totais.falhas}
+                  cor={linhaDoTempo.totais.falhas ? 'text-red-300' : 'text-slate-300'}
+                  rodape={linhaDoTempo.totais.pendentes ? `${linhaDoTempo.totais.pendentes} ainda na fila` : undefined}
+                />
+              </div>
 
-          {/* 6 mini KPIs */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {[['Empresas', Building2], ['Decisores', Users], ['Contatos válidos', Users], ['Mensagens', MessageSquare], ['Respostas', MessageSquare], ['Oportunidades', Target]].map(([label, Icon]) => {
-              const I = Icon as typeof Building2;
-              return (
-                <div key={label as string} className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl px-4 py-3">
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500"><I size={13} /> {label as string}</div>
-                  <div className="text-lg font-bold text-slate-400 mt-1">—</div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* Funil */}
-            <div className={card}>
-              <h3 className="font-semibold text-slate-200 text-sm mb-3">Funil da campanha</h3>
-              <div className="space-y-2">
-                {['Empresas', 'Contatos válidos', 'Mensagens', 'Respostas', 'Oportunidades', 'Visitas', 'Clientes'].map((etapa) => (
-                  <div key={etapa} className="flex items-center gap-3 text-sm">
-                    <span className="w-32 shrink-0 text-slate-400">{etapa}</span>
-                    <div className="flex-1 h-2 rounded-full bg-[#0f1117] border border-[#2a3147]" />
-                    <span className="w-16 text-right text-slate-500 text-xs">{NC}</span>
+              {linhaDoTempo.totais.publico > 0 && (
+                <div className={card}>
+                  <div className="flex items-center justify-between text-xs mb-2">
+                    <span className="text-slate-400 font-medium">Progresso do envio</span>
+                    <span className="tabular-nums text-slate-500">
+                      {linhaDoTempo.totais.enviados} de {linhaDoTempo.totais.publico}
+                    </span>
                   </div>
-                ))}
-              </div>
-            </div>
-            {/* Retorno */}
-            <div className={card}>
-              <h3 className="font-semibold text-slate-200 text-sm mb-3 flex items-center gap-2"><TrendingUp size={15} className="text-indigo-400" /> Retorno da campanha</h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <Retorno k="Receita atribuída" />
-                <Retorno k="Custo total" />
-                <Retorno k="ROI" />
-                <Retorno k="Custo por oportunidade" />
-                <Retorno k="CAC" />
-              </div>
-            </div>
-          </div>
+                  <div className="h-2 rounded-full bg-[#0f1117] border border-[#2a3147] overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-500/70"
+                      style={{ width: `${Math.round((linhaDoTempo.totais.enviados / linhaDoTempo.totais.publico) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div className={card}>
-              <h3 className="font-semibold text-slate-200 text-sm mb-3">Desempenho das mensagens</h3>
-              <table className="w-full text-sm">
-                <thead><tr className="border-b border-[#2a3147] text-xs text-slate-500">
-                  <th className="text-left py-2">Etapa</th><th className="text-right py-2">Enviadas</th><th className="text-right py-2">Abertas</th><th className="text-right py-2">Respostas</th>
-                </tr></thead>
-                <tbody><tr><td colSpan={4} className="py-8 text-center text-slate-500 text-xs">Sem telemetria de mensagens por campanha — {NC}.</td></tr></tbody>
-              </table>
-            </div>
-            <div className={card}>
-              <h3 className="font-semibold text-slate-200 text-sm mb-3">Negócios atribuídos</h3>
-              <table className="w-full text-sm">
-                <thead><tr className="border-b border-[#2a3147] text-xs text-slate-500">
-                  <th className="text-left py-2">Oportunidade</th><th className="text-right py-2">Valor</th><th className="text-right py-2">Status</th>
-                </tr></thead>
-                <tbody><tr><td colSpan={3} className="py-8 text-center text-slate-500 text-xs">Nenhum negócio atribuído a esta campanha ainda.</td></tr></tbody>
-              </table>
-            </div>
-          </div>
+              <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl overflow-hidden">
+                <div className="px-5 py-3 border-b border-[#2a3147]">
+                  <h3 className="font-semibold text-slate-200 text-sm">Quem recebeu</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Um bloco por destinatário, na ordem de inscrição, com o que o sistema registrou.
+                  </p>
+                </div>
+                <ul>
+                  {linhaDoTempo.destinatarios.map((d) => {
+                    const situacao = situacaoDoDestinatario(d);
+                    return (
+                      <li key={d.execucaoId} className="px-5 py-3.5 border-b border-[#2a3147] last:border-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-slate-100 truncate">{d.empresa}</div>
+                            <div className="text-xs text-slate-500 truncate">
+                              {[d.contato, d.email].filter(Boolean).join(' · ') || 'sem contato registrado'}
+                            </div>
+                          </div>
+                          <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full ${situacao.classe}`}>
+                            {situacao.rotulo}
+                          </span>
+                        </div>
+                        {d.eventos.length === 0 ? (
+                          <p className="text-xs text-slate-600 mt-2">
+                            Inscrito, sem evento registrado ainda.
+                          </p>
+                        ) : (
+                          <ol className="mt-2.5 space-y-1.5">
+                            {d.eventos.map((ev, i) => {
+                              const e = EVENTO[ev.tipo] ?? EVENTO.desconhecido;
+                              const Icon = e.Icon;
+                              return (
+                                <li key={`${d.execucaoId}-${i}`} className="flex items-start gap-2 text-xs">
+                                  <span className="tabular-nums text-slate-600 w-24 shrink-0">{quando(ev.em)}</span>
+                                  <Icon size={13} className={`shrink-0 mt-px ${e.cor}`} />
+                                  <span className={`shrink-0 ${e.cor}`}>{e.rotulo}</span>
+                                  {ev.detalhe && (
+                                    <span className="text-slate-500 min-w-0 truncate">— {ev.detalhe}</span>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ol>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              <p className="text-xs text-slate-600">
+                Uma resposta só é creditada aqui se chegou depois do início desta campanha para aquele lead — conversa
+                anterior não é atribuída. A atribuição usa o endereço do remetente: resposta vinda de um e-mail
+                diferente do cadastrado no lead não aparece nesta lista.
+              </p>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -627,11 +706,44 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
 function Linha({ k, v }: { k: string; v: string }) {
   return <div className="flex items-start gap-3 border-b border-[#2a3147] pb-2"><span className="text-slate-500 w-40 shrink-0">{k}</span><span className="text-slate-200">{v}</span></div>;
 }
-function Retorno({ k }: { k: string }) {
+function Placar({ label, valor, cor, rodape }: { label: string; valor: number; cor?: string; rodape?: string }) {
   return (
-    <div className="rounded-lg bg-[#0f1117] border border-[#2a3147] px-3 py-2.5">
-      <div className="text-[10px] uppercase tracking-wide text-slate-500">{k}</div>
-      <div className="text-base font-bold text-slate-400 mt-0.5">—</div>
+    <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl px-5 py-4">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className={`text-2xl font-bold mt-1 tabular-nums ${cor ?? 'text-slate-100'}`}>{valor}</div>
+      {rodape && <div className="text-[10px] text-slate-600 mt-0.5">{rodape}</div>}
     </div>
   );
+}
+
+// Vocabulário da linha do tempo. "Enviado" é o que o sistema realmente sabe: o
+// servidor aceitou a mensagem. Entrega e abertura não são rastreadas, então não
+// aparecem — nem como caixa vazia.
+const EVENTO: Record<string, { rotulo: string; cor: string; Icon: typeof Send }> = {
+  enviado: { rotulo: 'E-mail enviado', cor: 'text-sky-300', Icon: Send },
+  nao_enviado: { rotulo: 'Envio não realizado', cor: 'text-amber-300', Icon: MailX },
+  resposta: { rotulo: 'Respondeu', cor: 'text-green-300', Icon: CornerUpLeft },
+  closer: { rotulo: 'Closer avisado', cor: 'text-indigo-300', Icon: UserCheck },
+  erro: { rotulo: 'Erro na execução', cor: 'text-red-300', Icon: AlertTriangle },
+  cancelado: { rotulo: 'Execução cancelada', cor: 'text-red-300', Icon: XCircle },
+  desconhecido: { rotulo: 'Evento', cor: 'text-slate-400', Icon: Activity },
+};
+
+function situacaoDoDestinatario(d: DestinatarioCampanha): { rotulo: string; classe: string } {
+  if (d.respondeuEm) return { rotulo: 'Respondeu', classe: 'bg-green-500/15 text-green-300' };
+  if (d.statusExecucao === 'cancelado') return { rotulo: 'Cancelado', classe: 'bg-red-500/15 text-red-300' };
+  if (d.statusExecucao === 'erro') return { rotulo: 'Erro', classe: 'bg-red-500/15 text-red-300' };
+  if (d.enviadoEm) return { rotulo: 'Aguardando resposta', classe: 'bg-sky-500/15 text-sky-300' };
+  if (d.statusExecucao === 'aguardando' || d.statusExecucao === 'em_andamento') {
+    return { rotulo: 'Na fila', classe: 'bg-amber-500/15 text-amber-300' };
+  }
+  return { rotulo: 'Sem envio', classe: 'bg-slate-500/15 text-slate-400' };
+}
+
+function quando(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString('pt-BR', {
+      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+    });
+  } catch { return '—'; }
 }
