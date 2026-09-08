@@ -15,11 +15,20 @@ describe('permissoes — efetivas e padrão por role', () => {
     for (const p of PERMISSOES) expect(set.has(p)).toBe(true)
   })
 
-  it('usuario tem baseline de leitura e NÃO tem manage/configure', () => {
+  it('usuario cria campanha de comunicado, mas não os objetivos avançados', () => {
     expect(temPermissao('usuario', [], 'analytics.view')).toBe(true)
     expect(temPermissao('usuario', [], 'workflows.view')).toBe(true)
+    expect(temPermissao('usuario', [], 'campaigns.manage')).toBe(true)
+    // O par abaixo é a regra inteira: `manage` deixa criar campanha, e a
+    // AUSÊNCIA de `tipos.avancados` a limita a comunicado. Conceder a segunda ao
+    // papel `usuario` liberaria prospecção e follow-up sem querer.
+    expect(temPermissao('usuario', [], 'campaigns.tipos.avancados')).toBe(false)
+  })
+
+  it('usuario não configura o workspace nem gerencia workflows', () => {
     expect(temPermissao('usuario', [], 'workspace.configure')).toBe(false)
-    expect(temPermissao('usuario', [], 'campaigns.manage')).toBe(false)
+    expect(temPermissao('usuario', [], 'workflows.manage')).toBe(false)
+    expect(temPermissao('usuario', [], 'workflows.publish')).toBe(false)
   })
 
   it('perfil_permissoes é autoritativa quando há linhas (concede/revoga por usuário)', () => {

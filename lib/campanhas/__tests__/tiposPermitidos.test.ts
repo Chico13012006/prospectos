@@ -51,8 +51,17 @@ describe('permissão no catálogo RBAC', () => {
     expect(PERMISSOES_POR_ROLE.usuario).not.toContain('campaigns.tipos.avancados')
   })
 
-  it('usuario segue sem gerenciar campanha nem configurar o workspace', () => {
-    expect(PERMISSOES_POR_ROLE.usuario).not.toContain('campaigns.manage')
+  it('usuario cria campanha, mas sem os objetivos avançados — logo, só comunicado', () => {
+    expect(PERMISSOES_POR_ROLE.usuario).toContain('campaigns.manage')
+    expect(PERMISSOES_POR_ROLE.usuario).not.toContain('campaigns.tipos.avancados')
+
+    const temAvancado = PERMISSOES_POR_ROLE.usuario.includes('campaigns.tipos.avancados')
+    expect(tiposCampanhaDisponiveis(temAvancado).map((t) => t.id)).toEqual(['novidade_clientes'])
+  })
+
+  it('usuario segue sem configurar o workspace nem gerenciar workflows', () => {
     expect(PERMISSOES_POR_ROLE.usuario).not.toContain('workspace.configure')
+    expect(PERMISSOES_POR_ROLE.usuario).not.toContain('workflows.manage')
+    expect(PERMISSOES_POR_ROLE.usuario).not.toContain('workflows.publish')
   })
 })

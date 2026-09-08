@@ -31,12 +31,17 @@ export function isPermissao(x: unknown): x is Permissao {
 // não substitui o role, mapeia-o para um conjunto padrão de permissões.
 export type RolePadrao = 'admin' | 'usuario'
 
-// Padrão por role. admin = tudo; usuario = baseline de LEITURA (não remove nada
-// que ele já via hoje — campanhas/workflows-manage/configure nunca foram dele).
-// ESPELHO do backfill da migration 0015 — manter em sincronia.
+// Padrão por role. admin = tudo.
+//
+// `usuario` cria campanha (campaigns.manage), mas SEM
+// `campaigns.tipos.avancados` — na prática, só comunicado. Prospecção,
+// follow-up, reativação e renovação mexem na esteira do motor e continuam sendo
+// de quem administra. Workflows e configuração do workspace seguem fora.
+//
+// ESPELHO do backfill das migrations 0015, 0033 e 0034 — manter em sincronia.
 export const PERMISSOES_POR_ROLE: Record<RolePadrao, Permissao[]> = {
   admin: [...PERMISSOES],
-  usuario: ['campaigns.view', 'workflows.view', 'analytics.view'],
+  usuario: ['campaigns.view', 'campaigns.manage', 'workflows.view', 'analytics.view'],
 }
 
 // Permissões EFETIVAS de um usuário. `perfil_permissoes` é autoritativa: se há
