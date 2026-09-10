@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   BarChart3,
@@ -16,31 +16,30 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react'
-import { getLeadsPorEstagioPaginado } from '@/lib/api'
-import { ESTAGIOS_CADENCIA, labelProximaAcao } from '@/lib/pipeline-stages'
-import type { Lead } from '@/lib/supabase'
+import { getLeadsCadencia, type EtapaCadencia, type LeadCadencia } from '@/lib/api'
+import { labelProximaAcao } from '@/lib/pipeline-stages'
 import type { GlobalFilterState } from '@/components/pipeline/GlobalFilters'
 import styles from './CadenciaView.module.css'
 
-const PAGE_SIZE = 50
-
 type CadenciaStage = {
-  id: string
+  id: EtapaCadencia
   label: string
   description: string
   color: string
-  estagios: string[]
-  followups?: number | { gte: number }
   kind: 'contato' | 'followup' | 'respondeu'
 }
 
+// Colunas EXIBIDAS. A etapa é decidida em lib/api.ts (getLeadsCadencia) a partir
+// da inscrição em `workflow_execucoes` + contagem de envios em `interacoes` —
+// não de leads.estagio/followups_enviados. A etapa 'a_iniciar' (inscrito, nenhum
+// envio ainda) já é classificada lá, mas ainda NÃO tem coluna aqui.
 const CADENCIA_STAGES: CadenciaStage[] = [
-  { id: 'contato1', label: '1º contato', description: 'Primeiro contato enviado', color: '#4f7cff', estagios: ESTAGIOS_CADENCIA, followups: 0, kind: 'contato' },
-  { id: 'followup1', label: '1º Follow-up', description: 'Aguardando retorno', color: '#7c3aed', estagios: ESTAGIOS_CADENCIA, followups: 1, kind: 'followup' },
-  { id: 'followup2', label: '2º Follow-up', description: 'Segundo contato enviado', color: '#4f7cff', estagios: ESTAGIOS_CADENCIA, followups: 2, kind: 'followup' },
-  { id: 'followup3', label: '3º Follow-up', description: 'Terceiro contato enviado', color: '#9333ea', estagios: ESTAGIOS_CADENCIA, followups: 3, kind: 'followup' },
-  { id: 'followup4', label: '4º Follow-up', description: 'Última tentativa', color: '#7c3aed', estagios: ESTAGIOS_CADENCIA, followups: { gte: 4 }, kind: 'followup' },
-  { id: 'respondeu', label: 'Respondeu', description: 'Teve uma resposta', color: '#22c55e', estagios: ['interessado', 'respondeu', 'com_closer'], kind: 'respondeu' },
+  { id: 'contato1', label: '1º contato', description: 'Primeiro contato enviado', color: '#4f7cff', kind: 'contato' },
+  { id: 'followup1', label: '1º Follow-up', description: 'Aguardando retorno', color: '#7c3aed', kind: 'followup' },
+  { id: 'followup2', label: '2º Follow-up', description: 'Segundo contato enviado', color: '#4f7cff', kind: 'followup' },
+  { id: 'followup3', label: '3º Follow-up', description: 'Terceiro contato enviado', color: '#9333ea', kind: 'followup' },
+  { id: 'followup4', label: '4º Follow-up', description: 'Última tentativa', color: '#7c3aed', kind: 'followup' },
+  { id: 'respondeu', label: 'Respondeu', description: 'Teve uma resposta', color: '#22c55e', kind: 'respondeu' },
 ]
 
 function formatLastContact(value?: string | null): string {
@@ -72,7 +71,7 @@ function initials(name?: string | null): string {
 }
 
 function CadenciaLeadCard({ lead, stage, selected, onSelect }: {
-  lead: Lead
+  lead: LeadCadencia
   stage: CadenciaStage
   selected: boolean
   onSelect: () => void
@@ -113,66 +112,24 @@ function CadenciaLeadCard({ lead, stage, selected, onSelect }: {
   )
 }
 
-function CadenciaColumn({ stage, filters, selectedId, onSelect, reloadKey, onTotalChange }: {
+// Coluna puramente de apresentação: recebe os leads já classificados pela etapa.
+// A classificação e a busca vivem em CadenciaView (uma consulta para o board
+// inteiro), porque a etapa não é mais um filtro que o banco saiba aplicar.
+function CadenciaColumn({ stage, leads, buscando, selectedId, onSelect }: {
   stage: CadenciaStage
-  filters: GlobalFilterState
+  leads: LeadCadencia[]
+  buscando: boolean
   selectedId: string | null
   onSelect: (id: string) => void
-  reloadKey: number
-  onTotalChange: (stageId: string, total: number) => void
 }) {
-  const [data, setData] = useState<Lead[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(false)
-  const offsetRef = useRef(0)
-  const loadingRef = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const load = useCallback(async (reset: boolean) => {
-    if (loadingRef.current) return
-    loadingRef.current = true
-    setLoading(true)
-    const offset = reset ? 0 : offsetRef.current
-
-    try {
-      const result = await getLeadsPorEstagioPaginado(
-        stage.estagios,
-        {
-          busca: filters.search.trim(),
-          responsavel: filters.responsavel || undefined,
-          segmento: filters.segmento || undefined,
-          canal: filters.canal || undefined,
-          followups: stage.followups,
-        },
-        { limit: PAGE_SIZE, offset, ordenarPor: 'ultimo_contato' },
-      )
-      setTotal(result.total)
-      onTotalChange(stage.id, result.total)
-      setData((current) => reset ? result.data : [...current, ...result.data])
-      offsetRef.current = offset + result.data.length
-    } finally {
-      setLoading(false)
-      loadingRef.current = false
-    }
-  }, [filters.canal, filters.responsavel, filters.search, filters.segmento, onTotalChange, stage.estagios, stage.followups, stage.id])
-
-  useEffect(() => {
-    const timeout = setTimeout(() => load(true), 250)
-    return () => clearTimeout(timeout)
-  }, [load, reloadKey])
-
   const virtualizer = useVirtualizer({
-    count: data.length,
+    count: leads.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 159,
     overscan: 7,
   })
-
-  const handleScroll = () => {
-    const element = scrollRef.current
-    if (!element || loadingRef.current || data.length >= total) return
-    if (element.scrollHeight - element.scrollTop - element.clientHeight < 260) load(false)
-  }
 
   const StageIcon = stage.kind === 'respondeu' ? CheckCircle2 : stage.kind === 'contato' ? Send : Mail
 
@@ -184,18 +141,18 @@ function CadenciaColumn({ stage, filters, selectedId, onSelect, reloadKey, onTot
             <StageIcon size={16} style={{ color: stage.color }} aria-hidden="true" />
             <h2 id={`cadencia-${stage.id}`}>{stage.label}</h2>
           </div>
-          <span className={styles.count}>{total.toLocaleString('pt-BR')}</span>
+          <span className={styles.count}>{leads.length.toLocaleString('pt-BR')}</span>
         </div>
         <p>{stage.description}</p>
       </header>
 
-      <div ref={scrollRef} onScroll={handleScroll} className={styles.columnBody}>
-        {data.length === 0 && !loading ? (
-          <div className={styles.empty}>{filters.search ? 'Nenhum contato encontrado.' : 'Nenhum contato nesta etapa.'}</div>
+      <div ref={scrollRef} className={styles.columnBody}>
+        {leads.length === 0 ? (
+          <div className={styles.empty}>{buscando ? 'Nenhum contato encontrado.' : 'Nenhum contato nesta etapa.'}</div>
         ) : (
           <div className={styles.virtualList} style={{ height: virtualizer.getTotalSize() }}>
             {virtualizer.getVirtualItems().map((item) => {
-              const lead = data[item.index]
+              const lead = leads[item.index]
               return (
                 <div
                   key={lead.id}
@@ -215,7 +172,6 @@ function CadenciaColumn({ stage, filters, selectedId, onSelect, reloadKey, onTot
             })}
           </div>
         )}
-        {loading ? <div className={styles.loadingMore}><Loader2 size={13} className={styles.spinner} /> Carregando...</div> : null}
       </div>
     </section>
   )
@@ -250,17 +206,48 @@ export default function CadenciaView({
 }) {
   const [stageFilter, setStageFilter] = useState('')
   const [moreFilters, setMoreFilters] = useState(false)
-  const [totals, setTotals] = useState<Record<string, number>>({})
+  const [leads, setLeads] = useState<LeadCadencia[]>([])
+  const [carregando, setCarregando] = useState(true)
 
-  const updateTotal = useCallback((stageId: string, total: number) => {
-    setTotals((current) => current[stageId] === total ? current : { ...current, [stageId]: total })
-  }, [])
+  // Uma consulta para o board inteiro: a etapa depende de `workflow_execucoes` +
+  // contagem em `interacoes`, então o banco não sabe filtrar por coluna. O
+  // contador de requisição impede que uma resposta antiga (busca sendo digitada)
+  // sobrescreva a mais recente.
+  const requisicaoRef = useRef(0)
+  useEffect(() => {
+    const requisicao = ++requisicaoRef.current
+    setCarregando(true)
+    const timeout = setTimeout(async () => {
+      try {
+        const dados = await getLeadsCadencia({
+          busca: filtros.search.trim(),
+          responsavel: filtros.responsavel || undefined,
+          segmento: filtros.segmento || undefined,
+          canal: filtros.canal || undefined,
+        })
+        if (requisicao !== requisicaoRef.current) return
+        setLeads(dados)
+      } finally {
+        if (requisicao === requisicaoRef.current) setCarregando(false)
+      }
+    }, 250)
+    return () => clearTimeout(timeout)
+  }, [filtros.search, filtros.responsavel, filtros.segmento, filtros.canal, reloadKey])
+
+  const porEtapa = useMemo(() => {
+    const grupos = new Map<EtapaCadencia, LeadCadencia[]>()
+    for (const stage of CADENCIA_STAGES) grupos.set(stage.id, [])
+    // Leads em etapa sem coluna (hoje só 'a_iniciar') simplesmente não entram —
+    // ficam de fora até existir a coluna correspondente.
+    for (const lead of leads) grupos.get(lead.etapa)?.push(lead)
+    return grupos
+  }, [leads])
 
   const visibleStages = useMemo(
     () => stageFilter ? CADENCIA_STAGES.filter((stage) => stage.id === stageFilter) : CADENCIA_STAGES,
     [stageFilter],
   )
-  const total = visibleStages.reduce((sum, stage) => sum + (totals[stage.id] ?? 0), 0)
+  const total = visibleStages.reduce((sum, stage) => sum + (porEtapa.get(stage.id)?.length ?? 0), 0)
   const hasFilters = Boolean(filtros.search || filtros.responsavel || filtros.segmento || filtros.canal || stageFilter)
 
   const setFilters = (patch: Partial<GlobalFilterState>) => onFiltrosChange({ ...filtros, ...patch })
@@ -348,7 +335,7 @@ export default function CadenciaView({
       </div>
 
       <main className={styles.boardViewport}>
-        {loading ? (
+        {loading || carregando ? (
           <div className={styles.pageState}><Loader2 size={18} className={styles.spinner} /> Carregando contatos...</div>
         ) : !usingSupabase ? (
           <div className={styles.pageState}>Não foi possível carregar os dados da Pipeline.</div>
@@ -358,11 +345,10 @@ export default function CadenciaView({
               <CadenciaColumn
                 key={stage.id}
                 stage={stage}
-                filters={filtros}
+                leads={porEtapa.get(stage.id) ?? []}
+                buscando={Boolean(filtros.search)}
                 selectedId={selectedId}
                 onSelect={onSelect}
-                reloadKey={reloadKey}
-                onTotalChange={updateTotal}
               />
             ))}
           </div>

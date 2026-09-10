@@ -115,6 +115,149 @@ export async function getLeadsPorEstagioPaginado(
   return { data: (data ?? []) as Lead[], total: count ?? 0 }
 }
 
+// --- VISÃO CADÊNCIA -------------------------------------------------------
+// A Cadência NÃO deriva a etapa de `leads.estagio` nem de `leads.followups_enviados`.
+// Motivo: só o motor legado (lib/engine) mantém esses dois campos. Organizações
+// que rodam Campanhas/Workflows enviam por AmbienteSupabase.enviarEmailTemplate,
+// que grava a interação como tipo='nota' e NÃO toca em estagio/followups_enviados
+// — nessas orgs o board inteiro aparecia zerado mesmo com o 1º contato enviado.
+//
+// Fontes autoritativas desta visão:
+//   inscrição → `workflow_execucoes` (lead inscrito em workflow/campanha)
+//   nº envios → `interacoes` (canal='email', origem_acao='ia',
+//                tipo IN ('abordagem','follow_up','nota'))
+// `estagio` só decide "Respondeu", que tem PRECEDÊNCIA sobre a contagem de envios.
+// Lead sem execução em workflow não entra na Cadência.
+//
+// Escala: a classificação é feita em memória, sobre os leads inscritos. É o
+// suficiente para o volume atual e mantém a correção óbvia. O caminho de escala
+// é um contador denormalizado mantido pelos DOIS motores (hoje inexistente) —
+// decisão adiada de propósito, não esquecida.
+export const TIPOS_INTERACAO_ENVIO = ['abordagem', 'follow_up', 'nota']
+const ESTAGIOS_RESPONDEU_CADENCIA = ['interessado', 'respondeu', 'com_closer']
+const PAGINA_SUPABASE = 1000
+const LOTE_IDS = 150
+
+export type EtapaCadencia =
+  | 'a_iniciar' | 'contato1' | 'followup1' | 'followup2' | 'followup3' | 'followup4' | 'respondeu'
+
+export interface LeadCadencia extends Lead {
+  etapa: EtapaCadencia
+  envios: number
+}
+
+// nº de envios → etapa. 0 = inscrito e ainda sem envio: classificado como
+// 'a_iniciar', que HOJE não tem coluna no board (fica pronto para quando
+// decidirmos exibir "A iniciar", sem virar lead invisível por acidente).
+export function etapaPorEnvios(envios: number): EtapaCadencia {
+  if (envios <= 0) return 'a_iniciar'
+  if (envios === 1) return 'contato1'
+  if (envios === 2) return 'followup1'
+  if (envios === 3) return 'followup2'
+  if (envios === 4) return 'followup3'
+  return 'followup4'
+}
+
+// Leads com ao menos uma execução de workflow (= inscritos). Isolamento por
+// organização vem da RLS (client de browser com a sessão do usuário).
+async function idsInscritosEmWorkflow(): Promise<Set<string>> {
+  const ids = new Set<string>()
+  for (let offset = 0; ; offset += PAGINA_SUPABASE) {
+    const { data, error } = await supabase
+      .from('workflow_execucoes')
+      .select('lead_id')
+      .not('lead_id', 'is', null)
+      .range(offset, offset + PAGINA_SUPABASE - 1)
+    if (error) {
+      console.error('cadencia/inscritos:', error)
+      break
+    }
+    for (const row of data ?? []) if (row.lead_id) ids.add(row.lead_id as string)
+    if (!data || data.length < PAGINA_SUPABASE) break
+  }
+  return ids
+}
+
+// Contagem de e-mails de saída por lead. Cobre os DOIS motores: o legado grava
+// tipo='abordagem'/'follow_up', o de workflows grava tipo='nota'. `canal='email'`
+// é o que separa envio de nota de sistema (tarefa, bounce, log).
+async function enviosPorLead(): Promise<Map<string, number>> {
+  const contagem = new Map<string, number>()
+  for (let offset = 0; ; offset += PAGINA_SUPABASE) {
+    const { data, error } = await supabase
+      .from('interacoes')
+      .select('lead_id')
+      .eq('canal', 'email')
+      .eq('origem_acao', 'ia')
+      .in('tipo', TIPOS_INTERACAO_ENVIO)
+      .range(offset, offset + PAGINA_SUPABASE - 1)
+    if (error) {
+      console.error('cadencia/envios:', error)
+      break
+    }
+    for (const row of data ?? []) {
+      const id = row.lead_id as string | null
+      if (id) contagem.set(id, (contagem.get(id) ?? 0) + 1)
+    }
+    if (!data || data.length < PAGINA_SUPABASE) break
+  }
+  return contagem
+}
+
+export async function getLeadsCadencia(filtros: PipelineColFiltros = {}): Promise<LeadCadencia[]> {
+  const inscritos = await idsInscritosEmWorkflow()
+  if (inscritos.size === 0) return []
+  const envios = await enviosPorLead()
+
+  const { responsavel, segmento, canal, busca } = filtros
+  const orResponsavel = responsavel ? await filtroResponsavelOr(responsavel) : null
+  const ids = [...inscritos]
+  const leads: Lead[] = []
+  // Busca em lotes de ids: restringe aos inscritos sem montar um `in` gigante
+  // na URL — e sem varrer a base inteira.
+  for (let i = 0; i < ids.length; i += LOTE_IDS) {
+    let q = supabase
+      .from('leads')
+      .select('*, usuarios:responsavel_id (id, nome)')
+      .in('id', ids.slice(i, i + LOTE_IDS))
+    if (orResponsavel) q = q.or(orResponsavel)
+    if (segmento) q = q.eq('segmento', segmento)
+    if (canal) q = q.eq('canal_preferencial', canal)
+    if (busca && busca.trim()) {
+      const t = busca.trim().replace(/[%,()]/g, ' ')
+      q = q.or(`empresa.ilike.%${t}%,contato_nome.ilike.%${t}%,contato_email.ilike.%${t}%`)
+    }
+    const { data, error } = await q
+    if (error) {
+      console.error('getLeadsCadencia:', error)
+      return []
+    }
+    leads.push(...((data ?? []) as Lead[]))
+  }
+
+  // Mesma ordenação das colunas anteriores: último contato desc (nulos por
+  // último) e `id` como desempate estável.
+  const quando = (l: Lead) => (l.ultimo_contato ? new Date(l.ultimo_contato).getTime() : null)
+  leads.sort((a, b) => {
+    const ta = quando(a)
+    const tb = quando(b)
+    if (ta === null && tb !== null) return 1
+    if (tb === null && ta !== null) return -1
+    if (ta !== null && tb !== null && ta !== tb) return tb - ta
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  })
+
+  return leads.map((lead) => {
+    const n = envios.get(lead.id) ?? 0
+    return {
+      ...lead,
+      envios: n,
+      // Respondeu vence a contagem de envios.
+      etapa: ESTAGIOS_RESPONDEU_CADENCIA.includes(lead.estagio ?? '') ? 'respondeu' : etapaPorEnvios(n),
+    }
+  })
+}
+
 // RESERVATÓRIO "Novos Leads": caso particular do paginado, com filtro de data
 // (default últimos 30 dias) e ordenação por data de entrada.
 export async function getNovosLeads(opts: {
