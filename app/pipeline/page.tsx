@@ -7,8 +7,10 @@ import { getPipelineFiltrosOpcoes } from '@/lib/api';
 import PipelineColumn from '@/components/pipeline/PipelineColumn';
 import LeadsTableView from '@/components/pipeline/LeadsTableView';
 import GlobalFilters, { type GlobalFilterState } from '@/components/pipeline/GlobalFilters';
+import CadenciaView from '@/components/pipeline/cadencia/CadenciaView';
 import LeadPanel from '@/components/leads/LeadPanel';
-import { COLUNAS_KANBAN, COLUNAS_CADENCIA } from '@/lib/pipeline-stages';
+import NovoLeadModal from '@/components/leads/NovoLeadModal';
+import { COLUNAS_KANBAN } from '@/lib/pipeline-stages';
 
 // useSearchParams() exige um limite de Suspense (Next) — por isso o conteúdo real
 // da página vive em PipelineInner e o default export só o envolve.
@@ -26,11 +28,12 @@ function PipelineInner() {
   const [filtros, setFiltros] = useState<GlobalFilterState>({ search: '', responsavel: '', segmento: '', canal: '' });
   // Tabela é a visão PADRÃO (alto volume de leads); Kanban fica restrito a
   // quem já respondeu/tem interesse/virou oportunidade (COLUNAS_KANBAN).
-  const [vista, setVista] = useState<'tabela' | 'comercial' | 'cadencia'>('tabela'); // aba do board
+  const [vista, setVista] = useState<'tabela' | 'comercial' | 'cadencia'>('cadencia'); // aba do board
   const [filtroOpcoes, setFiltroOpcoes] = useState<{ responsaveis: string[]; segmentos: string[]; canais: string[] }>({ responsaveis: [], segmentos: [], canais: [] });
   const [reloadKey, setReloadKey] = useState(0); // bump -> colunas refazem o fetch (após mutação)
   const [loading, setLoading] = useState(true);
   const [useFallback, setUseFallback] = useState(false);
+  const [showNovoLead, setShowNovoLead] = useState(false);
 
   // Cada PipelineColumn busca os seus leads server-side (paginado + COUNT). No
   // mount só fazemos uma sonda leve — carregar as opções dos filtros — que também
@@ -56,6 +59,22 @@ function PipelineInner() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      {vista === 'cadencia' ? (
+        <CadenciaView
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          responsaveis={filtroOpcoes.responsaveis}
+          segmentos={filtroOpcoes.segmentos}
+          canais={filtroOpcoes.canais}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          reloadKey={reloadKey}
+          loading={loading}
+          usingSupabase={usingSupabase}
+          onOpenList={() => setVista('tabela')}
+          onNovoContato={() => setShowNovoLead(true)}
+        />
+      ) : (<>
       {/* Header */}
       <div className="px-6 pt-6 pb-3 flex items-start justify-between shrink-0">
         <div>
@@ -121,21 +140,6 @@ function PipelineInner() {
             onSelect={setSelectedId}
             reloadKey={reloadKey}
           />
-        ) : vista === 'cadencia' ? (
-          /* Visão CADÊNCIA: mesmos leads, agrupados por nº de follow-up */
-          <div className="h-full flex gap-4 overflow-x-auto px-6 pb-4">
-            {COLUNAS_CADENCIA.map(col => (
-              <PipelineColumn
-                key={col.id}
-                stage={col}
-                filtros={filtros}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-                reloadKey={reloadKey}
-                chipKind={col.chip}
-              />
-            ))}
-          </div>
         ) : (
           /* Visão KANBAN: só quem já respondeu, tem interesse ou virou
              oportunidade (COLUNAS_KANBAN) — Novos Leads/Em Prospecção ficam
@@ -155,6 +159,7 @@ function PipelineInner() {
           </div>
         )}
       </div>
+      </>)}
 
       {/* Painel lateral completo do lead (compartilhado com a Base de Leads) */}
       <LeadPanel
@@ -164,6 +169,13 @@ function PipelineInner() {
         usingSupabase={usingSupabase}
         contexto="pipeline"
       />
+
+      {showNovoLead && (
+        <NovoLeadModal
+          onClose={() => setShowNovoLead(false)}
+          onCreated={bumpReload}
+        />
+      )}
     </div>
   );
 }
