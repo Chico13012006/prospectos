@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createSupabaseAdminClient } from '@/lib/supabase-admin'
+import { extrairMensagensInbound, persistirMensagensInbound } from '@/lib/whatsapp/inbound'
 
 export const runtime = 'nodejs'
 
@@ -50,8 +52,14 @@ export async function GET(req: NextRequest) {
   return new NextResponse('Forbidden', { status: 403 })
 }
 
-// POST — evento recebido (mensagem, status de entrega, etc.). Sem lógica de
-// negócio nesta rodada: só log estruturado do payload e 200 imediato.
+// POST — evento recebido. Persiste apenas MENSAGENS reais (status de
+// entrega/leitura e outros eventos são ignorados dentro de
+// extrairMensagensInbound). Sem vínculo com lead nesta rodada.
+//
+// Regra de ouro: SEMPRE responder 200 rápido. Um 4xx/5xx faz a Meta reenviar
+// com backoff — e a persistência, sendo operação secundária, nunca pode causar
+// isso. Erro de banco é registrado e a resposta continua 200 (a idempotência
+// por whatsapp_message_id cobre um eventual reenvio).
 export async function POST(req: NextRequest) {
   let corpo: unknown = null
   try {
@@ -61,15 +69,32 @@ export async function POST(req: NextRequest) {
       ts: new Date().toISOString(), nivel: 'erro', escopo: 'webhook.whatsapp',
       msg: 'Payload do POST não é JSON válido.',
     }))
-    // 200 mesmo assim: um 4xx/5xx faria a Meta reenviar o mesmo payload inválido
-    // indefinidamente. Falha registrada; sem lógica de negócio hoje, nada é perdido.
     return NextResponse.json({ ok: true })
   }
 
-  console.log(JSON.stringify({
-    ts: new Date().toISOString(), nivel: 'info', escopo: 'webhook.whatsapp',
-    msg: 'Evento recebido da Meta (WhatsApp Cloud API).', payload: corpo,
-  }))
+  try {
+    const mensagens = extrairMensagensInbound(corpo)
+    if (mensagens.length === 0) {
+      console.log(JSON.stringify({
+        ts: new Date().toISOString(), nivel: 'info', escopo: 'webhook.whatsapp',
+        msg: 'Evento sem mensagem (status/notificação) — ignorado.',
+      }))
+      return NextResponse.json({ ok: true })
+    }
+
+    const resumo = await persistirMensagensInbound(createSupabaseAdminClient(), mensagens)
+    console.log(JSON.stringify({
+      ts: new Date().toISOString(), nivel: 'info', escopo: 'webhook.whatsapp',
+      msg: 'Mensagens inbound processadas.', ...resumo,
+    }))
+  } catch (e) {
+    // Rede de segurança: nada aqui pode derrubar a resposta 200.
+    console.error(JSON.stringify({
+      ts: new Date().toISOString(), nivel: 'erro', escopo: 'webhook.whatsapp',
+      msg: 'Erro ao processar evento — respondendo 200 mesmo assim.',
+      erro: e instanceof Error ? e.message : String(e),
+    }))
+  }
 
   return NextResponse.json({ ok: true })
 }
