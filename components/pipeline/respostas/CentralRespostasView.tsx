@@ -31,7 +31,9 @@ import {
 } from '@/lib/api'
 import { corEstagio, labelCanal, labelEstagio, labelProximaAcao } from '@/lib/pipeline-stages'
 import { dash } from '@/lib/utils'
-import type { Lead, Template } from '@/lib/supabase'
+import { createSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { REALTIME_SUBSCRIBE_STATES, type RealtimePostgresInsertPayload } from '@supabase/supabase-js'
+import type { Lead, MensagemWhatsapp, Template } from '@/lib/supabase'
 import type { GlobalFilterState } from '@/components/pipeline/GlobalFilters'
 import styles from './CentralRespostasView.module.css'
 
@@ -179,9 +181,11 @@ export default function CentralRespostasView({
   const fimDoFioRef = useRef<HTMLDivElement>(null)
 
   // --- Conversas -----------------------------------------------------------
-  const carregarConversas = useCallback(async () => {
+  // `silencioso`: relê sem o spinner (usado pelo tempo real, para a lista não
+  // piscar). O contador `reqRef` garante que a resposta mais nova vence.
+  const carregarConversas = useCallback(async (opts: { silencioso?: boolean } = {}) => {
     const req = ++reqRef.current
-    setCarregando(true)
+    if (!opts.silencioso) setCarregando(true)
     try {
       const dados = await getConversasResposta({
         busca: filtros.search.trim(),
@@ -197,9 +201,14 @@ export default function CentralRespostasView({
   }, [filtros.search, filtros.responsavel, filtros.segmento, filtros.canal])
 
   useEffect(() => {
-    const t = setTimeout(carregarConversas, 250)
+    const t = setTimeout(() => carregarConversas(), 250)
     return () => clearTimeout(t)
   }, [carregarConversas, reloadKey])
+
+  // Versão mais recente de carregarConversas (muda com os filtros) para o
+  // handler do Realtime, que é criado uma vez só.
+  const carregarConversasRef = useRef(carregarConversas)
+  useEffect(() => { carregarConversasRef.current = carregarConversas }, [carregarConversas])
 
   useEffect(() => { getTemplates().then(setTemplates).catch(() => setTemplates([])) }, [])
 
@@ -252,6 +261,76 @@ export default function CentralRespostasView({
     if (!ativa) { fioReqRef.current++; setFio([]); return }
     carregarFio(ativa)
   }, [ativa, carregarFio])
+
+  // --- Tempo real (WhatsApp) -----------------------------------------------
+  // INSERT em `whatsapp_mensagens` → releitura das fontes oficiais
+  // (getConversasResposta / getConversaDoLead). Nada de polling: o canal fica
+  // aberto e só reage a evento. Nenhuma mensagem é montada no cliente a partir
+  // do payload — ele só diz "houve novidade" e para qual lead.
+  //
+  // Isolamento: o Realtime avalia a policy de SELECT da tabela
+  // (organizacao_id = current_org_id()) com o JWT da sessão que o supabase-js
+  // propaga ao socket. Evento de outra organização, ou de mensagem ainda sem
+  // vínculo (organizacao_id NULL), nunca chega aqui. Sem sessão, nada chega.
+  //
+  // Pré-requisito de banco: a tabela precisa estar na publicação
+  // `supabase_realtime`; sem isso o canal assina, mas não recebe eventos.
+  useEffect(() => {
+    // Singleton do @supabase/ssr: a MESMA instância (e sessão) que lib/api usa.
+    const supabase = createSupabaseBrowserClient()
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const pendentes = { leads: new Set<string>(), fioAberto: false }
+    let jaInscrito = false
+
+    // Coalesce: rajada de eventos vira UMA releitura da lista (+ uma do fio,
+    // se o lead aberto está entre os afetados). Idempotente por construção: o
+    // estado é SUBSTITUÍDO pelo que a fonte devolve, nunca acrescido — releitura
+    // manual e por evento no mesmo instante produzem o mesmo resultado, e os
+    // contadores de requisição descartam a resposta mais antiga.
+    const agendarReleitura = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        timer = null
+        const aberto = ativaRef.current
+        const relerFio = !!aberto && (pendentes.fioAberto || pendentes.leads.has(aberto))
+        pendentes.leads.clear()
+        pendentes.fioAberto = false
+        carregarConversasRef.current({ silencioso: true })
+        if (aberto && relerFio) carregarFio(aberto, { silencioso: true })
+      }, 300)
+    }
+
+    const canal = supabase
+      .channel('central-respostas:whatsapp_mensagens')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'whatsapp_mensagens' },
+        (payload: RealtimePostgresInsertPayload<Pick<MensagemWhatsapp, 'id' | 'lead_id' | 'direcao'>>) => {
+          // Sem vínculo com lead a mensagem não aparece na Central — nada a reler.
+          const leadId = payload.new?.lead_id
+          if (!leadId) return
+          pendentes.leads.add(leadId)
+          agendarReleitura()
+        },
+      )
+      .subscribe((status, err) => {
+        if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
+          // Re-inscrição após queda de conexão: eventos do intervalo se perderam,
+          // então uma releitura de recuperação (lista + fio aberto). Na primeira
+          // inscrição não — a carga inicial já está a caminho.
+          if (jaInscrito) { pendentes.fioAberto = true; agendarReleitura() }
+          jaInscrito = true
+        } else if (status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR || status === REALTIME_SUBSCRIBE_STATES.TIMED_OUT) {
+          // Sem toast: a Central continua funcionando por leitura normal.
+          console.warn('[central-respostas] realtime whatsapp_mensagens:', status, err?.message ?? '')
+        }
+      })
+
+    return () => {
+      if (timer) clearTimeout(timer)
+      supabase.removeChannel(canal)
+    }
+  }, [carregarFio])
 
   const canaisDoFio = useMemo(() => new Set(fio.map((m) => m.canal)), [fio])
 
