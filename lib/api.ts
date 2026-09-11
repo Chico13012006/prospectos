@@ -545,8 +545,9 @@ export type StatusConversa = 'novo' | 'pendente' | 'respondido'
 export interface ConversaResposta {
   lead: Lead
   status: StatusConversa
-  canal: string            // canal da última resposta recebida
-  ultimaRespostaEm: string // created_at da última inbound
+  canal: string            // canal da última resposta recebida (define o selo)
+  canais: string[]         // TODOS os canais com resposta neste lead (filtro)
+  ultimaRespostaEm: string // data da última inbound, em qualquer canal
   trecho: string           // prévia da última resposta
   totalRespostas: number
 }
@@ -559,13 +560,49 @@ export function separarAssuntoCorpo(descricao: string): { assunto: string | null
   return { assunto: m[1].trim(), corpo: m[2].trim() }
 }
 
-function statusDaConversa(lead: Lead): StatusConversa {
+// Status da conversa. A regra de e-mail é a original e não muda: vem de
+// `leads.proxima_acao`, que o motor mantém no fluxo de detecção de resposta.
+// WhatsApp é a exceção: o webhook NÃO toca em `proxima_acao`, então para uma
+// conversa cuja última entrada é WhatsApp esse campo não diz nada sobre ela —
+// tratamos como 'novo'. Sem status novo, sem tabela nova.
+function statusDaConversa(lead: Lead, ultimoCanal: string): StatusConversa {
+  if (ultimoCanal === 'whatsapp') return 'novo'
   if (lead.proxima_acao === 'aguardando_closer') return 'novo'
   if (lead.proxima_acao === 'com_closer') return 'pendente'
   return 'respondido'
 }
 
+interface EntradaConversa {
+  canal: string
+  trecho: string
+  em: string
+  total: number
+  canais: Set<string>
+}
+
+// Guarda a entrada mais recente por lead e acumula canais/contagem. As duas
+// fontes (interacoes e whatsapp_mensagens) passam por aqui — o lead é a chave,
+// então nunca vira duas conversas.
+function registrar(mapa: Map<string, EntradaConversa>, leadId: string, dados: { canal: string; trecho: string; em: string }) {
+  const atual = mapa.get(leadId)
+  if (!atual) {
+    mapa.set(leadId, { ...dados, total: 1, canais: new Set([dados.canal]) })
+    return
+  }
+  atual.total += 1
+  atual.canais.add(dados.canal)
+  // Mais recente vence: define selo, data e trecho da lista.
+  if (dados.em > atual.em) {
+    atual.canal = dados.canal
+    atual.trecho = dados.trecho
+    atual.em = dados.em
+  }
+}
+
 export async function getConversasResposta(filtros: PipelineColFiltros = {}): Promise<ConversaResposta[]> {
+  const porLead = new Map<string, EntradaConversa>()
+
+  // Fonte 1 — E-MAIL (inalterada): interacoes tipo='resposta'.
   const { data: respostas, error } = await supabase
     .from('interacoes')
     .select('lead_id, canal, descricao, created_at')
@@ -577,21 +614,42 @@ export async function getConversasResposta(filtros: PipelineColFiltros = {}): Pr
     console.error('getConversasResposta:', error)
     return []
   }
-
-  // Agrupa por lead mantendo a resposta MAIS RECENTE (a lista já vem desc).
-  const porLead = new Map<string, { canal: string; trecho: string; em: string; total: number }>()
   for (const linha of respostas ?? []) {
     const id = linha.lead_id as string | null
     if (!id) continue
-    const atual = porLead.get(id)
-    if (atual) { atual.total += 1; continue }
-    porLead.set(id, {
+    registrar(porLead, id, {
       canal: (linha.canal as string) ?? 'email',
       trecho: separarAssuntoCorpo(linha.descricao as string).corpo.replace(/\s+/g, ' ').trim(),
       em: linha.created_at as string,
-      total: 1,
     })
   }
+
+  // Fonte 2 — WHATSAPP: mensagens inbound já vinculadas a um lead. A RLS de
+  // `whatsapp_mensagens` filtra por organizacao_id; mensagem sem vínculo tem
+  // organizacao_id NULL e não aparece. Nada é copiado para `interacoes` — a
+  // união acontece só aqui, na leitura. Falha degrada para "sem WhatsApp".
+  const { data: zaps, error: zapError } = await supabase
+    .from('whatsapp_mensagens')
+    .select('lead_id, conteudo, mensagem_em, created_at, tipo')
+    .not('lead_id', 'is', null)
+    .eq('direcao', 'inbound')
+    .order('mensagem_em', { ascending: false })
+    .limit(LIMITE_RESPOSTAS)
+  if (zapError) {
+    console.error('getConversasResposta/whatsapp:', zapError)
+  } else {
+    for (const msg of zaps ?? []) {
+      const id = msg.lead_id as string
+      const texto = (msg.conteudo as string | null)?.replace(/\s+/g, ' ').trim()
+      registrar(porLead, id, {
+        canal: 'whatsapp',
+        // Tipos sem texto (áudio, imagem, sticker) não têm conteúdo: mostra o tipo.
+        trecho: texto || `[${msg.tipo ?? 'mensagem'}]`,
+        em: (msg.mensagem_em as string) ?? (msg.created_at as string),
+      })
+    }
+  }
+
   if (porLead.size === 0) return []
 
   const { responsavel, segmento, canal, busca } = filtros
@@ -621,16 +679,19 @@ export async function getConversasResposta(filtros: PipelineColFiltros = {}): Pr
     const meta = porLead.get(lead.id)!
     return {
       lead,
-      status: statusDaConversa(lead),
+      status: statusDaConversa(lead, meta.canal),
       canal: meta.canal,
+      canais: [...meta.canais],
       ultimaRespostaEm: meta.em,
       trecho: meta.trecho,
       totalRespostas: meta.total,
     }
   })
 
-  // `canal` aqui filtra o canal da CONVERSA (não canal_preferencial do lead).
-  const filtradas = canal ? conversas.filter((c) => c.canal === canal) : conversas
+  // Filtro de canal da CONVERSA (não `canal_preferencial` do lead): casa com
+  // QUALQUER canal que o lead tenha, não só o da última resposta. Um lead com
+  // e-mail + WhatsApp aparece nos dois filtros — e uma vez só em cada.
+  const filtradas = canal ? conversas.filter((c) => c.canais.includes(canal)) : conversas
   return filtradas.sort((a, b) => b.ultimaRespostaEm.localeCompare(a.ultimaRespostaEm))
 }
 
@@ -647,8 +708,17 @@ export interface MensagemConversa {
 }
 
 export async function getConversaDoLead(leadId: string): Promise<MensagemConversa[]> {
-  const interacoes = await getInteracoesByLead(leadId)
-  return interacoes
+  // As duas fontes seguem separadas no banco; a união é só de leitura. A de
+  // WhatsApp é best-effort: se falhar, o histórico de e-mail continua servindo.
+  const [interacoes, zaps] = await Promise.all([
+    getInteracoesByLead(leadId),
+    getMensagensWhatsappByLead(leadId).catch((erro) => {
+      console.error('getConversaDoLead/whatsapp:', erro)
+      return [] as MensagemWhatsapp[]
+    }),
+  ])
+
+  const deInteracoes: MensagemConversa[] = interacoes
     .filter((i) => TIPOS_MENSAGEM.includes(i.tipo) && CANAIS_CONVERSA.includes(i.canal ?? ''))
     .map((i) => {
       const { assunto, corpo } = separarAssuntoCorpo(i.descricao)
@@ -662,7 +732,19 @@ export async function getConversaDoLead(leadId: string): Promise<MensagemConvers
         autor: i.usuarios?.nome ?? null,
       }
     })
-    .sort((a, b) => a.em.localeCompare(b.em))
+
+  const deWhatsapp: MensagemConversa[] = zaps.map((m) => ({
+    id: m.id,
+    entrada: m.direcao !== 'outbound',
+    canal: 'whatsapp',
+    assunto: null,
+    // Tipos sem texto (áudio, imagem, sticker) chegam com conteudo null.
+    corpo: m.conteudo ?? `[${m.tipo}]`,
+    em: m.mensagem_em || m.created_at,
+    autor: m.remetente_nome,
+  }))
+
+  return [...deInteracoes, ...deWhatsapp].sort((a, b) => a.em.localeCompare(b.em))
 }
 
 // --- INTERACOES ---
