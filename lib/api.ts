@@ -525,6 +525,146 @@ export async function registrarNota(leadId: string, descricao: string, tipo: str
   if (error) throw error
 }
 
+// --- CENTRAL DE RESPOSTAS -------------------------------------------------
+// Conversas = leads que RESPONDERAM. O sinal de resposta é `interacoes` com
+// tipo='resposta' (gravado por lib/engine/flows/detectarResposta ao ler a
+// caixa). Não existe tabela de mensagens própria nem estado de "lido": o
+// status da conversa é derivado de `leads.proxima_acao`, que é o que o motor
+// realmente mantém — 'aguardando_closer' = resposta ainda não tratada,
+// 'com_closer' = já encaminhada ao closer.
+// Isolamento por organização vem da RLS (client de browser com a sessão).
+
+// Canais que contam como MENSAGEM de conversa. 'sistema'/'plataforma' são notas
+// internas (tarefa, bounce, log) e não entram no fio da conversa.
+export const CANAIS_CONVERSA = ['email', 'whatsapp']
+const TIPOS_MENSAGEM = ['abordagem', 'follow_up', 'nota', 'resposta']
+const LIMITE_RESPOSTAS = 500
+
+export type StatusConversa = 'novo' | 'pendente' | 'respondido'
+
+export interface ConversaResposta {
+  lead: Lead
+  status: StatusConversa
+  canal: string            // canal da última resposta recebida
+  ultimaRespostaEm: string // created_at da última inbound
+  trecho: string           // prévia da última resposta
+  totalRespostas: number
+}
+
+// Corpo das mensagens do motor vem como "**Assunto**\n\ncorpo". Separa os dois
+// para a UI poder mostrar assunto e texto sem os asteriscos.
+export function separarAssuntoCorpo(descricao: string): { assunto: string | null; corpo: string } {
+  const m = /^\*\*(.+?)\*\*\s*\n+([\s\S]*)$/.exec(descricao ?? '')
+  if (!m) return { assunto: null, corpo: descricao ?? '' }
+  return { assunto: m[1].trim(), corpo: m[2].trim() }
+}
+
+function statusDaConversa(lead: Lead): StatusConversa {
+  if (lead.proxima_acao === 'aguardando_closer') return 'novo'
+  if (lead.proxima_acao === 'com_closer') return 'pendente'
+  return 'respondido'
+}
+
+export async function getConversasResposta(filtros: PipelineColFiltros = {}): Promise<ConversaResposta[]> {
+  const { data: respostas, error } = await supabase
+    .from('interacoes')
+    .select('lead_id, canal, descricao, created_at')
+    .eq('tipo', 'resposta')
+    .in('canal', CANAIS_CONVERSA)
+    .order('created_at', { ascending: false })
+    .limit(LIMITE_RESPOSTAS)
+  if (error) {
+    console.error('getConversasResposta:', error)
+    return []
+  }
+
+  // Agrupa por lead mantendo a resposta MAIS RECENTE (a lista já vem desc).
+  const porLead = new Map<string, { canal: string; trecho: string; em: string; total: number }>()
+  for (const linha of respostas ?? []) {
+    const id = linha.lead_id as string | null
+    if (!id) continue
+    const atual = porLead.get(id)
+    if (atual) { atual.total += 1; continue }
+    porLead.set(id, {
+      canal: (linha.canal as string) ?? 'email',
+      trecho: separarAssuntoCorpo(linha.descricao as string).corpo.replace(/\s+/g, ' ').trim(),
+      em: linha.created_at as string,
+      total: 1,
+    })
+  }
+  if (porLead.size === 0) return []
+
+  const { responsavel, segmento, canal, busca } = filtros
+  const orResponsavel = responsavel ? await filtroResponsavelOr(responsavel) : null
+  const ids = [...porLead.keys()]
+  const leads: Lead[] = []
+  for (let i = 0; i < ids.length; i += LOTE_IDS) {
+    let q = supabase
+      .from('leads')
+      .select('*, usuarios:responsavel_id (id, nome)')
+      .in('id', ids.slice(i, i + LOTE_IDS))
+    if (orResponsavel) q = q.or(orResponsavel)
+    if (segmento) q = q.eq('segmento', segmento)
+    if (busca && busca.trim()) {
+      const t = busca.trim().replace(/[%,()]/g, ' ')
+      q = q.or(`empresa.ilike.%${t}%,contato_nome.ilike.%${t}%,contato_email.ilike.%${t}%`)
+    }
+    const { data, error: leadError } = await q
+    if (leadError) {
+      console.error('getConversasResposta/leads:', leadError)
+      return []
+    }
+    leads.push(...((data ?? []) as Lead[]))
+  }
+
+  const conversas = leads.map((lead) => {
+    const meta = porLead.get(lead.id)!
+    return {
+      lead,
+      status: statusDaConversa(lead),
+      canal: meta.canal,
+      ultimaRespostaEm: meta.em,
+      trecho: meta.trecho,
+      totalRespostas: meta.total,
+    }
+  })
+
+  // `canal` aqui filtra o canal da CONVERSA (não canal_preferencial do lead).
+  const filtradas = canal ? conversas.filter((c) => c.canal === canal) : conversas
+  return filtradas.sort((a, b) => b.ultimaRespostaEm.localeCompare(a.ultimaRespostaEm))
+}
+
+// Fio da conversa: só mensagens de canal real, em ordem cronológica.
+// Reusa getInteracoesByLead (mesma fonte do painel do lead).
+export interface MensagemConversa {
+  id: string
+  entrada: boolean // true = recebida do lead; false = enviada por nós
+  canal: string
+  assunto: string | null
+  corpo: string
+  em: string
+  autor: string | null
+}
+
+export async function getConversaDoLead(leadId: string): Promise<MensagemConversa[]> {
+  const interacoes = await getInteracoesByLead(leadId)
+  return interacoes
+    .filter((i) => TIPOS_MENSAGEM.includes(i.tipo) && CANAIS_CONVERSA.includes(i.canal ?? ''))
+    .map((i) => {
+      const { assunto, corpo } = separarAssuntoCorpo(i.descricao)
+      return {
+        id: i.id,
+        entrada: i.tipo === 'resposta',
+        canal: i.canal ?? 'email',
+        assunto,
+        corpo,
+        em: i.created_at,
+        autor: i.usuarios?.nome ?? null,
+      }
+    })
+    .sort((a, b) => a.em.localeCompare(b.em))
+}
+
 // --- INTERACOES ---
 
 export async function getInteracoesByLead(leadId: string): Promise<Interacao[]> {

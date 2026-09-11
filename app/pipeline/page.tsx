@@ -8,6 +8,7 @@ import PipelineColumn from '@/components/pipeline/PipelineColumn';
 import GlobalFilters, { type GlobalFilterState } from '@/components/pipeline/GlobalFilters';
 import CadenciaView from '@/components/pipeline/cadencia/CadenciaView';
 import ListaView from '@/components/pipeline/lista/ListaView';
+import CentralRespostasView from '@/components/pipeline/respostas/CentralRespostasView';
 import LeadPanel from '@/components/leads/LeadPanel';
 import NovoLeadModal from '@/components/leads/NovoLeadModal';
 import { COLUNAS_KANBAN } from '@/lib/pipeline-stages';
@@ -28,7 +29,7 @@ function PipelineInner() {
   const [filtros, setFiltros] = useState<GlobalFilterState>({ search: '', responsavel: '', segmento: '', canal: '' });
   // Tabela é a visão PADRÃO (alto volume de leads); Kanban fica restrito a
   // quem já respondeu/tem interesse/virou oportunidade (COLUNAS_KANBAN).
-  const [vista, setVista] = useState<'tabela' | 'comercial' | 'cadencia'>('cadencia'); // aba do board
+  const [vista, setVista] = useState<'tabela' | 'comercial' | 'cadencia' | 'respostas'>('cadencia'); // aba do board
   const [filtroOpcoes, setFiltroOpcoes] = useState<{ responsaveis: string[]; segmentos: string[]; canais: string[] }>({ responsaveis: [], segmentos: [], canais: [] });
   const [reloadKey, setReloadKey] = useState(0); // bump -> colunas refazem o fetch (após mutação)
   const [loading, setLoading] = useState(true);
@@ -72,6 +73,21 @@ function PipelineInner() {
           loading={loading}
           usingSupabase={usingSupabase}
           onOpenList={() => setVista('tabela')}
+          onOpenRespostas={() => setVista('respostas')}
+          onNovoContato={() => setShowNovoLead(true)}
+        />
+      ) : vista === 'respostas' ? (
+        <CentralRespostasView
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          responsaveis={filtroOpcoes.responsaveis}
+          segmentos={filtroOpcoes.segmentos}
+          onAbrirLead={setSelectedId}
+          reloadKey={reloadKey}
+          loading={loading}
+          usingSupabase={usingSupabase}
+          onOpenCadencia={() => setVista('cadencia')}
+          onOpenLista={() => setVista('tabela')}
           onNovoContato={() => setShowNovoLead(true)}
         />
       ) : vista === 'tabela' ? (
@@ -87,6 +103,7 @@ function PipelineInner() {
           loading={loading}
           usingSupabase={usingSupabase}
           onOpenCadencia={() => setVista('cadencia')}
+          onOpenRespostas={() => setVista('respostas')}
           onNovoContato={() => setShowNovoLead(true)}
         />
       ) : (<>

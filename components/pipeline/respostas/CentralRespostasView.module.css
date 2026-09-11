@@ -1,0 +1,1228 @@
+/* Casca (header, abas, filtros) igual à da Cadência e da Lista — mesma tela.
+   Abaixo da toolbar, o layout de 3 colunas próprio desta aba. */
+
+.root {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 88% 3%, rgba(62, 84, 180, 0.1), transparent 27rem),
+    #0c121f;
+  color: #f4f7ff;
+}
+
+.pageHeader {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.5rem 1.5rem 1rem;
+}
+
+.headingBlock {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.headingIcon {
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.45rem;
+  background: rgba(99, 102, 241, 0.13);
+  color: #7c83ff;
+}
+
+.headingBlock h1 {
+  margin: 0;
+  color: #f7f8ff;
+  font-size: 1.5rem;
+  font-weight: 720;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.headingBlock p {
+  margin: 0.35rem 0 0;
+  color: #8794ab;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.primaryButton,
+.tabs button,
+.moreButton,
+.clearButton {
+  border: 0;
+  font: inherit;
+}
+
+.primaryButton {
+  display: inline-flex;
+  min-height: 2.3rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  background: linear-gradient(135deg, #6558f5, #5145e5);
+  box-shadow: 0 0.5rem 1.5rem rgba(78, 70, 229, 0.22);
+  color: white;
+  font-size: 0.79rem;
+  font-weight: 650;
+  transition: filter 140ms ease, transform 140ms ease;
+}
+
+.primaryButton:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.toolbar {
+  flex-shrink: 0;
+  border-bottom: 1px solid #202c40;
+  padding: 0 1.5rem 1rem;
+}
+
+.viewRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tabs button {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid #28364e;
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.85rem;
+  background: #111c2e;
+  color: #a9b4c8;
+  font-size: 0.78rem;
+  font-weight: 590;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.tabs button:hover {
+  border-color: #3a4b68;
+  color: #eef2ff;
+}
+
+.tabs .tabActive {
+  border-color: rgba(106, 92, 255, 0.55);
+  background: linear-gradient(135deg, #6459ed, #5045d8);
+  box-shadow: 0 0.4rem 1.15rem rgba(84, 72, 222, 0.18);
+  color: white;
+}
+
+.total {
+  color: #8896ad;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.total strong {
+  color: #dbe3f3;
+  font-weight: 620;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.filters select,
+.search {
+  height: 2.35rem;
+  border: 1px solid #26344a;
+  border-radius: 0.48rem;
+  background: #101a2b;
+  color: #cbd4e5;
+  font-size: 0.76rem;
+}
+
+.filters select {
+  min-width: 10.2rem;
+  padding: 0 2rem 0 0.75rem;
+  outline: none;
+}
+
+.filters select:focus,
+.search:focus-within {
+  border-color: rgba(99, 102, 241, 0.72);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.13);
+}
+
+.search {
+  display: flex;
+  min-width: 13rem;
+  flex: 1 1 16rem;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0 0.7rem;
+  color: #77869e;
+}
+
+.search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #dce4f4;
+  font: inherit;
+}
+
+.search input::placeholder {
+  color: #66758e;
+}
+
+.clearButton {
+  display: inline-flex;
+  height: 2.35rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid #2a3951;
+  border-radius: 0.48rem;
+  padding: 0 0.8rem;
+  background: #111c2e;
+  color: #93a0b5;
+  font-size: 0.76rem;
+  font-weight: 560;
+}
+
+.clearButton:hover {
+  border-color: rgba(99, 102, 241, 0.58);
+  color: #c8caff;
+}
+
+/* --- 3 colunas ------------------------------------------------------------ */
+
+.board {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: 20rem minmax(0, 1fr) 19rem;
+  gap: 0.85rem;
+  padding: 0.9rem 1.5rem 1.1rem;
+}
+
+/* Em telas menores o contexto sai da grade (o lead segue acessível pelo drawer). */
+@media (max-width: 1400px) {
+  .board {
+    grid-template-columns: 18rem minmax(0, 1fr);
+  }
+  .contexto {
+    display: none;
+  }
+}
+
+.painel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #1e2a3d;
+  border-radius: 0.7rem;
+  background: rgba(16, 26, 43, 0.6);
+}
+
+.painelHeader {
+  flex-shrink: 0;
+  border-bottom: 1px solid #202c40;
+  padding: 0.75rem 0.85rem;
+}
+
+.painelTitulo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: #e7ecf8;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.painelTitulo svg {
+  color: #7c83ff;
+}
+
+.contagem {
+  min-width: 1.45rem;
+  border-radius: 0.38rem;
+  padding: 0.16rem 0.38rem;
+  background: #263751;
+  color: #d8e0ef;
+  font-size: 0.68rem;
+  font-weight: 690;
+  text-align: center;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.6rem;
+}
+
+.chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid #27344a;
+  border-radius: 999px;
+  padding: 0.22rem 0.55rem;
+  background: transparent;
+  color: #94a2b8;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.chips button:hover {
+  border-color: #3a4b68;
+  color: #dce4f4;
+}
+
+.chipAtivo {
+  border-color: rgba(106, 92, 255, 0.6) !important;
+  background: rgba(99, 102, 241, 0.16) !important;
+  color: #c3c6ff !important;
+}
+
+.chipContagem {
+  color: #6f7f99;
+  font-weight: 700;
+}
+
+/* --- Lista de conversas --------------------------------------------------- */
+
+.lista {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.4rem;
+  scrollbar-color: #34445f transparent;
+  scrollbar-width: thin;
+}
+
+.conversa {
+  display: block;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
+  padding: 0.6rem 0.62rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 130ms ease, border-color 130ms ease;
+}
+
+.conversa:hover {
+  background: rgba(27, 42, 68, 0.6);
+}
+
+.conversaAtiva {
+  border-color: rgba(106, 92, 255, 0.5);
+  background: rgba(99, 102, 241, 0.11);
+}
+
+.conversaTopo {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* O CONTATO é o destaque da lista — a empresa ganha contexto no painel direito. */
+.conversaContato {
+  overflow: hidden;
+  flex: 1;
+  color: #f1f4fb;
+  font-size: 0.78rem;
+  font-weight: 660;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversaQuando {
+  flex-shrink: 0;
+  color: #6f7f99;
+  font-size: 0.66rem;
+}
+
+.conversaEmpresa {
+  display: block;
+  overflow: hidden;
+  margin-top: 0.14rem;
+  color: #8494ab;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversaTrecho {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 0.35rem;
+  color: #93a1b7;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.conversaRodape {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.42rem;
+}
+
+.avatarLista {
+  display: inline-flex;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.45rem;
+  background: #273450;
+  color: #b9c5dc;
+  font-size: 0.58rem;
+  font-weight: 760;
+}
+
+/* --- Buscar leads para prospecção (rodapé da coluna esquerda) -------------- */
+
+.prospeccao {
+  flex-shrink: 0;
+  border-top: 1px solid #202c40;
+  padding: 0.7rem 0.7rem 0.75rem;
+  background: rgba(13, 22, 38, 0.5);
+}
+
+.prospTitulo {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #dce4f4;
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.prospTitulo svg {
+  color: #7c83ff;
+}
+
+.prospApoio {
+  margin: 0.22rem 0 0.5rem;
+  color: #74849c;
+  font-size: 0.67rem;
+  line-height: 1.3;
+}
+
+.prospCampo,
+.prospSelect {
+  height: 1.95rem;
+  border: 1px solid #26344a;
+  border-radius: 0.42rem;
+  background: #0d1626;
+  color: #dce4f4;
+  font: inherit;
+  font-size: 0.7rem;
+  outline: none;
+}
+
+.prospCampo {
+  width: 100%;
+  padding: 0 0.55rem;
+}
+
+.prospCampo:focus,
+.prospSelect:focus {
+  border-color: rgba(99, 102, 241, 0.6);
+}
+
+.prospCampo::placeholder {
+  color: #5d6c85;
+}
+
+.prospLinha {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.prospSelect {
+  min-width: 0;
+  flex: 1;
+  padding: 0 1.4rem 0 0.5rem;
+}
+
+.prospBotao {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.3rem;
+  border: 0;
+  border-radius: 0.42rem;
+  padding: 0 0.7rem;
+  background: linear-gradient(135deg, #6558f5, #5145e5);
+  color: white;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 640;
+  cursor: pointer;
+}
+
+.prospBotao:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.prospVazio {
+  margin: 0.5rem 0 0;
+  color: #74849c;
+  font-size: 0.68rem;
+}
+
+.prospLista {
+  max-height: 9.5rem;
+  overflow-y: auto;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  scrollbar-color: #34445f transparent;
+  scrollbar-width: thin;
+}
+
+.prospLista button {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 0.4rem;
+  padding: 0.34rem 0.4rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.prospLista button:hover {
+  background: rgba(27, 42, 68, 0.7);
+}
+
+.prospEmpresa {
+  display: block;
+  overflow: hidden;
+  color: #dce4f4;
+  font-size: 0.71rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prospMeta {
+  display: block;
+  overflow: hidden;
+  color: #74849c;
+  font-size: 0.66rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Selos ---------------------------------------------------------------- */
+
+.selo {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 0.14rem 0.42rem;
+  font-size: 0.62rem;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.seloEmail {
+  border-color: rgba(96, 130, 255, 0.3);
+  background: rgba(96, 130, 255, 0.12);
+  color: #8fa8ff;
+}
+
+.seloWhatsapp {
+  border-color: rgba(34, 197, 94, 0.3);
+  background: rgba(34, 197, 94, 0.12);
+  color: #5ed48c;
+}
+
+.seloNovo {
+  border-color: rgba(96, 130, 255, 0.32);
+  background: rgba(96, 130, 255, 0.13);
+  color: #93aaff;
+}
+
+.seloPendente {
+  border-color: rgba(251, 191, 36, 0.32);
+  background: rgba(251, 191, 36, 0.12);
+  color: #e8b86a;
+}
+
+.seloRespondido {
+  border-color: rgba(148, 163, 184, 0.26);
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+}
+
+/* --- Conversa (centro) ---------------------------------------------------- */
+
+.conversaHeader {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.65rem;
+  border-bottom: 1px solid #202c40;
+  padding: 0.8rem 0.95rem;
+}
+
+.avatarConversa {
+  display: inline-flex;
+  width: 2.1rem;
+  height: 2.1rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background: #273450;
+  color: #c6d2e8;
+  font-size: 0.7rem;
+  font-weight: 760;
+}
+
+.conversaHeaderTexto {
+  min-width: 0;
+  flex: 1;
+}
+
+.conversaHeaderTexto h2 {
+  overflow: hidden;
+  margin: 0;
+  color: #f1f4fb;
+  font-size: 0.86rem;
+  font-weight: 680;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversaHeaderTexto p {
+  overflow: hidden;
+  margin: 0.18rem 0 0;
+  color: #8494ab;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Seletor de canal da conversa. Um canal sem mensagem fica desabilitado — não
+   é botão decorativo. */
+.canais {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.canais button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  border: 1px solid #27344a;
+  border-radius: 0.45rem;
+  padding: 0.3rem 0.55rem;
+  background: #101a2b;
+  color: #94a2b8;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.canais button:hover:not(:disabled) {
+  border-color: #3a4b68;
+  color: #dce4f4;
+}
+
+.canais button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.canalAtivo {
+  border-color: rgba(106, 92, 255, 0.55) !important;
+  background: rgba(99, 102, 241, 0.16) !important;
+  color: #c3c6ff !important;
+}
+
+.fio {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.55rem;
+  overflow-y: auto;
+  padding: 0.9rem;
+  scrollbar-color: #34445f transparent;
+  scrollbar-width: thin;
+}
+
+.separadorData {
+  align-self: center;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  background: rgba(38, 55, 81, 0.7);
+  color: #8494ab;
+  font-size: 0.66rem;
+  font-weight: 600;
+}
+
+.mensagem {
+  max-width: 78%;
+  border-radius: 0.65rem;
+  padding: 0.6rem 0.7rem;
+}
+
+.mensagemEntrada {
+  align-self: flex-start;
+  border: 1px solid #24324a;
+  background: #16223a;
+}
+
+.mensagemSaida {
+  align-self: flex-end;
+  border: 1px solid rgba(99, 102, 241, 0.32);
+  background: rgba(79, 82, 221, 0.22);
+}
+
+.mensagemTopo {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  margin-bottom: 0.3rem;
+}
+
+.mensagemAutor {
+  color: #cfd8e8;
+  font-size: 0.71rem;
+  font-weight: 650;
+}
+
+.mensagemHora {
+  color: #6f7f99;
+  font-size: 0.65rem;
+}
+
+.mensagemAssunto {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #e7ecf8;
+  font-size: 0.73rem;
+  font-weight: 620;
+}
+
+.mensagemCorpo {
+  margin: 0;
+  color: #c2cdde;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.verMaisMsg {
+  margin-top: 0.3rem;
+  border: 0;
+  background: transparent;
+  color: #8fa8ff;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* --- Composer ------------------------------------------------------------- */
+
+.composer {
+  flex-shrink: 0;
+  border-top: 1px solid #202c40;
+  padding: 0.7rem 0.85rem 0.8rem;
+}
+
+.composerTopo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.5rem;
+}
+
+.composerTopo label {
+  color: #7a89a2;
+  font-size: 0.7rem;
+}
+
+.composerTopo select {
+  height: 1.95rem;
+  border: 1px solid #26344a;
+  border-radius: 0.42rem;
+  padding: 0 1.6rem 0 0.5rem;
+  background: #101a2b;
+  color: #cbd4e5;
+  font-size: 0.7rem;
+  outline: none;
+}
+
+.composerTopo select:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* Canal do composer: segmented control — o estado ativo tem de ser óbvio. */
+.segmented {
+  display: inline-flex;
+  border: 1px solid #26344a;
+  border-radius: 0.45rem;
+  padding: 0.12rem;
+  background: #0d1626;
+}
+
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 0;
+  border-radius: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  background: transparent;
+  color: #8494ab;
+  font: inherit;
+  font-size: 0.71rem;
+  font-weight: 620;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.segmented button:hover {
+  color: #dce4f4;
+}
+
+.segAtivo {
+  background: linear-gradient(135deg, #6459ed, #5045d8) !important;
+  box-shadow: 0 0.25rem 0.7rem rgba(84, 72, 222, 0.25);
+  color: white !important;
+}
+
+.templateLinha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.45rem;
+}
+
+.templateSelect {
+  height: 1.95rem;
+  min-width: 0;
+  flex: 1 1 9rem;
+  border: 1px solid #26344a;
+  border-radius: 0.42rem;
+  padding: 0 1.5rem 0 0.5rem;
+  background: #101a2b;
+  color: #cbd4e5;
+  font: inherit;
+  font-size: 0.7rem;
+  outline: none;
+}
+
+.templateSelect:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* --- Prévia do e-mail ------------------------------------------------------ */
+
+.previaFundo {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(3, 7, 18, 0.62);
+  inset: 0;
+}
+
+.previaCaixa {
+  display: flex;
+  width: min(46rem, 100%);
+  max-height: 82vh;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #26344a;
+  border-radius: 0.7rem;
+  background: #101a2b;
+  box-shadow: 0 1.5rem 3rem rgba(2, 6, 18, 0.45);
+}
+
+.previaHeader {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid #202c40;
+  padding: 0.75rem 0.9rem;
+  color: #e7ecf8;
+  font-size: 0.8rem;
+}
+
+.previaHeader button {
+  border: 0;
+  background: transparent;
+  color: #8494ab;
+  cursor: pointer;
+}
+
+.previaHeader button:hover {
+  color: #dce4f4;
+}
+
+.previaAssunto {
+  display: block;
+  margin-top: 0.2rem;
+  color: #8494ab;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.previaFrame {
+  min-height: 22rem;
+  flex: 1;
+  border: 0;
+  background: white;
+}
+
+.previaTexto {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  margin: 0;
+  padding: 1rem;
+  color: #c2cdde;
+  font: inherit;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.campoAssunto {
+  width: 100%;
+  height: 2.1rem;
+  margin-bottom: 0.4rem;
+  border: 1px solid #26344a;
+  border-radius: 0.45rem;
+  padding: 0 0.6rem;
+  background: #0d1626;
+  color: #dce4f4;
+  font: inherit;
+  font-size: 0.73rem;
+  outline: none;
+}
+
+.campoTexto {
+  width: 100%;
+  min-height: 4.6rem;
+  resize: vertical;
+  border: 1px solid #26344a;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.6rem;
+  background: #0d1626;
+  color: #dce4f4;
+  font: inherit;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  outline: none;
+}
+
+.campoAssunto:focus,
+.campoTexto:focus {
+  border-color: rgba(99, 102, 241, 0.6);
+}
+
+.campoTexto::placeholder {
+  color: #5d6c85;
+}
+
+.composerAcoes {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+}
+
+.aviso {
+  flex: 1;
+  color: #7a89a2;
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.botaoSecundario {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid #2f3a52;
+  border-radius: 0.45rem;
+  padding: 0.42rem 0.7rem;
+  background: transparent;
+  color: #c1cbda;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.botaoSecundario:hover:not(:disabled) {
+  border-color: rgba(99, 102, 241, 0.55);
+  color: #c8caff;
+}
+
+.botaoPrincipal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 0;
+  border-radius: 0.45rem;
+  padding: 0.45rem 0.85rem;
+  background: linear-gradient(135deg, #6558f5, #5145e5);
+  color: white;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.botaoPrincipal:disabled,
+.botaoSecundario:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* --- Contexto (direita) --------------------------------------------------- */
+
+.contexto {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #1e2a3d;
+  border-radius: 0.7rem;
+  background: rgba(16, 26, 43, 0.6);
+}
+
+.contextoCorpo {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.85rem;
+  scrollbar-color: #34445f transparent;
+  scrollbar-width: thin;
+}
+
+/* A EMPRESA é o destaque aqui — espelho invertido da lista da esquerda. */
+.contextoEmpresa {
+  margin: 0;
+  color: #f1f4fb;
+  font-size: 0.88rem;
+  font-weight: 690;
+  line-height: 1.25;
+}
+
+.contextoContato {
+  margin: 0.2rem 0 0;
+  color: #8494ab;
+  font-size: 0.73rem;
+  line-height: 1.3;
+}
+
+/* Grupos separam os níveis de prioridade sem virar um cartão por campo. */
+.grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(32, 44, 66, 0.8);
+}
+
+.grupo:first-of-type {
+  border-top: 0;
+}
+
+.campo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.campoRotulo {
+  flex-shrink: 0;
+  color: #6f7f99;
+  font-size: 0.68rem;
+}
+
+.campoValor {
+  overflow: hidden;
+  color: #cfd8e8;
+  font-size: 0.72rem;
+  font-weight: 560;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.estagioPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 0.16rem 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 620;
+  white-space: nowrap;
+}
+
+.estagioDot {
+  width: 0.38rem;
+  height: 0.38rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.abrirLead {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  border: 1px solid #2f3a52;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  background: transparent;
+  color: #c1cbda;
+  font: inherit;
+  font-size: 0.73rem;
+  font-weight: 620;
+  cursor: pointer;
+}
+
+.abrirLead:hover {
+  border-color: rgba(99, 102, 241, 0.55);
+  color: #c8caff;
+}
+
+/* --- Estados -------------------------------------------------------------- */
+
+.vazio {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 2rem 1.2rem;
+  color: #74849c;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.vazio svg {
+  color: #3c4b66;
+}
+
+.vazioTitulo {
+  color: #aab6c9;
+  font-size: 0.8rem;
+  font-weight: 620;
+}
+
+.spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.root button:focus-visible,
+.root select:focus-visible,
+.root input:focus-visible,
+.root textarea:focus-visible {
+  outline: 2px solid rgba(124, 131, 255, 0.85);
+  outline-offset: 2px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

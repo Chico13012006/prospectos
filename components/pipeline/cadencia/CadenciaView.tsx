@@ -9,6 +9,7 @@ import {
   List,
   Loader2,
   Mail,
+  MessagesSquare,
   Plus,
   Search,
   Send,
@@ -294,6 +295,7 @@ export default function CadenciaView({
   loading,
   usingSupabase,
   onOpenList,
+  onOpenRespostas,
   onNovoContato,
 }: {
   filtros: GlobalFilterState
@@ -307,6 +309,7 @@ export default function CadenciaView({
   loading: boolean
   usingSupabase: boolean
   onOpenList: () => void
+  onOpenRespostas: () => void
   onNovoContato: () => void
 }) {
   const [stageFilter, setStageFilter] = useState('')
@@ -390,6 +393,9 @@ export default function CadenciaView({
             </button>
             <button type="button" onClick={onOpenList} aria-pressed="false">
               <List size={15} /> Lista
+            </button>
+            <button type="button" onClick={onOpenRespostas} aria-pressed="false">
+              <MessagesSquare size={15} /> Central de Respostas
             </button>
           </div>
           <span className={styles.total}><strong>{total.toLocaleString('pt-BR')}</strong> oportunidades</span>

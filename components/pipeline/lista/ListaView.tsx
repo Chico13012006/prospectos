@@ -11,6 +11,7 @@ import {
   Columns3,
   List,
   Loader2,
+  MessagesSquare,
   Plus,
   Search,
   SlidersHorizontal,
@@ -107,6 +108,7 @@ export default function ListaView({
   loading,
   usingSupabase,
   onOpenCadencia,
+  onOpenRespostas,
   onNovoContato,
 }: {
   filtros: GlobalFilterState
@@ -120,6 +122,7 @@ export default function ListaView({
   loading: boolean
   usingSupabase: boolean
   onOpenCadencia: () => void
+  onOpenRespostas: () => void
   onNovoContato: () => void
 }) {
   const [grupoEstagio, setGrupoEstagio] = useState('')
@@ -214,6 +217,9 @@ export default function ListaView({
             </button>
             <button type="button" className={styles.tabActive} aria-pressed="true">
               <List size={15} /> Lista
+            </button>
+            <button type="button" onClick={onOpenRespostas} aria-pressed="false">
+              <MessagesSquare size={15} /> Central de Respostas
             </button>
           </div>
           <span className={styles.total}><strong>{total.toLocaleString('pt-BR')}</strong> oportunidades</span>
