@@ -12,9 +12,9 @@ import EmpresaDecisoresCard from '@/components/leads/EmpresaDecisoresCard';
 import ServicosLaudosCard from '@/components/leads/ServicosLaudosCard';
 import EditarLeadModal from '@/components/leads/EditarLeadModal';
 import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
-import { getLeadById, getInteracoesByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao, updateLead, gerarInsightLead, gerarMensagemLead } from '@/lib/api';
+import { getLeadById, getInteracoesByLead, getMensagensWhatsappByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao, updateLead, gerarInsightLead, gerarMensagemLead } from '@/lib/api';
 import type { InsightComercialLead, MensagemPreview } from '@/lib/api';
-import type { Lead, Interacao } from '@/lib/supabase';
+import type { Lead, Interacao, MensagemWhatsapp } from '@/lib/supabase';
 import { ESTAGIOS_MANUAIS } from '@/lib/pipeline-stages';
 import { ultimoContatoEfetivo } from '@/lib/leads/ultimoContato';
 
@@ -157,6 +157,34 @@ function ehLogSistema(i: Interacao): boolean {
   return i.canal === 'plataforma' || i.canal === 'sistema';
 }
 
+// Item do histórico mesclado da aba Conversa: ou uma interação existente, ou
+// uma mensagem real de WhatsApp (fonte: whatsapp_mensagens — nunca copiada
+// para interacoes). `quando` é o epoch usado para ordenar os dois.
+type ItemConversa =
+  | { kind: 'interacao'; id: string; quando: number; interacao: Interacao }
+  | { kind: 'whatsapp'; id: string; quando: number; mensagem: MensagemWhatsapp };
+
+// Direção da mensagem de WhatsApp na mesma linguagem de cor dos badges de
+// interação: recebido = verde ("Respondido"), enviado = azul ("Enviado").
+const WHATSAPP_DIRECAO = {
+  inbound: { rotulo: 'WhatsApp recebido', status: 'Recebido', classes: 'bg-green-500/20 text-green-400', statusClasses: 'bg-green-500/10 text-green-400' },
+  outbound: { rotulo: 'WhatsApp enviado', status: 'Enviado', classes: 'bg-blue-500/20 text-blue-400', statusClasses: 'bg-blue-500/10 text-blue-400' },
+} as const;
+function direcaoWhatsapp(m: MensagemWhatsapp) {
+  return m.direcao === 'outbound' ? WHATSAPP_DIRECAO.outbound : WHATSAPP_DIRECAO.inbound;
+}
+// Cronologia do WhatsApp: `mensagem_em` (timestamp da Meta), fallback `created_at`.
+function quandoWhatsapp(m: MensagemWhatsapp): string {
+  return m.mensagem_em || m.created_at;
+}
+// Remetente só faz sentido em mensagem RECEBIDA. No outbound o backend grava o
+// telefone/nome do CLIENTE em `remetente` (é o que agrupa a conversa), então
+// exibi-lo como autor seria errado — e quem enviou não fica registrado.
+function remetenteWhatsapp(m: MensagemWhatsapp): string | null {
+  if (m.direcao === 'outbound') return null;
+  return m.remetente_nome || m.remetente || null;
+}
+
 // Rótulo, ícone e cor do canal (valores em minúsculo no Supabase)
 const CANAL_INFO: Record<string, { label: string; Icon: typeof Bot; classes: string }> = {
   email: { label: 'Email', Icon: Mail, classes: 'bg-[#252b3b] text-slate-300' },
@@ -202,6 +230,9 @@ export default function LeadPanel({
   const selectedId = leadId;
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
+  // Mensagens reais de WhatsApp do lead (fonte: whatsapp_mensagens, via RLS).
+  // Mescladas com `interacoes` SÓ na exibição da aba Conversa / "Ver tudo".
+  const [mensagensWhatsapp, setMensagensWhatsapp] = useState<MensagemWhatsapp[]>([]);
   const [loadingInteracoes, setLoadingInteracoes] = useState(false);
   const [interacoesError, setInteracoesError] = useState(false);
   const [showAllInteracoes, setShowAllInteracoes] = useState(false);
@@ -236,14 +267,24 @@ export default function LeadPanel({
   const carregarInteracoes = useCallback(async () => {
     if (!selectedId || !usingSupabase) {
       setInteracoes([]);
+      setMensagensWhatsapp([]);
       setInteracoesError(false);
       return;
     }
     setLoadingInteracoes(true);
     setInteracoesError(false);
     try {
-      const data = await getInteracoesByLead(selectedId);
+      // WhatsApp em paralelo; uma falha aqui degrada para "sem WhatsApp" e não
+      // derruba o histórico de interações.
+      const [data, whatsapp] = await Promise.all([
+        getInteracoesByLead(selectedId),
+        getMensagensWhatsappByLead(selectedId).catch((err) => {
+          console.error('Erro ao carregar mensagens WhatsApp:', err);
+          return [] as MensagemWhatsapp[];
+        }),
+      ]);
       setInteracoes(data);
+      setMensagensWhatsapp(whatsapp);
     } catch (err) {
       console.error('Erro ao carregar interações:', err);
       setInteracoesError(true);
@@ -473,6 +514,28 @@ export default function LeadPanel({
     () => ultimoContatoEfetivo(selectedLead?.ultimo_contato, interacoes),
     [selectedLead?.ultimo_contato, interacoes],
   );
+
+  // Aba Conversa / "Ver tudo": histórico ÚNICO = interações + mensagens reais
+  // de WhatsApp (inbound e outbound), mescladas só aqui, na UI. Ordem
+  // cronológica decrescente, igual à que getInteracoesByLead já devolve.
+  // A "Atividade recente" da Visão geral e a cadência seguem só em `interacoes`.
+  const historicoConversa = useMemo<ItemConversa[]>(() => {
+    const itens: ItemConversa[] = [
+      ...interacoes.map((i) => ({
+        kind: 'interacao' as const,
+        id: i.id,
+        quando: new Date(i.created_at).getTime() || 0,
+        interacao: i,
+      })),
+      ...mensagensWhatsapp.map((m) => ({
+        kind: 'whatsapp' as const,
+        id: m.id,
+        quando: new Date(quandoWhatsapp(m)).getTime() || 0,
+        mensagem: m,
+      })),
+    ];
+    return itens.sort((a, b) => b.quando - a.quando);
+  }, [interacoes, mensagensWhatsapp]);
 
   const panelTimeSince = selectedEmpresa
     ? (ultimoContato
@@ -1022,11 +1085,45 @@ export default function LeadPanel({
                 <Loader2 size={13} className="animate-spin" />
                 <span className="text-xs">Carregando interações...</span>
               </div>
-            ) : interacoes.length === 0 ? (
+            ) : historicoConversa.length === 0 ? (
               <p className="text-xs text-slate-500">Nenhuma interação registrada ainda.</p>
             ) : (
               <div className="space-y-2">
-                {interacoes.map(interacao => {
+                {historicoConversa.map(item => {
+                  // Mensagem real de WhatsApp (fonte: whatsapp_mensagens). Mesmo
+                  // card das interações; muda o rótulo por direção e o remetente.
+                  if (item.kind === 'whatsapp') {
+                    const m = item.mensagem;
+                    const dir = direcaoWhatsapp(m);
+                    const remetente = remetenteWhatsapp(m);
+                    const corpo = m.conteudo ?? '';
+                    const expandida = msgsExpandidas.has(m.id);
+                    const longa = corpo.length > 160 || corpo.split('\n').length > 3;
+                    return (
+                      <div key={m.id} className="rounded-lg border border-[#2a3147] bg-[#0f1117] p-2.5">
+                        <div className="flex items-center gap-2 mb-1">
+                          <MessageSquare size={11} className="text-green-400 shrink-0" />
+                          <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${dir.classes}`}>{dir.rotulo}</span>
+                          <span className="text-[11px] text-slate-500 ml-auto shrink-0">{formatDateTime(quandoWhatsapp(m))}</span>
+                        </div>
+                        {remetente && <div className="text-xs font-medium text-slate-300 mb-0.5 truncate">{remetente}</div>}
+                        {corpo ? (
+                          <p className={`text-xs text-slate-400 leading-relaxed whitespace-pre-wrap ${!expandida && longa ? 'line-clamp-3' : ''}`}>
+                            {corpo}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-slate-600 italic">[mensagem sem texto — {m.tipo}]</p>
+                        )}
+                        {longa && (
+                          <button onClick={() => toggleExpandir(m.id)} className="text-[11px] text-indigo-400 hover:underline mt-1">
+                            {expandida ? 'Ver menos' : 'Ver mensagem completa'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  const interacao = item.interacao;
                   const isIA = interacao.origem_acao === 'ia';
 
                   // (2) Log de sistema/manutenção: estilo discreto (uma linha, dim,
@@ -1366,11 +1463,48 @@ export default function LeadPanel({
                       <Loader2 size={16} className="animate-spin" />
                       <span className="text-sm">Carregando interações...</span>
                     </div>
-                  ) : interacoes.length === 0 ? (
+                  ) : historicoConversa.length === 0 ? (
                     <p className="text-sm text-slate-500 py-4">Nenhuma interação registrada ainda.</p>
                   ) : (
                     <div className="space-y-3">
-                      {interacoes.map(interacao => {
+                      {historicoConversa.map(item => {
+                        // Mensagem real de WhatsApp (fonte: whatsapp_mensagens).
+                        if (item.kind === 'whatsapp') {
+                          const m = item.mensagem;
+                          const wa = CANAL_INFO.whatsapp;
+                          const dir = direcaoWhatsapp(m);
+                          const remetente = remetenteWhatsapp(m);
+                          return (
+                            <div key={m.id} className="rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-4 shadow-none">
+                              <div className="flex items-start justify-between gap-3 mb-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                                    <Clock size={11} /> {formatDateTime(quandoWhatsapp(m))}
+                                  </span>
+                                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${dir.classes}`}>
+                                    {dir.rotulo}
+                                  </span>
+                                  <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${wa.classes}`}>
+                                    <wa.Icon size={11} /> {wa.label}
+                                  </span>
+                                </div>
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${dir.statusClasses}`}>
+                                  {dir.status}
+                                </span>
+                              </div>
+                              {m.conteudo ? (
+                                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{m.conteudo}</p>
+                              ) : (
+                                <p className="text-sm text-slate-500 italic">[mensagem sem texto — {m.tipo}]</p>
+                              )}
+                              {remetente && (
+                                <p className="text-xs text-slate-500 mt-1.5">de {remetente}</p>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        const interacao = item.interacao;
                         const tipoBadge = getTipoInteracaoBadge(interacao.tipo, interacao.descricao);
                         const statusBadge = getStatusInteracao(interacao.tipo);
                         const canal = interacao.canal ? CANAL_INFO[interacao.canal.toLowerCase()] : null;
