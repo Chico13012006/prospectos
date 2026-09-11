@@ -1,4 +1,4 @@
-import type { Lead, Interacao, Usuario, Template } from './supabase'
+import type { Lead, Interacao, Usuario, Template, MensagemWhatsapp } from './supabase'
 import { apenasTemplatesAutorais } from './campanhas/workflowsInternos'
 import { normalizarNicho } from './nichos/normalizar'
 import { createSupabaseBrowserClient } from './supabase-browser'
@@ -700,6 +700,25 @@ export async function createInteracao(interacao: Partial<Interacao>): Promise<In
     if (leadError) console.warn('Interação registrada sem sincronizar o último contato do lead.')
   }
   return data
+}
+
+// --- MENSAGENS WHATSAPP (aba Conversa) ---
+
+// Mensagens reais de WhatsApp já vinculadas a um lead. Fonte única:
+// `whatsapp_mensagens` — não duplicamos em `interacoes`. Somente leitura.
+//
+// Isolamento: a policy de SELECT da tabela filtra `organizacao_id =
+// current_org_id()`; mensagem ainda não vinculada tem `organizacao_id` NULL e
+// nunca retorna aqui. `mensagem_em` (timestamp da Meta) é a cronologia; a UI
+// cai para `created_at` se preciso.
+export async function getMensagensWhatsappByLead(leadId: string): Promise<MensagemWhatsapp[]> {
+  const { data, error } = await supabase
+    .from('whatsapp_mensagens')
+    .select('id, lead_id, organizacao_id, direcao, remetente, remetente_nome, tipo, conteudo, mensagem_em, created_at')
+    .eq('lead_id', leadId)
+    .order('mensagem_em', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as MensagemWhatsapp[]
 }
 
 // --- USUARIOS ---
