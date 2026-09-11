@@ -15,6 +15,8 @@ type Resumo = {
   novos: number
   nichos: Array<{ nicho: string; leads: number; templateAtivo: boolean }>
   semSegmento: number
+  comValidade: number
+  validadeInvalida: number
 }
 const MOTIVO_LABEL: Record<string, string> = {
   sem_nome: 'sem nome',
@@ -117,7 +119,7 @@ export default function ImportarLeadsModal({
               <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => escolherArquivo(e.target.files?.[0] ?? null)} />
             </label>
             <p className="text-xs text-slate-600 mt-1.5">
-              Obrigatórias: <span className="text-slate-500">Nome, E-mail, Empresa, Nicho/Segmento</span> · Opcionais: Origem, Telefone, Cargo, Cidade e Estado.
+              Obrigatórias: <span className="text-slate-500">Nome, E-mail, Empresa, Nicho/Segmento</span> · Opcionais: Origem, Telefone, Cargo, Cidade, Estado e Validade do laudo (dd/mm/aaaa).
             </p>
 
             {carregandoPrevia && (
@@ -137,6 +139,18 @@ export default function ImportarLeadsModal({
                   <div className="flex justify-between gap-3">
                     <span className="text-slate-400">Sem segmento</span>
                     <span className="text-amber-300/80 tabular-nums">{resumo.semSegmento}</span>
+                  </div>
+                )}
+                {resumo.comValidade > 0 && (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-400">Com validade do laudo</span>
+                    <span className="text-slate-300 tabular-nums">{resumo.comValidade}</span>
+                  </div>
+                )}
+                {resumo.validadeInvalida > 0 && (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-400">Validade não reconhecida</span>
+                    <span className="text-amber-300/80 tabular-nums">{resumo.validadeInvalida}</span>
                   </div>
                 )}
                 {resumo.nichos.length > 0 && (
@@ -163,6 +177,13 @@ export default function ImportarLeadsModal({
                     {resumo.semSegmento === 1 ? ' Ele entra' : ' Eles entram'} na base normalmente, mas o motor
                     não escolhe a mensagem de primeiro contato sem segmento — classifique depois na ficha do lead
                     para {resumo.semSegmento === 1 ? 'ele entrar' : 'eles entrarem'} na esteira.
+                  </p>
+                )}
+                {resumo.validadeInvalida > 0 && (
+                  <p className="pt-2 mt-2 border-t border-[#2a3147] text-xs leading-5 text-amber-300/80">
+                    {resumo.validadeInvalida} linha{resumo.validadeInvalida === 1 ? '' : 's'} com validade que não foi
+                    reconhecida como data — use dd/mm/aaaa ou aaaa-mm-dd. {resumo.validadeInvalida === 1 ? 'Ela entra' : 'Elas entram'} na
+                    base sem validade; preencha depois na ficha do lead.
                   </p>
                 )}
               </div>

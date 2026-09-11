@@ -80,6 +80,11 @@ export interface LeadPadrao {
   contato_cargo: string | null
   cidade: string | null
   estado: string | null
+  // Opcional. Data de validade do laudo (migration 0025), já em ISO
+  // `AAAA-MM-DD` — é o formato da coluna `date` e o que o motor de renovação
+  // compara. Planilha sem a coluna, célula vazia ou data que não dá para ler
+  // viram null: o lead entra igual, só sem validade.
+  data_validade: string | null
 }
 
 export type MotivoPulo = 'sem_nome' | 'sem_email' | 'email_invalido' | 'sem_empresa'
@@ -91,6 +96,10 @@ export interface ResultadoPlanilha {
   // para a prévia dizer na cara que esses ficarão parados até serem
   // classificados, em vez de sumirem silenciosamente da esteira.
   semSegmento: number
+  // Linhas válidas cuja célula de validade estava preenchida mas não foi
+  // reconhecida como data. Entram sem validade; a prévia avisa para a pessoa
+  // não descobrir só quando a renovação não disparar.
+  validadeInvalida: number
   totalLinhas: number
 }
 
@@ -110,10 +119,36 @@ const ALIASES: Record<keyof Omit<LeadPadrao, never>, string[]> = {
   contato_cargo: ['cargo', 'title', 'role', 'posicao', 'funcao', 'job title'],
   cidade: ['cidade', 'city', 'municipio'],
   estado: ['estado', 'uf', 'state'],
+  data_validade: [
+    'validade', 'data de validade', 'data validade', 'validade do laudo',
+    'vencimento', 'data de vencimento', 'vencimento do laudo',
+    'valid until', 'expiration', 'expiry', 'expiration date',
+  ],
 }
 
 const semAcento = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+
+// Data de validade da planilha → ISO `AAAA-MM-DD`, ou null se não der para ler.
+// Aceita o que planilha brasileira traz na prática: `DD/MM/AAAA` (também com
+// `-` ou `.`) e o ISO `AAAA-MM-DD`. Ano de 2 dígitos NÃO é aceito — é ambíguo
+// e a validade de um laudo não pode ser chutada. Valida que a data existe de
+// verdade (31/02 → null) usando UTC, para o dia não escorregar por fuso.
+export function parseDataValidade(bruto: string): string | null {
+  const s = (bruto ?? '').trim()
+  if (!s) return null
+  let ano: number, mes: number, dia: number
+  let m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/.exec(s)
+  if (m) { dia = +m[1]; mes = +m[2]; ano = +m[3] }
+  else {
+    m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
+    if (!m) return null
+    ano = +m[1]; mes = +m[2]; dia = +m[3]
+  }
+  const d = new Date(Date.UTC(ano, mes - 1, dia))
+  if (d.getUTCFullYear() !== ano || d.getUTCMonth() !== mes - 1 || d.getUTCDate() !== dia) return null
+  return d.toISOString().slice(0, 10)
+}
 
 // Resolve, para cada campo canônico, qual cabeçalho da planilha o representa.
 function mapearColunas(headers: string[]): Partial<Record<keyof LeadPadrao, string>> {
@@ -164,6 +199,7 @@ export function mapearLeadPadrao(
       contato_cargo: get('contato_cargo') || null,
       cidade: get('cidade') || null,
       estado: get('estado') || null,
+      data_validade: parseDataValidade(get('data_validade')),
     },
   }
 }
@@ -202,14 +238,21 @@ export function processarPlanilhaPadrao(content: string): ResultadoPlanilha {
 
   const validos: LeadPadrao[] = []
   const pulados: LinhaPulada[] = []
+  let validadeInvalida = 0
+  const colValidade = colunas.data_validade
   rows.forEach((row, i) => {
     const r = mapearLeadPadrao(row, colunas)
     // +2: a linha 1 é o cabeçalho e o índice é 0-based (nº "de planilha" real).
-    if ('lead' in r) validos.push(r.lead)
-    else pulados.push({ linha: i + 2, motivo: r.motivo })
+    if ('lead' in r) {
+      validos.push(r.lead)
+      // Célula preenchida que virou null = data que não reconhecemos.
+      if (colValidade && (row[colValidade] ?? '').trim() && !r.lead.data_validade) validadeInvalida++
+    } else {
+      pulados.push({ linha: i + 2, motivo: r.motivo })
+    }
   })
   const semSegmento = validos.filter((lead) => !lead.segmento).length
-  return { validos, pulados, semSegmento, totalLinhas: rows.length }
+  return { validos, pulados, semSegmento, validadeInvalida, totalLinhas: rows.length }
 }
 
 // Dedupe interna do arquivo por e-mail (o 1º ganha). Genérica: serve tanto pro

@@ -6,6 +6,7 @@ import {
   processarPlanilhaPadrao,
   dedupeInternaPorEmail,
   resumirNichosImportacao,
+  parseDataValidade,
   ORIGEM_PADRAO_IMPORT,
   type LeadPadrao,
 } from '../importarCsv'
@@ -60,6 +61,7 @@ describe('processarPlanilhaPadrao', () => {
       contato_cargo: 'CEO',
       cidade: 'São Paulo',
       estado: 'SP',
+      data_validade: null,
     })
   })
 
@@ -120,6 +122,79 @@ describe('processarPlanilhaPadrao', () => {
       'Name,Email,Company,Industry\nA,a@x.com,Acme,Mineração',
     )
     expect(validos[0].segmento).toBe('mineracao')
+  })
+
+  // --- Validade do laudo (opcional) -----------------------------------------
+
+  it('lê a coluna de validade (aliases pt/en, com acento) e grava em ISO', () => {
+    for (const cab of ['Validade', 'Data de Validade', 'Vencimento', 'Validade do Laudo', 'Expiration']) {
+      const { validos, validadeInvalida } = processarPlanilhaPadrao(
+        `nome;email;empresa;${cab}\nA;a@x.com;Acme;15/03/2027`,
+      )
+      expect(validos[0].data_validade, cab).toBe('2027-03-15')
+      expect(validadeInvalida).toBe(0)
+    }
+  })
+
+  it('planilha SEM coluna de validade importa tudo com validade null — o campo é opcional', () => {
+    const { validos, pulados, validadeInvalida } = processarPlanilhaPadrao(
+      'nome;email;empresa\nA;a@x.com;Acme\nB;b@x.com;Beta',
+    )
+    expect(pulados).toHaveLength(0)
+    expect(validos.map((l) => l.data_validade)).toEqual([null, null])
+    expect(validadeInvalida).toBe(0)
+  })
+
+  it('célula de validade vazia não pula a linha nem conta como inválida', () => {
+    const { validos, pulados, validadeInvalida } = processarPlanilhaPadrao(
+      'nome;email;empresa;validade\nA;a@x.com;Acme;\nB;b@x.com;Beta;01/01/2027',
+    )
+    expect(pulados).toHaveLength(0)
+    expect(validos[0].data_validade).toBeNull()
+    expect(validos[1].data_validade).toBe('2027-01-01')
+    expect(validadeInvalida).toBe(0)
+  })
+
+  it('validade que não é data: lead ENTRA (sem validade) e a prévia recebe a contagem', () => {
+    const { validos, pulados, validadeInvalida } = processarPlanilhaPadrao(
+      'nome;email;empresa;validade\n' +
+      'A;a@x.com;Acme;31/02/2027\n' +      // dia inexistente
+      'B;b@x.com;Beta;em breve\n' +        // texto
+      'C;c@x.com;Gama;15/03/27\n' +        // ano de 2 dígitos (ambíguo)
+      'D;d@x.com;Delta;2027-03-15',        // válida
+    )
+    expect(pulados).toHaveLength(0)
+    expect(validos).toHaveLength(4)
+    expect(validos.slice(0, 3).map((l) => l.data_validade)).toEqual([null, null, null])
+    expect(validos[3].data_validade).toBe('2027-03-15')
+    expect(validadeInvalida).toBe(3)
+  })
+})
+
+describe('parseDataValidade', () => {
+  it('aceita dd/mm/aaaa (com /, - ou .) e aaaa-mm-dd', () => {
+    expect(parseDataValidade('15/03/2027')).toBe('2027-03-15')
+    expect(parseDataValidade('5/3/2027')).toBe('2027-03-05')
+    expect(parseDataValidade('15-03-2027')).toBe('2027-03-15')
+    expect(parseDataValidade('15.03.2027')).toBe('2027-03-15')
+    expect(parseDataValidade('2027-03-15')).toBe('2027-03-15')
+    expect(parseDataValidade('  31/12/2026  ')).toBe('2026-12-31')
+  })
+
+  it('rejeita data inexistente, ano de 2 dígitos, formato americano ambíguo e lixo', () => {
+    expect(parseDataValidade('31/02/2027')).toBeNull()
+    expect(parseDataValidade('00/01/2027')).toBeNull()
+    expect(parseDataValidade('15/13/2027')).toBeNull()
+    expect(parseDataValidade('15/03/27')).toBeNull()
+    expect(parseDataValidade('2027/03/15')).toBeNull()
+    expect(parseDataValidade('março 2027')).toBeNull()
+    expect(parseDataValidade('')).toBeNull()
+    expect(parseDataValidade('   ')).toBeNull()
+  })
+
+  it('não escorrega o dia por fuso horário (usa UTC)', () => {
+    expect(parseDataValidade('01/01/2027')).toBe('2027-01-01')
+    expect(parseDataValidade('2026-12-31')).toBe('2026-12-31')
   })
 })
 

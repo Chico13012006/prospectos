@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     }
 
     const texto = await lerTextoCsv(file)
-    const { validos, pulados, totalLinhas } = processarPlanilhaPadrao(texto)
+    const { validos, pulados, totalLinhas, validadeInvalida } = processarPlanilhaPadrao(texto)
     const { unicos, duplicados } = dedupeInternaPorEmail(validos)
 
     // Contagem por motivo de pulo (nome/e-mail/empresa/nicho), pro preview.
@@ -88,6 +88,12 @@ export async function POST(req: NextRequest) {
       // importação. Segmento é opcional aqui, mas sem ele o motor não escolhe
       // template e o lead fica parado — a prévia diz isso em voz alta.
       semSegmento: novos.filter((lead) => !lead.segmento).length,
+      // Validade do laudo é opcional. `comValidade` conta sobre os novos (o que
+      // a renovação vai ter para trabalhar); `validadeInvalida` é sobre o
+      // arquivo — célula preenchida que não virou data. Nenhum dos dois
+      // bloqueia a importação.
+      comValidade: novos.filter((lead) => !!lead.data_validade).length,
+      validadeInvalida,
     }
 
     if (modo !== 'confirmar') {
@@ -127,6 +133,7 @@ export async function POST(req: NextRequest) {
       contato_cargo: l.contato_cargo,
       cidade: l.cidade,
       estado: l.estado,
+      data_validade: l.data_validade,
       responsavel_id: vinculo.usuario.id,
       responsavel_nome: vinculo.usuario.nome,
     }))
