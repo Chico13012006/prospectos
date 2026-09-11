@@ -1,0 +1,532 @@
+/* Casca (header, abas, filtros) idêntica à da Cadência — mesma tela, mesma
+   linguagem visual. Daqui para baixo o que muda é a tabela. */
+
+.root {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 88% 3%, rgba(62, 84, 180, 0.1), transparent 27rem),
+    #0c121f;
+  color: #f4f7ff;
+}
+
+.pageHeader {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.5rem 1.5rem 1rem;
+}
+
+.headingBlock {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.headingIcon {
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.45rem;
+  background: rgba(99, 102, 241, 0.13);
+  color: #7c83ff;
+}
+
+.headingBlock h1 {
+  margin: 0;
+  color: #f7f8ff;
+  font-size: 1.5rem;
+  font-weight: 720;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.headingBlock p {
+  margin: 0.35rem 0 0;
+  color: #8794ab;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.primaryButton,
+.tabs button,
+.moreButton,
+.clearButton {
+  border: 0;
+  font: inherit;
+}
+
+.primaryButton {
+  display: inline-flex;
+  min-height: 2.3rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  background: linear-gradient(135deg, #6558f5, #5145e5);
+  box-shadow: 0 0.5rem 1.5rem rgba(78, 70, 229, 0.22);
+  color: white;
+  font-size: 0.79rem;
+  font-weight: 650;
+  transition: filter 140ms ease, transform 140ms ease;
+}
+
+.primaryButton:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.toolbar {
+  flex-shrink: 0;
+  border-bottom: 1px solid #202c40;
+  padding: 0 1.5rem 1rem;
+}
+
+.viewRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tabs button {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid #28364e;
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.85rem;
+  background: #111c2e;
+  color: #a9b4c8;
+  font-size: 0.78rem;
+  font-weight: 590;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.tabs button:hover {
+  border-color: #3a4b68;
+  color: #eef2ff;
+}
+
+.tabs .tabActive {
+  border-color: rgba(106, 92, 255, 0.55);
+  background: linear-gradient(135deg, #6459ed, #5045d8);
+  box-shadow: 0 0.4rem 1.15rem rgba(84, 72, 222, 0.18);
+  color: white;
+}
+
+.total {
+  color: #8896ad;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.total strong {
+  color: #dbe3f3;
+  font-weight: 620;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.filters select,
+.search {
+  height: 2.35rem;
+  border: 1px solid #26344a;
+  border-radius: 0.48rem;
+  background: #101a2b;
+  color: #cbd4e5;
+  font-size: 0.76rem;
+}
+
+.filters select {
+  min-width: 10.7rem;
+  padding: 0 2rem 0 0.75rem;
+  outline: none;
+}
+
+.filters select:focus,
+.search:focus-within {
+  border-color: rgba(99, 102, 241, 0.72);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.13);
+}
+
+.search {
+  display: flex;
+  min-width: 13rem;
+  flex: 1 1 16rem;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0 0.7rem;
+  color: #77869e;
+}
+
+.search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #dce4f4;
+  font: inherit;
+}
+
+.search input::placeholder {
+  color: #66758e;
+}
+
+.moreButton,
+.clearButton {
+  display: inline-flex;
+  height: 2.35rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid #2a3951;
+  border-radius: 0.48rem;
+  padding: 0 0.8rem;
+  background: #111c2e;
+  color: #c1cbda;
+  font-size: 0.76rem;
+  font-weight: 560;
+}
+
+.moreButton:hover,
+.moreButtonActive {
+  border-color: rgba(99, 102, 241, 0.58);
+  color: #c8caff;
+}
+
+.clearButton {
+  color: #93a0b5;
+}
+
+.clearButton:hover {
+  border-color: rgba(99, 102, 241, 0.58);
+  color: #c8caff;
+}
+
+/* --- Tabela ---------------------------------------------------------------
+   Menos "planilha": sem grade vertical, só separadores horizontais discretos,
+   linhas altas com hierarquia em duas alturas de texto. */
+
+.tableViewport {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  padding: 1rem 1.5rem 0;
+}
+
+.tableScroll {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  border: 1px solid #1e2a3d;
+  border-radius: 0.7rem;
+  background: rgba(16, 26, 43, 0.6);
+  scrollbar-color: #34445f transparent;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 1px solid #22304a;
+  background: #0f1a2b;
+  padding: 0.7rem 0.9rem;
+  color: #6e7d95;
+  font-size: 0.68rem;
+  font-weight: 640;
+  letter-spacing: 0.02em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.sortButton:hover {
+  color: #c3cde0;
+}
+
+.sortInativo {
+  opacity: 0.32;
+}
+
+.table tbody td {
+  border-bottom: 1px solid rgba(32, 44, 66, 0.72);
+  padding: 0.72rem 0.9rem;
+  color: #aab6c9;
+  font-size: 0.76rem;
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.row {
+  cursor: pointer;
+  transition: background 130ms ease;
+}
+
+.row:hover td {
+  background: rgba(27, 42, 68, 0.55);
+}
+
+.rowSelected td {
+  background: rgba(99, 102, 241, 0.11);
+}
+
+/* Empresa em cima, decisor embaixo — a coluna âncora da lista. */
+.empresa {
+  display: block;
+  overflow: hidden;
+  color: #f1f4fb;
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contato {
+  display: block;
+  overflow: hidden;
+  margin-top: 0.16rem;
+  color: #8494ab;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.colEmpresa {
+  min-width: 13rem;
+  max-width: 18rem;
+}
+
+/* Valor principal + apoio, para Último contato e Próxima ação. */
+.principal {
+  display: block;
+  color: #cfd8e8;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.apoio {
+  display: block;
+  overflow: hidden;
+  margin-top: 0.16rem;
+  color: #74849c;
+  font-size: 0.7rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.colAcao {
+  min-width: 11rem;
+  max-width: 15rem;
+}
+
+.estagio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 0.22rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 620;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.estagioDot {
+  width: 0.4rem;
+  height: 0.4rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.responsavel {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.45rem;
+  color: #c3cddd;
+  white-space: nowrap;
+}
+
+.avatar {
+  display: inline-flex;
+  width: 1.45rem;
+  height: 1.45rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(183, 178, 255, 0.7);
+  border-radius: 50%;
+  background: #d8d4ff;
+  color: #312e81;
+  font-size: 0.52rem;
+  font-weight: 750;
+}
+
+/* --- Rodapé --------------------------------------------------------------- */
+
+.footer {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.85rem 0 1rem;
+  color: #74849c;
+  font-size: 0.72rem;
+}
+
+.porPagina {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.porPagina select {
+  height: 1.95rem;
+  border: 1px solid #26344a;
+  border-radius: 0.42rem;
+  padding: 0 1.7rem 0 0.55rem;
+  background: #101a2b;
+  color: #cbd4e5;
+  font-size: 0.72rem;
+  outline: none;
+}
+
+.paginas {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.paginas button {
+  display: inline-flex;
+  min-width: 1.85rem;
+  height: 1.85rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #26344a;
+  border-radius: 0.42rem;
+  padding: 0 0.35rem;
+  background: #101a2b;
+  color: #aab6c9;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.paginas button:hover:not(:disabled) {
+  border-color: rgba(99, 102, 241, 0.55);
+  color: #c8caff;
+}
+
+.paginas button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.paginaAtiva {
+  border-color: rgba(106, 92, 255, 0.55) !important;
+  background: linear-gradient(135deg, #6459ed, #5045d8) !important;
+  color: white !important;
+}
+
+.reticencias {
+  padding: 0 0.2rem;
+  color: #5d6c85;
+}
+
+.estadoLinha {
+  padding: 3.5rem 1rem;
+  color: #74849c;
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.estadoLinha span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.root button:focus-visible,
+.root select:focus-visible,
+.root input:focus-visible {
+  outline: 2px solid rgba(124, 131, 255, 0.85);
+  outline-offset: 2px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

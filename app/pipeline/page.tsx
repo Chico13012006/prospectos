@@ -5,9 +5,9 @@ import { useSearchParams } from 'next/navigation';
 import { Settings, Loader2 } from 'lucide-react';
 import { getPipelineFiltrosOpcoes } from '@/lib/api';
 import PipelineColumn from '@/components/pipeline/PipelineColumn';
-import LeadsTableView from '@/components/pipeline/LeadsTableView';
 import GlobalFilters, { type GlobalFilterState } from '@/components/pipeline/GlobalFilters';
 import CadenciaView from '@/components/pipeline/cadencia/CadenciaView';
+import ListaView from '@/components/pipeline/lista/ListaView';
 import LeadPanel from '@/components/leads/LeadPanel';
 import NovoLeadModal from '@/components/leads/NovoLeadModal';
 import { COLUNAS_KANBAN } from '@/lib/pipeline-stages';
@@ -74,6 +74,21 @@ function PipelineInner() {
           onOpenList={() => setVista('tabela')}
           onNovoContato={() => setShowNovoLead(true)}
         />
+      ) : vista === 'tabela' ? (
+        <ListaView
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          responsaveis={filtroOpcoes.responsaveis}
+          segmentos={filtroOpcoes.segmentos}
+          canais={filtroOpcoes.canais}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          reloadKey={reloadKey}
+          loading={loading}
+          usingSupabase={usingSupabase}
+          onOpenCadencia={() => setVista('cadencia')}
+          onNovoContato={() => setShowNovoLead(true)}
+        />
       ) : (<>
       {/* Header */}
       <div className="px-6 pt-6 pb-3 flex items-start justify-between shrink-0">
@@ -131,19 +146,10 @@ function PipelineInner() {
             <span className="text-sm font-medium text-slate-400">Sem conexão com os dados.</span>
             <span className="text-xs">Verifique a conexão com o Supabase.</span>
           </div>
-        ) : vista === 'tabela' ? (
-          /* Visão TABELA (padrão): todos os leads, alto volume — busca, filtros
-             rápidos, ordenação e paginação server-side. */
-          <LeadsTableView
-            filtros={filtros}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            reloadKey={reloadKey}
-          />
         ) : (
           /* Visão KANBAN: só quem já respondeu, tem interesse ou virou
              oportunidade (COLUNAS_KANBAN) — Novos Leads/Em Prospecção ficam
-             só na Tabela, que aguenta o volume. */
+             só na Lista, que aguenta o volume. */
           <div className="h-full flex gap-4 overflow-x-auto px-6 pb-4">
             {COLUNAS_KANBAN.map(col => (
               <PipelineColumn

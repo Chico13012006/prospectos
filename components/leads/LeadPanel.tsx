@@ -489,20 +489,32 @@ export default function LeadPanel({
 
   if (!selectedEmpresa) return null;
 
+  // Refino visual restrito ao Pipeline. A Base de Leads continua recebendo
+  // EXATAMENTE as classes de antes — toda diferença passa por `noPipeline`,
+  // nunca por alteração global. O painel já era sobreposto (fixed + backdrop);
+  // o que apertava a Lista era a largura escalar até 44rem nas telas grandes.
+  const noPipeline = contexto === 'pipeline';
+  const larguraPainel = noPipeline
+    ? 'max-w-full sm:max-w-[520px]'
+    : 'max-w-md lg:max-w-[32rem] xl:max-w-[38rem] 2xl:max-w-[44rem]';
+  // Divisor mais discreto e blocos com mais respiro só no Pipeline.
+  const divisor = noPipeline ? 'border-b border-[#212a3c]' : 'border-b border-[#2a3147]';
+  const secao = noPipeline ? 'px-4 py-4' : 'px-5 py-3';
+
   return (
     <>
       <div
         className="fixed inset-0 bg-black/20 z-40"
         onClick={onClose}
       />
-      <div className="fixed top-0 right-0 h-full w-full max-w-md lg:max-w-[32rem] xl:max-w-[38rem] 2xl:max-w-[44rem] bg-[#1a1f2e] shadow-2xl z-50 flex flex-col">
+      <div className={`fixed top-0 right-0 h-full w-full ${larguraPainel} bg-[#1a1f2e] shadow-2xl z-50 flex flex-col`}>
         {/* Panel header */}
-        <div className="px-5 py-4 border-b border-[#2a3147]">
-          <div className="flex items-start justify-between mb-2">
+        <div className={`${noPipeline ? 'px-4 py-3' : 'px-5 py-4'} ${divisor}`}>
+          <div className={`flex items-start justify-between ${noPipeline ? 'mb-1.5' : 'mb-2'}`}>
             <div className="flex items-start gap-3 flex-1 min-w-0 pr-3">
               <SdrCircle name={selectedEmpresa.responsavel} />
               <div className="min-w-0">
-                <h2 className="font-bold text-slate-100 text-lg leading-tight">{selectedEmpresa.nome}</h2>
+                <h2 className={`font-bold text-slate-100 leading-tight ${noPipeline ? 'text-base' : 'text-lg'}`}>{selectedEmpresa.nome}</h2>
                 {(() => {
                   const partes = [
                     [selectedLead?.cidade ?? selectedEmpresa.cidade, selectedLead?.estado ?? selectedEmpresa.estado].filter(Boolean).join(', '),
@@ -510,7 +522,7 @@ export default function LeadPanel({
                     selectedEmpresa.funcionarios_faixa ? `${selectedEmpresa.funcionarios_faixa} func.` : '',
                   ].filter(Boolean)
                   return partes.length > 0 ? (
-                    <div className="text-sm text-slate-400 mt-0.5">{partes.join(' · ')}</div>
+                    <div className={`text-slate-400 mt-0.5 ${noPipeline ? 'text-xs' : 'text-sm'}`}>{partes.join(' · ')}</div>
                   ) : null
                 })()}
               </div>
@@ -520,7 +532,11 @@ export default function LeadPanel({
                 <button
                   type="button"
                   onClick={() => setEditandoDados(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20"
+                  className={noPipeline
+                    /* Ação secundária: discreta no Pipeline, para não competir
+                       com o CTA "Executar ação". */
+                    ? 'inline-flex items-center gap-1.5 rounded-lg border border-[#2a3147] px-2 py-1 text-[11px] font-semibold text-slate-400 hover:border-indigo-500/40 hover:text-indigo-300'
+                    : 'inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20'}
                   title="Editar informações e validade do lead"
                 >
                   <PencilLine size={12} /> Editar
@@ -575,12 +591,20 @@ export default function LeadPanel({
         {/* Cartão ADITIVO da nova camada de entidades (Fase 2e) — fail-safe:
             renderiza nada quando o flag está off/erro/vazio. Não altera os
             campos legados do painel. */}
-        {selectedLead && <EmpresaDecisoresCard leadId={selectedLead.id} />}
-        {selectedLead && <ServicosLaudosCard leadId={selectedLead.id} />}
+        {/* Empresa e decisor já vêm no cabeçalho do drawer: no Pipeline esta
+            faixa apenas repetiria o que está logo acima. Segue inteira na Base
+            de Leads (e na ficha completa, mais abaixo). */}
+        {selectedLead && !noPipeline && <EmpresaDecisoresCard leadId={selectedLead.id} />}
+        {/* "Laudos / serviços recorrentes" é uma faixa intermediária ACIMA das
+            abas: no Pipeline ela empurra "Próxima ação · IA" para baixo e repete
+            contexto que não decide o próximo passo comercial. Fica oculta só
+            aqui — a funcionalidade (listar/criar/editar/arquivar) continua
+            inteira na Base de Leads, que é onde esse ciclo é gerido. */}
+        {selectedLead && !noPipeline && <ServicosLaudosCard leadId={selectedLead.id} />}
 
         <div className="flex-1 overflow-y-auto">
           {/* Abas da ficha (item 2): Visão geral · Conversa · Dados */}
-          <div className="px-5 pt-2 flex gap-1 border-b border-[#2a3147] sticky top-0 bg-[#1a1f2e] z-10">
+          <div className={`${noPipeline ? 'px-4' : 'px-5'} pt-2 flex gap-1 ${divisor} sticky top-0 bg-[#1a1f2e] z-10`}>
             {([
               { id: 'visao', label: 'Visão geral' },
               { id: 'conversa', label: 'Conversa' },
@@ -600,7 +624,7 @@ export default function LeadPanel({
 
           {abaPainel === 'visao' && (<>
           {/* Status */}
-          <div className="px-5 py-3 border-b border-[#2a3147] flex items-center gap-3">
+          <div className={`${secao} ${divisor} flex items-center ${noPipeline ? 'gap-2 flex-wrap' : 'gap-3'}`}>
             <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusBadgeClasses(selectedEmpresa.status)}`}>
               {getStatusLabel(selectedEmpresa.status)}
             </span>
@@ -620,7 +644,7 @@ export default function LeadPanel({
           </div>
 
           {/* 4 KPI cards */}
-          <div className="px-4 py-3 border-b border-[#2a3147] grid grid-cols-2 gap-2">
+          <div className={`${noPipeline ? 'px-4 py-4' : 'px-4 py-3'} ${divisor} grid grid-cols-2 ${noPipeline ? 'gap-2.5' : 'gap-2'}`}>
             {[
               {
                 label: 'Último contato',
@@ -647,7 +671,13 @@ export default function LeadPanel({
                 color: '#374151',
               },
             ].map(card => (
-              <div key={card.label} className="bg-[#0f1117] rounded-xl px-3 py-2" style={{ maxHeight: 80 }}>
+              /* Secundário: no Pipeline os KPIs ficam achatados (sem caixa
+                 sólida) para não pesarem igual ao bloco de Próxima ação. */
+              <div
+                key={card.label}
+                className={noPipeline ? 'rounded-lg px-2.5 py-1.5 border border-[#212a3c]' : 'bg-[#0f1117] rounded-xl px-3 py-2'}
+                style={{ maxHeight: 80 }}
+              >
                 <div className="text-xs text-slate-500 mb-1 leading-none">{card.label}</div>
                 <div className="font-bold text-sm leading-tight truncate" style={{ color: card.color }}>{card.value}</div>
                 {card.sub && <div className="text-xs text-slate-500 mt-0.5">{card.sub}</div>}
@@ -656,15 +686,15 @@ export default function LeadPanel({
           </div>
 
           {selectedLead && (
-            <div className="px-4 py-3 border-b border-[#2a3147]">
+            <div className={`${noPipeline ? 'px-4 py-4' : 'px-4 py-3'} ${divisor}`}>
               <button
                 type="button"
                 onClick={() => setEditandoDados(true)}
-                className="w-full flex items-center justify-between gap-3 rounded-xl border border-[#2a3147] bg-[#0f1117] px-3 py-2 text-left hover:border-indigo-500/40 hover:bg-indigo-500/5"
+                className={`w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-left hover:border-indigo-500/40 hover:bg-indigo-500/5 ${noPipeline ? 'border border-[#212a3c]' : 'border border-[#2a3147] bg-[#0f1117]'}`}
               >
                 <span>
                   <span className="block text-xs text-slate-500">Validade do laudo</span>
-                  <span className="block text-sm font-semibold text-slate-300 mt-0.5">
+                  <span className={`block font-semibold text-slate-300 mt-0.5 ${noPipeline ? 'text-xs' : 'text-sm'}`}>
                     {selectedLead.data_validade ? formatDate(selectedLead.data_validade) : 'Não configurada'}
                   </span>
                 </span>
@@ -675,11 +705,13 @@ export default function LeadPanel({
             </div>
           )}
 
-          {/* Próxima ação IA */}
-          <div className="px-5 py-3 border-b border-[#2a3147]">
+          {/* Próxima ação IA — bloco de MAIOR prioridade no Pipeline: ganha
+              fundo levemente destacado e faixa lateral, para liderar a coluna
+              em vez de disputar peso com os cartões vizinhos. */}
+          <div className={`${secao} ${divisor} ${noPipeline ? 'bg-indigo-500/[0.05] border-l-2 border-l-indigo-500' : ''}`}>
             <div className="flex items-center gap-1.5 mb-2">
               <Bot size={12} className="text-indigo-500" />
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Próxima ação · IA</span>
+              <span className={`text-xs font-semibold uppercase tracking-wide ${noPipeline ? 'text-indigo-300/90' : 'text-slate-500'}`}>Próxima ação · IA</span>
               {isActionDelayed && (
                 <span className="ml-auto text-xs font-semibold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded">Atrasada</span>
               )}
@@ -712,10 +744,14 @@ export default function LeadPanel({
                   {liberando ? 'Liberando...' : confirmandoLiberar ? 'Confirmar liberação?' : 'Liberar para o motor'}
                 </button>
               ) : (
+                /* CTA principal: no Pipeline ganha peso (mais alto, mais largo
+                   que a secundária e com sombra) para liderar o bloco. */
                 <button
                   onClick={handleExecutarAcao}
                   disabled={executando}
-                  className="flex-1 text-xs font-semibold text-white py-1.5 rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50"
+                  className={`text-xs font-semibold text-white rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50 ${
+                    noPipeline ? 'flex-[1.5] py-2 shadow-lg shadow-indigo-500/20' : 'flex-1 py-1.5'
+                  }`}
                   style={{ backgroundColor: '#6366f1' }}
                 >
                   {executando ? 'Executando...' : 'Executar ação'}
@@ -724,7 +760,9 @@ export default function LeadPanel({
               <button
                 onClick={handleGerarMensagem}
                 disabled={mensagemLoading}
-                className="flex-1 text-xs font-medium text-slate-300 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-1"
+                className={`flex-1 text-xs font-medium text-slate-300 rounded-lg border hover:bg-[#0f1117] transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-1 ${
+                  noPipeline ? 'py-2 border-[#2f3a52]' : 'py-1.5 border-[#2a3147]'
+                }`}
               >
                 {mensagemLoading ? <Loader2 size={12} className="animate-spin" /> : null}
                 {mensagemLoading ? 'Gerando...' : 'Gerar mensagem'}
@@ -748,7 +786,7 @@ export default function LeadPanel({
           </div>
 
           {/* Cadência (item 2): progresso real de contatos + status da automação */}
-          <div className="px-5 py-3 border-b border-[#2a3147]">
+          <div className={`${secao} ${divisor}`}>
             <div className="flex items-center gap-1.5 mb-2">
               <Repeat size={12} className="text-indigo-400" />
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cadência</span>
@@ -772,7 +810,7 @@ export default function LeadPanel({
           </div>
 
           {/* Resumo IA */}
-          <div className="px-5 py-3 border-b border-[#2a3147]">
+          <div className={`${secao} ${divisor}`}>
             <div className="flex items-center gap-1.5 mb-1.5">
               <Bot size={12} className="text-green-500" />
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Resumo · IA</span>
@@ -783,7 +821,7 @@ export default function LeadPanel({
           </div>
 
           {/* Inteligência Comercial · IA (item 4) — gerada sob demanda */}
-          <div className="px-5 py-3 border-b border-[#2a3147]">
+          <div className={`${secao} ${divisor}`}>
             <div className="flex items-center gap-1.5 mb-2">
               <Sparkles size={12} className="text-amber-400" />
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Inteligência Comercial · IA</span>
@@ -843,7 +881,7 @@ export default function LeadPanel({
           </div>
 
           {/* Atividade recente (item 2): timeline curta + link p/ o histórico */}
-          <div className="px-5 py-3 border-b border-[#2a3147]">
+          <div className={`${secao} ${divisor}`}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Atividade recente</span>
               <button
@@ -899,7 +937,7 @@ export default function LeadPanel({
 
           {abaPainel === 'conversa' && (<>
           {/* Registrar interação (formulário real) */}
-          <div className="px-5 py-3 border-b border-[#2a3147]">
+          <div className={`${secao} ${divisor}`}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Registrar interação</span>
               {!showRegistrar && (
@@ -966,7 +1004,7 @@ export default function LeadPanel({
           </div>
 
           {/* Histórico */}
-          <div className="px-5 py-4 border-b border-[#2a3147]">
+          <div className={`${noPipeline ? 'px-4 py-4' : 'px-5 py-4'} ${divisor}`}>
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Histórico de interações</span>
               <button
