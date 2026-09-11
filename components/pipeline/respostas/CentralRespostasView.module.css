@@ -1016,6 +1016,16 @@
   line-height: 1.35;
 }
 
+/* Retorno do envio de WhatsApp no lugar do aviso: erro (recusa, rede, fora
+   da janela) e atenção (modo ensaio — nada foi enviado). */
+.avisoErro {
+  color: var(--danger, #f87171);
+}
+
+.avisoAtencao {
+  color: var(--warning, #f59e0b);
+}
+
 .botaoSecundario {
   display: inline-flex;
   align-items: center;

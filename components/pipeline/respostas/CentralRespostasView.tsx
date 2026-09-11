@@ -160,6 +160,10 @@ export default function CentralRespostasView({
   const [canalComposer, setCanalComposer] = useState<Canal>('email')
   const [templateId, setTemplateId] = useState('')
   const [previa, setPrevia] = useState(false)
+  // Envio de WhatsApp: só por clique explícito, sem retry. `retornoEnvio`
+  // substitui o aviso do rodapé do composer até a próxima tentativa.
+  const [enviando, setEnviando] = useState(false)
+  const [retornoEnvio, setRetornoEnvio] = useState<{ tipo: 'erro' | 'atencao'; texto: string } | null>(null)
 
   // Bloco de prospecção (rodapé da coluna esquerda): busca na base existente.
   const [prospBusca, setProspBusca] = useState('')
@@ -168,6 +172,10 @@ export default function CentralRespostasView({
   const [prospCarregando, setProspCarregando] = useState(false)
 
   const reqRef = useRef(0)
+  const fioReqRef = useRef(0)
+  // Lead selecionado no momento — para uma resposta de envio que chega depois
+  // de trocar de conversa não mexer no fio nem no rascunho do lead novo.
+  const ativaRef = useRef<string | null>(null)
   const fimDoFioRef = useRef<HTMLDivElement>(null)
 
   // --- Conversas -----------------------------------------------------------
@@ -218,28 +226,45 @@ export default function CentralRespostasView({
   )
 
   // --- Fio da conversa -----------------------------------------------------
+  // Contador de requisição: resposta antiga (lead anterior ou recarga anterior)
+  // nunca sobrescreve a mais recente. `silencioso` recarrega sem o spinner —
+  // usado após enviar, para o histórico não piscar.
+  const carregarFio = useCallback(async (leadId: string, opts: { silencioso?: boolean } = {}) => {
+    const req = ++fioReqRef.current
+    if (!opts.silencioso) setFioCarregando(true)
+    try {
+      const msgs = await getConversaDoLead(leadId)
+      if (req === fioReqRef.current) setFio(msgs)
+    } catch {
+      if (req === fioReqRef.current) setFio([])
+    } finally {
+      if (req === fioReqRef.current) setFioCarregando(false)
+    }
+  }, [])
+
   useEffect(() => {
-    if (!ativa) { setFio([]); return }
-    let cancelado = false
-    setFioCarregando(true)
-    getConversaDoLead(ativa)
-      .then((msgs) => { if (!cancelado) setFio(msgs) })
-      .catch(() => { if (!cancelado) setFio([]) })
-      .finally(() => { if (!cancelado) setFioCarregando(false) })
+    ativaRef.current = ativa
     // Trocar de conversa limpa o rascunho — nunca enviar texto no lead errado.
     setAssunto('')
     setTexto('')
     setCopiado(false)
-    return () => { cancelado = true }
-  }, [ativa])
+    setRetornoEnvio(null)
+    if (!ativa) { fioReqRef.current++; setFio([]); return }
+    carregarFio(ativa)
+  }, [ativa, carregarFio])
 
   const canaisDoFio = useMemo(() => new Set(fio.map((m) => m.canal)), [fio])
 
+  // Canal inicial (leitura e composer) = canal da última resposta recebida.
+  // Keyed no LEAD, não no fio: recarregar o fio (ex.: depois de enviar) não
+  // pode desfazer o canal que o usuário escolheu à mão.
+  const canalUltimaResposta = conversaAtiva?.canal
   useEffect(() => {
-    const inicial: Canal = canaisDoFio.has('email') || canaisDoFio.size === 0 ? 'email' : 'whatsapp'
+    if (!ativa) return
+    const inicial: Canal = canalUltimaResposta === 'whatsapp' ? 'whatsapp' : 'email'
     setCanalAtivo(inicial)
     setCanalComposer(inicial)
-  }, [canaisDoFio])
+  }, [ativa, canalUltimaResposta])
 
   const fioDoCanal = useMemo(() => fio.filter((m) => m.canal === canalAtivo), [fio, canalAtivo])
 
@@ -259,7 +284,8 @@ export default function CentralRespostasView({
   )
 
   // Trocar de canal zera o template: um template de e-mail não serve no WhatsApp.
-  useEffect(() => { setTemplateId(''); setPrevia(false) }, [canalComposer])
+  // E limpa o retorno do envio — um erro de WhatsApp não pertence ao e-mail.
+  useEffect(() => { setTemplateId(''); setPrevia(false); setRetornoEnvio(null) }, [canalComposer])
 
   const aplicarTemplate = () => {
     if (!templateEscolhido) return
@@ -275,6 +301,54 @@ export default function CentralRespostasView({
       setTimeout(() => setCopiado(false), 1800)
     } catch {
       setCopiado(false)
+    }
+  }
+
+  // Envio de WhatsApp pela rota já existente (POST /api/whatsapp/enviar). A
+  // organização vem da SESSÃO no servidor; daqui vai só { leadId, texto }.
+  // Dispara SÓ no clique. Sem retry: erro fica na tela com o texto preservado.
+  // Em sucesso não há mensagem otimista — o fio é recarregado e a outbound
+  // aparece vinda de `whatsapp_mensagens`.
+  const podeEnviarWhatsapp = canalComposer === 'whatsapp' && !!conversaAtiva && !!texto.trim() && !enviando
+  const enviarWhatsapp = async () => {
+    if (!podeEnviarWhatsapp || !conversaAtiva) return
+    const leadId = conversaAtiva.lead.id
+    setEnviando(true)
+    setRetornoEnvio(null)
+    try {
+      const res = await fetch('/api/whatsapp/enviar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId, texto }),
+      })
+      const corpo = (await res.json().catch(() => ({}))) as {
+        erro?: string; codigo?: string; simulado?: boolean
+      }
+      // Usuário trocou de conversa enquanto enviava: não mexer no lead novo.
+      if (ativaRef.current !== leadId) return
+
+      if (!res.ok) {
+        setRetornoEnvio({
+          tipo: 'erro',
+          texto: corpo.codigo === 'fora_da_janela'
+            ? 'Fora da janela de 24h: o WhatsApp só aceita texto livre até 24h após a última mensagem recebida do lead. Será necessário usar um template aprovado do WhatsApp.'
+            : (corpo.erro ?? `Não foi possível enviar (erro ${res.status}).`),
+        })
+        return
+      }
+      if (corpo.simulado) {
+        // WHATSAPP_MODO_ENSAIO: nada foi enviado nem gravado. Mantém o texto e
+        // diz isso — sem fingir sucesso.
+        setRetornoEnvio({ tipo: 'atencao', texto: 'Modo ensaio do WhatsApp: envio simulado — nada foi enviado nem gravado.' })
+        return
+      }
+      setTexto('')
+      await carregarFio(leadId, { silencioso: true })
+    } catch (e) {
+      if (ativaRef.current !== leadId) return
+      setRetornoEnvio({ tipo: 'erro', texto: `Falha de rede ao enviar: ${e instanceof Error ? e.message : String(e)}` })
+    } finally {
+      setEnviando(false)
     }
   }
 
@@ -658,22 +732,43 @@ export default function CentralRespostasView({
               />
 
               <div className={styles.composerAcoes}>
-                <span className={styles.aviso}>
-                  {canalComposer === 'email'
-                    ? <>Envio pela plataforma ainda não ligado — quem dispara e-mail é o motor de cadência. Use <strong>Copiar</strong>.</>
-                    : <>Integração de envio do WhatsApp ainda não está ligada nesta versão.</>}
+                <span
+                  className={`${styles.aviso} ${retornoEnvio?.tipo === 'erro' ? styles.avisoErro : retornoEnvio?.tipo === 'atencao' ? styles.avisoAtencao : ''}`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {retornoEnvio
+                    ? retornoEnvio.texto
+                    : canalComposer === 'email'
+                      ? <>Envio pela plataforma ainda não ligado — quem dispara e-mail é o motor de cadência. Use <strong>Copiar</strong>.</>
+                      : <>Texto livre só dentro da janela de 24h após a última mensagem recebida do lead.</>}
                 </span>
                 <button type="button" className={styles.botaoSecundario} onClick={copiar} disabled={!texto.trim()}>
                   {copiado ? <><Check size={13} /> Copiado</> : <><Copy size={13} /> Copiar</>}
                 </button>
-                <button
-                  type="button"
-                  className={styles.botaoPrincipal}
-                  disabled
-                  title="Envio pela Central ainda não implementado."
-                >
-                  <Send size={13} /> Enviar
-                </button>
+                {canalComposer === 'whatsapp' ? (
+                  <button
+                    type="button"
+                    className={styles.botaoPrincipal}
+                    onClick={enviarWhatsapp}
+                    disabled={!podeEnviarWhatsapp}
+                    title={enviando ? 'Enviando...' : !texto.trim() ? 'Escreva a mensagem para enviar.' : 'Enviar pelo WhatsApp'}
+                  >
+                    {enviando
+                      ? <><Loader2 size={13} className={styles.spinner} /> Enviando...</>
+                      : <><Send size={13} /> Enviar</>}
+                  </button>
+                ) : (
+                  // E-mail segue exatamente como estava: sem envio pela Central.
+                  <button
+                    type="button"
+                    className={styles.botaoPrincipal}
+                    disabled
+                    title="Envio pela Central ainda não implementado."
+                  >
+                    <Send size={13} /> Enviar
+                  </button>
+                )}
               </div>
             </div>
           </>)}
