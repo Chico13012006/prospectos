@@ -63,6 +63,27 @@ export type Interacao = {
   } | null
 }
 
+// Mensagem real de WhatsApp gravada pelo webhook em `whatsapp_mensagens`
+// (fonte única — NÃO é copiada para `interacoes`). A aba Conversa lê esta
+// tabela direto e mescla no histórico. Só as colunas que a UI consome.
+export type MensagemWhatsapp = {
+  id: string
+  lead_id: string | null
+  organizacao_id: string | null
+  // 'inbound' nesta fase; 'outbound' quando houver envio pela plataforma.
+  direcao: string
+  remetente: string
+  remetente_nome: string | null
+  // Tipo da Meta: text | image | audio | video | document | sticker | ...
+  tipo: string
+  // Texto da mensagem quando existe; null para tipos sem texto (sticker etc.).
+  conteudo: string | null
+  // Timestamp informado pela Meta (cronologia principal da conversa).
+  mensagem_em: string
+  // Quando a linha foi gravada (fallback de ordenação).
+  created_at: string
+}
+
 export type Usuario = {
   id: string
   nome: string
