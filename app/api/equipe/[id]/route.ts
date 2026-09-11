@@ -59,8 +59,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
-// DELETE — remove o membro da plataforma: perfis (login/role, que cascateia
-// perfil_permissoes) -> usuarios (SDR) -> auth.users (acesso).
+// DELETE — remove o membro da plataforma: usuarios (SDR) -> perfis (login/role,
+// que cascateia perfil_permissoes) -> auth.users (acesso).
+//
+// O que a pessoa ATRIBUIU fica: versões de workflow que publicou, leads e
+// histórico de que era responsável sobrevivem com o carimbo zerado (migration
+// 0038: ON DELETE SET NULL nessas FKs). Removê-la nunca apaga dado de negócio.
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
@@ -81,18 +85,33 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     // e-mail do alvo pra localizar a linha em usuarios (ligada por e-mail).
     const { data: authUser } = await admin.auth.admin.getUserById(id);
     const email = authUser?.user?.email?.toLowerCase();
+
+    // Quantos leads perdem o responsável — informado na resposta para a tela
+    // dizer, não para bloquear (responsavel_id nulo é estado normal da base).
+    let leadsSemResponsavel = 0;
     if (email) {
-      await admin.from('usuarios').delete().eq('organizacao_id', org).ilike('email', email);
+      const { data: sdr } = await admin
+        .from('usuarios').select('id').eq('organizacao_id', org).ilike('email', email).maybeSingle();
+      if (sdr) {
+        const { count } = await admin
+          .from('leads').select('id', { count: 'exact', head: true })
+          .eq('organizacao_id', org).eq('responsavel_id', sdr.id);
+        leadsSemResponsavel = count ?? 0;
+      }
+      // Antes o erro daqui era engolido: a FK de leads/interacoes barrava o
+      // delete, a rota seguia e sobrava uma linha zumbi em `usuarios`.
+      const { error: eU } = await admin.from('usuarios').delete().eq('organizacao_id', org).ilike('email', email);
+      if (eU) return NextResponse.json({ erro: eU.message }, { status: 400 });
     }
 
-    // perfis primeiro: o on delete cascade limpa perfil_permissoes junto.
+    // perfis: o on delete cascade limpa perfil_permissoes junto.
     const { error: eP } = await admin.from('perfis').delete().eq('id', id).eq('organizacao_id', org);
     if (eP) return NextResponse.json({ erro: eP.message }, { status: 400 });
 
     const { error: eA } = await admin.auth.admin.deleteUser(id);
     if (eA) return NextResponse.json({ erro: eA.message }, { status: 400 });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, leadsSemResponsavel });
   } catch (err) {
     console.error('[equipe/[id] DELETE] erro interno:', err);
     return NextResponse.json({ erro: 'Erro interno' }, { status: 500 });
