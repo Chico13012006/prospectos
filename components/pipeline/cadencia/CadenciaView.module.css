@@ -320,6 +320,62 @@
   white-space: nowrap;
 }
 
+/* Busca local da coluna. Fica no header (fora de .columnBody), então continua
+   visível enquanto os cards rolam. Compacta de propósito: menor que a busca
+   global da toolbar, para não competir com ela. */
+.columnSearch {
+  display: flex;
+  height: 1.85rem;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  border: 1px solid #26344a;
+  border-radius: 0.4rem;
+  padding: 0 0.45rem;
+  background: #0d1626;
+  color: #6b7a92;
+}
+
+.columnSearch:focus-within {
+  border-color: rgba(99, 102, 241, 0.6);
+}
+
+.columnSearch svg {
+  flex-shrink: 0;
+}
+
+.columnSearch input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #dce4f4;
+  font: inherit;
+  font-size: 0.68rem;
+}
+
+.columnSearch input::placeholder {
+  color: #5d6c85;
+}
+
+.columnSearch button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.25rem;
+  padding: 0.15rem;
+  background: transparent;
+  color: #7c8aa2;
+  cursor: pointer;
+}
+
+.columnSearch button:hover {
+  color: #cbd4e5;
+}
+
 .columnBody {
   min-height: 0;
   flex: 1;
@@ -329,16 +385,30 @@
   scrollbar-width: thin;
 }
 
-.virtualList {
-  position: relative;
-  width: 100%;
+.cardList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
 }
 
-.virtualItem {
-  position: absolute;
-  top: 0;
-  left: 0;
+/* "Ver mais (N)": só soma mais um lote no DOM desta coluna. */
+.verMais {
   width: 100%;
+  border: 1px dashed #2f4160;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  background: transparent;
+  color: #93a2ba;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.verMais:hover {
+  border-color: rgba(106, 115, 255, 0.55);
+  color: #c8caff;
 }
 
 .card {
@@ -392,11 +462,17 @@
   line-height: 1.25;
 }
 
+.badgeRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.32rem;
+  margin-top: 0.58rem;
+}
+
 .stageBadge {
-  align-self: flex-start;
   max-width: 100%;
   overflow: hidden;
-  margin-top: 0.58rem;
   border: 1px solid;
   border-radius: 999px;
   padding: 0.2rem 0.52rem;
@@ -405,6 +481,41 @@
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Urgência: vermelho SÓ para atraso, âmbar para hoje, neutro para aguardando. */
+.urgencia {
+  flex-shrink: 0;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.6rem;
+  font-weight: 660;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.urgenciaAtraso {
+  border-color: rgba(248, 113, 113, 0.34);
+  background: rgba(248, 113, 113, 0.13);
+  color: #f2a09a;
+}
+
+.urgenciaHoje {
+  border-color: rgba(251, 191, 36, 0.32);
+  background: rgba(251, 191, 36, 0.12);
+  color: #e8b86a;
+}
+
+.urgenciaAguardando {
+  border-color: rgba(148, 163, 184, 0.26);
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+}
+
+/* Único reforço no card inteiro, e só para atraso — o resto fica no selo. */
+.cardAtraso {
+  border-color: rgba(248, 113, 113, 0.32);
 }
 
 .cardMeta {

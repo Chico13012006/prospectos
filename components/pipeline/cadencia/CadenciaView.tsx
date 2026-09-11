@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   BarChart3,
   CalendarDays,
@@ -70,9 +69,73 @@ function initials(name?: string | null): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
 }
 
-function CadenciaLeadCard({ lead, stage, selected, onSelect }: {
+// --- Prioridade operacional -------------------------------------------------
+// Ordem dentro da coluna: ação vencida → para hoje → futura mais próxima → sem
+// próxima ação. A comparação é por DIA LOCAL, igual ao que o card exibe
+// (formatDate usa o fuso do navegador) — não é filtro de cadastro, então aqui
+// não se aplica a janela UTC meio-aberta usada na Base de Leads.
+type Urgencia = 'atraso' | 'hoje' | 'aguardando' | 'nenhuma'
+
+const PESO_URGENCIA: Record<Urgencia, number> = { atraso: 0, hoje: 1, aguardando: 2, nenhuma: 3 }
+const ROTULO_URGENCIA: Record<Exclude<Urgencia, 'nenhuma'>, string> = {
+  atraso: 'Em atraso',
+  hoje: 'Hoje',
+  aguardando: 'Aguardando',
+}
+const CLASSE_URGENCIA: Record<Exclude<Urgencia, 'nenhuma'>, string> = {
+  atraso: styles.urgenciaAtraso,
+  hoje: styles.urgenciaHoje,
+  aguardando: styles.urgenciaAguardando,
+}
+
+function inicioDoDia(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+}
+
+function urgenciaDoLead(lead: LeadCadencia, hoje: number): Urgencia {
+  if (!lead.proxima_acao_data) return 'nenhuma'
+  const data = new Date(lead.proxima_acao_data)
+  if (Number.isNaN(data.getTime())) return 'nenhuma'
+  const dia = inicioDoDia(data)
+  if (dia < hoje) return 'atraso'
+  if (dia === hoje) return 'hoje'
+  return 'aguardando'
+}
+
+function instante(valor?: string | null): number | null {
+  if (!valor) return null
+  const t = new Date(valor).getTime()
+  return Number.isNaN(t) ? null : t
+}
+
+// Ordena por prioridade e, dentro dela, do mais antigo para o mais novo.
+// Datas ausentes vão para o fim (mesma convenção do `nullsFirst: false` que a
+// consulta usava antes).
+function ordenarPorPrioridade(leads: LeadCadencia[], hoje: number): LeadCadencia[] {
+  return [...leads].sort((a, b) => {
+    const pesoA = PESO_URGENCIA[urgenciaDoLead(a, hoje)]
+    const pesoB = PESO_URGENCIA[urgenciaDoLead(b, hoje)]
+    if (pesoA !== pesoB) return pesoA - pesoB
+
+    const acaoA = instante(a.proxima_acao_data)
+    const acaoB = instante(b.proxima_acao_data)
+    if (acaoA !== null && acaoB !== null && acaoA !== acaoB) return acaoA - acaoB
+
+    const contatoA = instante(a.ultimo_contato)
+    const contatoB = instante(b.ultimo_contato)
+    if (contatoA === null && contatoB !== null) return 1
+    if (contatoB === null && contatoA !== null) return -1
+    if (contatoA !== null && contatoB !== null && contatoA !== contatoB) return contatoA - contatoB
+
+    // Desempate estável: sem ele a ordem pode oscilar entre renders.
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  })
+}
+
+function CadenciaLeadCard({ lead, stage, urgencia, selected, onSelect }: {
   lead: LeadCadencia
   stage: CadenciaStage
+  urgencia: Urgencia
   selected: boolean
   onSelect: () => void
 }) {
@@ -83,17 +146,22 @@ function CadenciaLeadCard({ lead, stage, selected, onSelect }: {
   return (
     <button
       type="button"
-      className={`${styles.card} ${selected ? styles.cardSelected : ''}`}
+      className={`${styles.card} ${selected ? styles.cardSelected : ''} ${urgencia === 'atraso' ? styles.cardAtraso : ''}`}
       onClick={onSelect}
     >
       <strong className={styles.company}>{lead.empresa}</strong>
       <span className={styles.contact}>{lead.contato_nome || 'Contato não informado'}</span>
 
-      <span
-        className={styles.stageBadge}
-        style={{ color: stage.color, backgroundColor: `${stage.color}22`, borderColor: `${stage.color}38` }}
-      >
-        {stage.label}
+      <span className={styles.badgeRow}>
+        <span
+          className={styles.stageBadge}
+          style={{ color: stage.color, backgroundColor: `${stage.color}22`, borderColor: `${stage.color}38` }}
+        >
+          {stage.label}
+        </span>
+        {urgencia !== 'nenhuma' ? (
+          <span className={`${styles.urgencia} ${CLASSE_URGENCIA[urgencia]}`}>{ROTULO_URGENCIA[urgencia]}</span>
+        ) : null}
       </span>
 
       <span className={styles.cardMeta}>
@@ -112,24 +180,40 @@ function CadenciaLeadCard({ lead, stage, selected, onSelect }: {
   )
 }
 
-// Coluna puramente de apresentação: recebe os leads já classificados pela etapa.
-// A classificação e a busca vivem em CadenciaView (uma consulta para o board
-// inteiro), porque a etapa não é mais um filtro que o banco saiba aplicar.
-function CadenciaColumn({ stage, leads, buscando, selectedId, onSelect }: {
+// Quantos cards a coluna mostra por vez. Cada "Ver mais" soma outro lote — o
+// board inteiro já está em memória, então isso limita só o que vai ao DOM.
+const LOTE_COLUNA = 20
+
+// Coluna de apresentação: recebe os leads já classificados e ORDENADOS pela
+// etapa. A classificação e os filtros globais vivem em CadenciaView (uma
+// consulta para o board inteiro), porque a etapa não é um filtro que o banco
+// saiba aplicar. A busca desta caixa é local: não refaz consulta e não afeta as
+// outras colunas.
+function CadenciaColumn({ stage, leads, hoje, buscaGlobal, selectedId, onSelect }: {
   stage: CadenciaStage
   leads: LeadCadencia[]
-  buscando: boolean
+  hoje: number
+  buscaGlobal: boolean
   selectedId: string | null
   onSelect: (id: string) => void
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const [busca, setBusca] = useState('')
+  const [limite, setLimite] = useState(LOTE_COLUNA)
 
-  const virtualizer = useVirtualizer({
-    count: leads.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 159,
-    overscan: 7,
-  })
+  // Trocar a busca ou receber dados novos volta a coluna ao primeiro lote.
+  useEffect(() => { setLimite(LOTE_COLUNA) }, [busca, leads])
+
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase()
+    if (!termo) return leads
+    return leads.filter((lead) =>
+      (lead.empresa ?? '').toLowerCase().includes(termo)
+      || (lead.contato_nome ?? '').toLowerCase().includes(termo))
+  }, [busca, leads])
+
+  const visiveis = filtrados.slice(0, limite)
+  const restantes = filtrados.length - visiveis.length
+  const buscandoAqui = busca.trim().length > 0
 
   const StageIcon = stage.kind === 'respondeu' ? CheckCircle2 : stage.kind === 'contato' ? Send : Mail
 
@@ -141,35 +225,56 @@ function CadenciaColumn({ stage, leads, buscando, selectedId, onSelect }: {
             <StageIcon size={16} style={{ color: stage.color }} aria-hidden="true" />
             <h2 id={`cadencia-${stage.id}`}>{stage.label}</h2>
           </div>
-          <span className={styles.count}>{leads.length.toLocaleString('pt-BR')}</span>
+          <span className={styles.count}>
+            {buscandoAqui
+              ? `${filtrados.length.toLocaleString('pt-BR')} de ${leads.length.toLocaleString('pt-BR')}`
+              : leads.length.toLocaleString('pt-BR')}
+          </span>
         </div>
         <p>{stage.description}</p>
+
+        <div className={styles.columnSearch}>
+          <Search size={12} aria-hidden="true" />
+          <input
+            value={busca}
+            onChange={(event) => setBusca(event.target.value)}
+            placeholder="Buscar nesta etapa..."
+            aria-label={`Buscar em ${stage.label} por empresa ou contato`}
+          />
+          {buscandoAqui ? (
+            <button type="button" onClick={() => setBusca('')} aria-label="Limpar busca desta etapa">
+              <X size={11} />
+            </button>
+          ) : null}
+        </div>
       </header>
 
-      <div ref={scrollRef} className={styles.columnBody}>
-        {leads.length === 0 ? (
-          <div className={styles.empty}>{buscando ? 'Nenhum contato encontrado.' : 'Nenhum contato nesta etapa.'}</div>
+      <div className={styles.columnBody}>
+        {filtrados.length === 0 ? (
+          <div className={styles.empty}>
+            {buscandoAqui || buscaGlobal ? 'Nenhum contato encontrado.' : 'Nenhum contato nesta etapa.'}
+          </div>
         ) : (
-          <div className={styles.virtualList} style={{ height: virtualizer.getTotalSize() }}>
-            {virtualizer.getVirtualItems().map((item) => {
-              const lead = leads[item.index]
-              return (
-                <div
-                  key={lead.id}
-                  ref={virtualizer.measureElement}
-                  data-index={item.index}
-                  className={styles.virtualItem}
-                  style={{ transform: `translateY(${item.start}px)` }}
-                >
-                  <CadenciaLeadCard
-                    lead={lead}
-                    stage={stage}
-                    selected={selectedId === lead.id}
-                    onSelect={() => onSelect(lead.id)}
-                  />
-                </div>
-              )
-            })}
+          <div className={styles.cardList}>
+            {visiveis.map((lead) => (
+              <CadenciaLeadCard
+                key={lead.id}
+                lead={lead}
+                stage={stage}
+                urgencia={urgenciaDoLead(lead, hoje)}
+                selected={selectedId === lead.id}
+                onSelect={() => onSelect(lead.id)}
+              />
+            ))}
+            {restantes > 0 ? (
+              <button
+                type="button"
+                className={styles.verMais}
+                onClick={() => setLimite((atual) => atual + LOTE_COLUNA)}
+              >
+                Ver mais ({restantes.toLocaleString('pt-BR')})
+              </button>
+            ) : null}
           </div>
         )}
       </div>
@@ -234,14 +339,20 @@ export default function CadenciaView({
     return () => clearTimeout(timeout)
   }, [filtros.search, filtros.responsavel, filtros.segmento, filtros.canal, reloadKey])
 
+  // Referência de "hoje" para urgência/ordenação. Recalculada junto com os
+  // dados; não precisa acompanhar a virada do dia com o board aberto.
+  const hoje = useMemo(() => inicioDoDia(new Date()), [leads])
+
   const porEtapa = useMemo(() => {
     const grupos = new Map<EtapaCadencia, LeadCadencia[]>()
     for (const stage of CADENCIA_STAGES) grupos.set(stage.id, [])
     // Leads em etapa sem coluna (hoje só 'a_iniciar') simplesmente não entram —
     // ficam de fora até existir a coluna correspondente.
     for (const lead of leads) grupos.get(lead.etapa)?.push(lead)
+    // Ordem operacional dentro de cada coluna, feita uma vez por carga.
+    for (const [etapa, doGrupo] of grupos) grupos.set(etapa, ordenarPorPrioridade(doGrupo, hoje))
     return grupos
-  }, [leads])
+  }, [leads, hoje])
 
   const visibleStages = useMemo(
     () => stageFilter ? CADENCIA_STAGES.filter((stage) => stage.id === stageFilter) : CADENCIA_STAGES,
@@ -346,7 +457,8 @@ export default function CadenciaView({
                 key={stage.id}
                 stage={stage}
                 leads={porEtapa.get(stage.id) ?? []}
-                buscando={Boolean(filtros.search)}
+                hoje={hoje}
+                buscaGlobal={Boolean(filtros.search)}
                 selectedId={selectedId}
                 onSelect={onSelect}
               />
