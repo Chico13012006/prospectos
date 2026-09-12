@@ -91,6 +91,25 @@ describe('workspaceConfig', () => {
     expect(efetiva.templateTipo).toBe(RENOVACAO_PADRAO.templateTipo) // cai no default
   })
 
+  it('renovacao.alertaDias: janela de alerta do laudo, default 30, independente de antecedenciaDias', () => {
+    // Sem config: 30. Não herda de antecedenciaDias (45).
+    const padrao = renovacaoEfetiva(parseWorkspaceConfig({}))
+    expect(padrao.alertaDias).toBe(30)
+    expect(padrao.antecedenciaDias).toBe(45)
+
+    // Configurar um NÃO mexe no outro.
+    const soAntecedencia = renovacaoEfetiva(parseWorkspaceConfig({ renovacao: { antecedenciaDias: 60 } }))
+    expect(soAntecedencia.alertaDias).toBe(30)
+    const soAlerta = renovacaoEfetiva(parseWorkspaceConfig({ renovacao: { alertaDias: 15 } }))
+    expect(soAlerta.alertaDias).toBe(15)
+    expect(soAlerta.antecedenciaDias).toBe(45)
+
+    // Valor inválido é descartado (cai no default).
+    expect(parseWorkspaceConfig({ renovacao: { alertaDias: -1 } }).renovacao).toBeUndefined()
+    expect(parseWorkspaceConfig({ renovacao: { alertaDias: '30' } }).renovacao).toBeUndefined()
+    expect(renovacaoEfetiva(parseWorkspaceConfig({ renovacao: { alertaDias: 0 } })).alertaDias).toBe(0)
+  })
+
   it('operação: aplica padrão compatível em blob legado', () => {
     expect(operacaoEfetiva(parseWorkspaceConfig({}))).toEqual(OPERACAO_PADRAO)
   })

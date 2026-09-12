@@ -747,6 +747,39 @@ export async function getConversaDoLead(leadId: string): Promise<MensagemConvers
   return [...deInteracoes, ...deWhatsapp].sort((a, b) => a.em.localeCompare(b.em))
 }
 
+// --- LAUDO (ciclos de validade) ---
+// Status e histórico vêm prontos do servidor (a janela de alerta é config da
+// organização, resolvida lá). Aqui só transporte.
+
+export async function getLaudoLead(leadId: string): Promise<import('./laudos/ciclos').LaudoLeadView> {
+  const res = await fetch(`/api/leads/${leadId}/laudo`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.erro ?? `Erro ${res.status}`)
+  }
+  const { laudo } = await res.json()
+  return laudo
+}
+
+// "Marcar como renovado": só a nova validade. Encerra o ciclo atual (vira
+// histórico), abre o novo e espelha em leads.data_validade.
+export async function renovarLaudoLead(
+  leadId: string,
+  novaValidade: string,
+): Promise<import('./laudos/ciclos').LaudoLeadView> {
+  const res = await fetch(`/api/leads/${leadId}/laudo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ novaValidade }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.erro ?? `Erro ${res.status}`)
+  }
+  const { laudo } = await res.json()
+  return laudo
+}
+
 // --- INTERACOES ---
 
 export async function getInteracoesByLead(leadId: string): Promise<Interacao[]> {

@@ -10,6 +10,7 @@ import { getStatusLabel, getStatusBadgeClasses, getEstagioPipelineLabel, formatD
 import { SdrPill, SdrCircle } from '@/components/ui/SdrAvatar';
 import EmpresaDecisoresCard from '@/components/leads/EmpresaDecisoresCard';
 import ServicosLaudosCard from '@/components/leads/ServicosLaudosCard';
+import LaudoCicloCard from '@/components/leads/LaudoCicloCard';
 import EditarLeadModal from '@/components/leads/EditarLeadModal';
 import type { Empresa, Contato, EstagioPipeline } from '@/lib/types';
 import { getLeadById, getInteracoesByLead, getMensagensWhatsappByLead, createInteracao, atualizarEstagio, registrarNota, executarAcao, updateLead, gerarInsightLead, gerarMensagemLead } from '@/lib/api';
@@ -766,6 +767,20 @@ export default function LeadPanel({
                 </span>
               </button>
             </div>
+          )}
+
+          {/* Ciclo do laudo: status calculado + "Marcar como renovado" + histórico.
+              "Editar" acima corrige a data do ciclo atual; renovar é outro fluxo. */}
+          {selectedLead && (
+            <LaudoCicloCard
+              leadId={selectedLead.id}
+              validade={selectedLead.data_validade}
+              compacto={noPipeline}
+              onRenovado={(novaValidade) => {
+                setSelectedLead((l) => (l ? { ...l, data_validade: novaValidade } : l));
+                onChanged?.();
+              }}
+            />
           )}
 
           {/* Próxima ação IA — bloco de MAIOR prioridade no Pipeline: ganha
