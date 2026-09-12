@@ -504,6 +504,13 @@ export async function analisarReuniaoCopiloto(
     body: JSON.stringify({ leadId, transcricao }),
   })
   if (!res.ok) {
+    // 504/502 vêm da Vercel em HTML (função estourou o tempo), não da nossa
+    // rota — sem JSON para ler. Dizer o que fazer em vez de "Erro 504".
+    if (res.status === 504 || res.status === 502) {
+      throw new Error(
+        'A análise demorou mais que o limite do servidor. Tente com uma transcrição mais curta (só o trecho relevante da reunião).',
+      )
+    }
     const err = await res.json().catch(() => ({}))
     throw new Error(err.erro ?? `Erro ${res.status}`)
   }
