@@ -141,6 +141,16 @@ export default function EquipePage() {
       const res = await fetch(`/api/equipe/${removendo.id}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) { setErroRemocao(data.erro || 'Erro ao remover'); return; }
+      const nome = removendo.nome || removendo.email;
+      const n = Number(data.leadsSemResponsavel ?? 0);
+      // Os leads da pessoa não são apagados — ficam sem responsável. Dizer isso
+      // aqui, para ninguém procurar depois por que sumiu "o dono" desses leads.
+      setFeedback({
+        tipo: 'sucesso',
+        msg: n > 0
+          ? `${nome} removido(a). ${n} lead${n === 1 ? '' : 's'} ficou${n === 1 ? '' : 'aram'} sem responsável — reatribua na Base de Leads.`
+          : `${nome} removido(a) da equipe.`,
+      });
       setRemovendo(null);
       await carregarMembros();
     } catch {
