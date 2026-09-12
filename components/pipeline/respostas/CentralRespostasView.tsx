@@ -30,6 +30,7 @@ import {
   type StatusConversa,
 } from '@/lib/api'
 import { corEstagio, labelCanal, labelEstagio, labelProximaAcao } from '@/lib/pipeline-stages'
+import { documentoPreviewHtml, montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha'
 import { dash } from '@/lib/utils'
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { REALTIME_SUBSCRIBE_STATES, type RealtimePostgresInsertPayload } from '@supabase/supabase-js'
@@ -431,6 +432,67 @@ export default function CentralRespostasView({
     }
   }
 
+  // Envio de E-MAIL pela rota /api/email/enviar, que usa o motor de e-mail já
+  // existente (GmailProvider + registrarInteracao). Mesmo contrato do WhatsApp:
+  // organização vem da sessão; daqui vai { leadId, assunto, texto }. Sem retry;
+  // em erro o texto fica. Em sucesso o fio é recarregado e o e-mail aparece
+  // vindo de `interacoes` (nota/email), a fonte que a Central já lê.
+  const leadTemEmail = !!conversaAtiva?.lead.contato_email?.trim()
+  const podeEnviarEmail = canalComposer === 'email'
+    && !!conversaAtiva && leadTemEmail
+    && !!assunto.trim() && !!texto.trim() && !enviando
+  const enviarEmail = async () => {
+    if (!podeEnviarEmail || !conversaAtiva) return
+    const leadId = conversaAtiva.lead.id
+    setEnviando(true)
+    setRetornoEnvio(null)
+    try {
+      const res = await fetch('/api/email/enviar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId, assunto, texto }),
+      })
+      const corpo = (await res.json().catch(() => ({}))) as {
+        erro?: string; codigo?: string; simulado?: boolean; interacaoRegistrada?: boolean
+      }
+      if (ativaRef.current !== leadId) return
+
+      if (!res.ok) {
+        setRetornoEnvio({ tipo: 'erro', texto: corpo.erro ?? `Não foi possível enviar (erro ${res.status}).` })
+        return
+      }
+      if (corpo.simulado) {
+        // MODO_ENSAIO global do motor: nada saiu nem foi registrado.
+        setRetornoEnvio({ tipo: 'atencao', texto: 'Motor em MODO_ENSAIO: e-mail simulado — nada foi enviado nem registrado.' })
+        return
+      }
+      setAssunto('')
+      setTexto('')
+      setTemplateId('')
+      if (corpo.interacaoRegistrada === false) {
+        setRetornoEnvio({ tipo: 'atencao', texto: 'E-mail enviado, mas o registro no histórico falhou. Não reenvie.' })
+      }
+      await carregarFio(leadId, { silencioso: true })
+    } catch (e) {
+      if (ativaRef.current !== leadId) return
+      setRetornoEnvio({ tipo: 'erro', texto: `Falha de rede ao enviar: ${e instanceof Error ? e.message : String(e)}` })
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  // Prévia FIEL ao que sai: passa pelo mesmo montarEmailCampanhaHtml do envio
+  // (HTML sanitizado ou texto escapado + assinatura) e pelo documentoPreviewHtml
+  // (CSP sem script). Só falta o nome do serviço, que é config da org.
+  const htmlPrevia = useMemo(() => {
+    if (!texto.trim()) return ''
+    const responsavelNome = conversaAtiva?.lead.usuarios?.nome ?? conversaAtiva?.lead.responsavel_nome ?? null
+    const miolo = pareceHtml(texto)
+      ? montarEmailCampanhaHtml('', { responsavelNome }, texto)
+      : montarEmailCampanhaHtml(texto, { responsavelNome })
+    return documentoPreviewHtml(miolo)
+  }, [texto, conversaAtiva])
+
   // --- Busca de leads para prospecção --------------------------------------
   // Lê a base que já existe (getTodosLeads). Não é a Base de Leads: é um
   // atalho compacto para achar quem prospectar sem sair da Central.
@@ -819,7 +881,9 @@ export default function CentralRespostasView({
                   {retornoEnvio
                     ? retornoEnvio.texto
                     : canalComposer === 'email'
-                      ? <>Envio pela plataforma ainda não ligado — quem dispara e-mail é o motor de cadência. Use <strong>Copiar</strong>.</>
+                      ? (leadTemEmail
+                          ? <>Enviado pela conta de e-mail da organização, com a assinatura do responsável.</>
+                          : <>Este lead não tem e-mail cadastrado.</>)
                       : <>Texto livre só dentro da janela de 24h após a última mensagem recebida do lead.</>}
                 </span>
                 <button type="button" className={styles.botaoSecundario} onClick={copiar} disabled={!texto.trim()}>
@@ -838,14 +902,22 @@ export default function CentralRespostasView({
                       : <><Send size={13} /> Enviar</>}
                   </button>
                 ) : (
-                  // E-mail segue exatamente como estava: sem envio pela Central.
                   <button
                     type="button"
                     className={styles.botaoPrincipal}
-                    disabled
-                    title="Envio pela Central ainda não implementado."
+                    onClick={enviarEmail}
+                    disabled={!podeEnviarEmail}
+                    title={
+                      enviando ? 'Enviando...'
+                      : !leadTemEmail ? 'O lead não tem e-mail cadastrado.'
+                      : !assunto.trim() ? 'Informe o assunto.'
+                      : !texto.trim() ? 'Escreva a mensagem para enviar.'
+                      : 'Enviar e-mail'
+                    }
                   >
-                    <Send size={13} /> Enviar
+                    {enviando
+                      ? <><Loader2 size={13} className={styles.spinner} /> Enviando...</>
+                      : <><Send size={13} /> Enviar</>}
                   </button>
                 )}
               </div>
@@ -941,8 +1013,9 @@ export default function CentralRespostasView({
         </aside>
       </div>
 
-      {/* Prévia do e-mail. HTML vai em iframe com sandbox vazio: sem script,
-          sem navegação e sem herdar o CSS da aplicação. */}
+      {/* Prévia do e-mail: o MESMO HTML que o envio monta (montarEmailCampanhaHtml
+          + documentoPreviewHtml, com CSP sem script), num iframe com sandbox
+          vazio — sem script, sem navegação, sem herdar o CSS da aplicação. */}
       {previa ? (
         <div className={styles.previaFundo} onClick={() => setPrevia(false)}>
           <div className={styles.previaCaixa} onClick={(e) => e.stopPropagation()}>
@@ -955,11 +1028,7 @@ export default function CentralRespostasView({
                 <X size={15} />
               </button>
             </header>
-            {pareceHtml(texto) ? (
-              <iframe className={styles.previaFrame} sandbox="" title="Prévia do e-mail" srcDoc={texto} />
-            ) : (
-              <pre className={styles.previaTexto}>{texto}</pre>
-            )}
+            <iframe className={styles.previaFrame} sandbox="" title="Prévia do e-mail" srcDoc={htmlPrevia} />
           </div>
         </div>
       ) : null}
