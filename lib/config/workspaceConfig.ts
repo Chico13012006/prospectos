@@ -78,6 +78,10 @@ export interface RenovacaoConfig {
   antecedenciaDias?: number       // janela: cria a tarefa N dias antes do vencimento
   templateTipo?: string           // tipo de template da 1ª mensagem de renovação
   enviarPrimeiraMensagem?: boolean // se true, dispara a 1ª mensagem (gated por MODO_ENSAIO)
+  // Janela de ALERTA do laudo: a partir de quantos dias antes de vencer o ciclo
+  // atual aparece como "Próximo do vencimento". Regra própria do laudo —
+  // DESACOPLADA de `antecedenciaDias`, que dispara tarefa/campanha.
+  alertaDias?: number
 }
 
 // Feature flags POR ORGANIZAÇÃO (toggle de módulo — preferência flexível, cabe no
@@ -119,6 +123,7 @@ export const RENOVACAO_PADRAO: Required<RenovacaoConfig> = {
   antecedenciaDias: 45,
   templateTipo: 'renovacao_1',
   enviarPrimeiraMensagem: true,
+  alertaDias: 30,
 }
 
 // Blob de um workspace recém-criado: só a versão atual, tudo no padrão.
@@ -191,6 +196,7 @@ export function parseWorkspaceConfig(bruto: unknown): WorkspaceConfig {
     if (typeof r.antecedenciaDias === 'number' && r.antecedenciaDias >= 0) ren.antecedenciaDias = r.antecedenciaDias
     if (typeof r.templateTipo === 'string' && r.templateTipo) ren.templateTipo = r.templateTipo
     if (typeof r.enviarPrimeiraMensagem === 'boolean') ren.enviarPrimeiraMensagem = r.enviarPrimeiraMensagem
+    if (typeof r.alertaDias === 'number' && r.alertaDias >= 0) ren.alertaDias = r.alertaDias
     if (Object.keys(ren).length > 0) out.renovacao = ren
   }
   if (ehObjeto(obj.operacao)) {

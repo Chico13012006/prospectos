@@ -8,6 +8,7 @@ import {
 } from '@/lib/leads/importarCsv'
 import { resolverResponsavelPorAuthId } from '@/lib/leads/responsavelServer'
 import { camposBaseImportacao, montarAvisoImportacao } from '@/lib/leads/importacaoOperacional'
+import { criarCiclosIniciais } from '@/lib/laudos/ciclos'
 
 // Importação de leads em LOTE pela tela (2.2). Roda server-side com service role
 // (nunca expõe a chave ao client). Dois modos no mesmo endpoint:
@@ -141,7 +142,7 @@ export async function POST(req: NextRequest) {
     let inseridos = 0
     for (let i = 0; i < payload.length; i += LOTE) {
       const lote = payload.slice(i, i + LOTE)
-      const { error } = await admin.from('leads').insert(lote)
+      const { data: criados, error } = await admin.from('leads').insert(lote).select('id, data_validade')
       if (error) {
         return NextResponse.json(
           { erro: `Falha ao inserir (após ${inseridos}): ${error.message}`, inseridos, resumo },
@@ -149,6 +150,9 @@ export async function POST(req: NextRequest) {
         )
       }
       inseridos += lote.length
+      // Lead importado com validade nasce com o seu ciclo atual do laudo
+      // (histórico começa aqui; não é renovação).
+      await criarCiclosIniciais(admin, org, (criados ?? []) as Array<{ id: string; data_validade: string | null }>)
     }
 
     // Aviso in-app aos administradores. É best-effort: uma falha de aviso não

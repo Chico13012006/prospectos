@@ -1,6 +1,7 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PatchCadastralLead } from './edicao'
+import { sincronizarCicloAtual } from '@/lib/laudos/ciclos'
 
 export async function buscarLeadParaEdicao(admin: SupabaseClient, org: string, id: string) {
   const { data, error } = await admin
@@ -45,5 +46,10 @@ export async function atualizarDadosCadastraisLead(
     .select('*, usuarios:responsavel_id (id, nome)')
     .maybeSingle()
   if (error) throw new Error(error.message)
+  // Editar a validade pela ficha é CORREÇÃO do ciclo atual do laudo — não
+  // renovação. Mantém laudo_ciclos em sincronia sem encerrar ciclo.
+  if (data && 'data_validade' in patch) {
+    await sincronizarCicloAtual(admin, org, id, patch.data_validade ?? null)
+  }
   return data
 }
