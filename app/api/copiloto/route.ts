@@ -2,12 +2,20 @@
 // chama a IA (Opus) e devolve a análise estruturada. Auth por sessão; o lead
 // (para contexto) é lido escopado à organização do usuário. SERVER-ONLY.
 import { NextRequest, NextResponse } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { iaConfigurada } from '@/lib/ia/cliente'
 import { analisarReuniao } from '@/lib/ia/copilotoReuniao'
 
 export const runtime = 'nodejs'
+
+// A análise com Opus leva ~20 s para uma transcrição de 6 mil caracteres e
+// 30–40 s para uma reunião real (até 24 mil). Sem isto a função cai no limite
+// padrão da Vercel (10–15 s) e morre antes de responder: o cliente recebe um
+// 504 em HTML e a tela mostra só "Erro 504". 60 s é o teto do plano Hobby e
+// cobre o pior caso com folga.
+export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
   try {
@@ -44,6 +52,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ analise })
   } catch (err) {
     console.error('[copiloto POST] erro:', err)
+    // Erros da API da Anthropic têm classe tipada: traduz os que a pessoa
+    // consegue agir sobre, sem vazar detalhe interno. O resto fica genérico.
+    if (err instanceof Anthropic.AuthenticationError) {
+      return NextResponse.json({ erro: 'Chave da IA inválida ou revogada. Verifique ANTHROPIC_API_KEY no ambiente.' }, { status: 502 })
+    }
+    if (err instanceof Anthropic.RateLimitError) {
+      return NextResponse.json({ erro: 'Limite de uso da IA atingido. Aguarde um minuto e tente de novo.' }, { status: 429 })
+    }
+    if (err instanceof Anthropic.APIError) {
+      return NextResponse.json({ erro: `A IA recusou a requisição (${err.status}). Tente uma transcrição menor.` }, { status: 502 })
+    }
     return NextResponse.json({ erro: 'Erro ao analisar a reunião.' }, { status: 500 })
   }
 }
