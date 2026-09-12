@@ -9,8 +9,8 @@ export const runtime = 'nodejs'
 // Coexiste com POST /api/whatsapp/enviar (Meta): rota separada, transporte
 // separado. Mesmo contrato de segurança: a organização vem da SESSÃO
 // (resolverAcesso → perfis.organizacao_id), nunca do corpo; o cliente manda
-// só { lead_id, message }. Nesta rodada NÃO persiste nada — só valida o
-// transporte Z-API.
+// só { lead_id, message }. Fluxo: status da instância → send-text → registro
+// em whatsapp_mensagens (ver enviarTextoZapiParaLead).
 
 // Erro de negócio → status HTTP, no padrão da rota da Meta.
 const STATUS: Record<CodigoErroEnvioZapi, number> = {
@@ -18,6 +18,8 @@ const STATUS: Record<CodigoErroEnvioZapi, number> = {
   lead_nao_encontrado: 404,
   sem_telefone: 422,
   config_ausente: 503,
+  zapi_status_falhou: 503,
+  zapi_desconectada: 503,
   falha_rede: 502,
   erro_provider: 502,
   resposta_invalida: 502,
@@ -51,10 +53,12 @@ export async function POST(req: Request) {
     }
     // Só os ids que a Z-API realmente devolveu. `telefone` fica fora da
     // resposta — o cliente já conhece o lead; não há por que ecoar o número.
-    const { messageId, zaapId, id } = resultado
+    // `registrada=false` = aceita pela Z-API mas não gravada: NÃO reenviar.
+    const { messageId, zaapId, id, registrada } = resultado
     return NextResponse.json({
       ok: true,
       provider: 'zapi',
+      registrada,
       ...(messageId ? { messageId } : {}),
       ...(zaapId ? { zaapId } : {}),
       ...(id ? { id } : {}),
