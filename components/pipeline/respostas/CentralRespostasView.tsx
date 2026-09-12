@@ -25,6 +25,7 @@ import {
   getConversaDoLead,
   getTemplates,
   getTodosLeads,
+  getUsuarios,
   type ConversaResposta,
   type MensagemConversa,
   type StatusConversa,
@@ -34,7 +35,7 @@ import { documentoPreviewHtml, montarEmailCampanhaHtml } from '@/lib/campanhas/e
 import { dash } from '@/lib/utils'
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { REALTIME_SUBSCRIBE_STATES, type RealtimePostgresInsertPayload } from '@supabase/supabase-js'
-import type { Lead, MensagemWhatsapp, Template } from '@/lib/supabase'
+import type { Lead, MensagemWhatsapp, Template, Usuario } from '@/lib/supabase'
 import type { GlobalFilterState } from '@/components/pipeline/GlobalFilters'
 import styles from './CentralRespostasView.module.css'
 
@@ -97,6 +98,146 @@ function SeloCanal({ canal }: { canal: string }) {
   )
 }
 
+// Separa o texto novo do histórico citado. Heurística simples, só de
+// apresentação — o corpo gravado não muda. A citação começa na PRIMEIRA linha
+// que bate em um destes sinais:
+//   1. linha iniciada por ">"                            (citação clássica)
+//   2. "Em … escreveu:" / "On … wrote:"                  (Gmail/Apple/Thunderbird)
+//      — a atribuição costuma vir QUEBRADA em 2–3 linhas pelo cliente
+//      ("Em seg., 7 de set. …, Fulano <\n email> escreveu:"), então aceita
+//      "escreveu:"/"wrote:" no fim desta linha OU de uma das 2 seguintes.
+//   3. separadores de reply/forward: "-----Mensagem original-----",
+//      "----- Original Message -----", linha de underscores (Outlook),
+//      "---------- Forwarded message ----------" / "Mensagem encaminhada".
+//   4. cabeçalho de reply do Outlook: "De:" seguido, em até 4 linhas, de
+//      "Enviado/Enviada/Sent/Para/To/Assunto/Subject:".
+const RE_CITACAO_LINHA = /^>/
+const RE_ATRIBUICAO_INICIO = /^(Em|On)\s.{3,}/i
+const RE_ATRIBUICAO_FIM = /(escreveu|wrote):\s*$/i
+const RE_SEPARADOR = /^(-{3,}\s*(Mensagem original|Original Message|Forwarded message|Mensagem encaminhada)\s*-{0,}|_{8,}|-{10,})\s*$/i
+const RE_OUTLOOK_DE = /^(De|From):\s.+/i
+const RE_OUTLOOK_CAMPO = /^(Enviad[ao]( em)?|Sent|Para|To|Assunto|Subject):\s/i
+
+function inicioDaCitacao(linhas: string[]): number {
+  for (let i = 0; i < linhas.length; i++) {
+    const l = linhas[i].trim()
+    if (!l) continue
+    if (RE_CITACAO_LINHA.test(l)) return i
+    if (RE_SEPARADOR.test(l)) return i
+    if (RE_ATRIBUICAO_INICIO.test(l)) {
+      const janela = [l, linhas[i + 1]?.trim() ?? '', linhas[i + 2]?.trim() ?? '']
+      if (janela.some((x) => RE_ATRIBUICAO_FIM.test(x))) return i
+    }
+    if (RE_OUTLOOK_DE.test(l)) {
+      const proximas = linhas.slice(i + 1, i + 5).map((x) => x.trim())
+      if (proximas.some((x) => RE_OUTLOOK_CAMPO.test(x))) return i
+    }
+  }
+  return -1
+}
+
+function separarCitacao(corpo: string): { principal: string; citacao: string | null } {
+  const linhas = corpo.split('\n')
+  const inicio = inicioDaCitacao(linhas)
+  // Só vale a pena colapsar se houver texto próprio antes da citação.
+  if (inicio <= 0) return { principal: corpo, citacao: null }
+  const principal = linhas.slice(0, inicio).join('\n').trim()
+  if (!principal) return { principal: corpo, citacao: null }
+  const citacao = linhas.slice(inicio).join('\n').trim()
+  return { principal, citacao: citacao || null }
+}
+
+function dataHoraCompleta(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d)
+}
+
+// "Nome <email>" quando há e-mail; só o nome quando não há.
+function Pessoa({ nome, email }: { nome: string; email: string | null }) {
+  return (
+    <>
+      <span className={styles.pessoaNome}>{nome}</span>
+      {email ? <span className={styles.pessoaEmail}>&lt;{email}&gt;</span> : null}
+    </>
+  )
+}
+
+// Bloco de E-MAIL: cabeçalho (remetente, selo, data), linhas De/Para, assunto
+// em linha própria, corpo em parágrafos e histórico citado recolhido.
+//
+// Só dados reais: o lead tem nome + e-mail; a nossa ponta é o RESPONSÁVEL do
+// lead (nome de `msg.autor`/lead, e-mail de `usuarios`). A caixa remetente da
+// organização é config de servidor e não chega ao browser — por isso o e-mail
+// mostrado do nosso lado é o do responsável, que assina e recebe cópia.
+function MensagemEmail({ msg, lead, responsavel }: {
+  msg: MensagemConversa
+  lead: Lead
+  responsavel: { nome: string; email: string | null }
+}) {
+  const [expandida, setExpandida] = useState(false)
+  const [citacaoAberta, setCitacaoAberta] = useState(false)
+
+  const { principal, citacao } = useMemo(() => separarCitacao(msg.corpo), [msg.corpo])
+  const longa = principal.length > LIMITE_CORPO
+  const visivel = longa && !expandida ? `${principal.slice(0, LIMITE_CORPO)}…` : principal
+  // Parágrafos de verdade: quebra dupla separa <p>; quebra simples vira <br>.
+  const paragrafos = useMemo(() => visivel.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean), [visivel])
+
+  const contatoLead = { nome: lead.contato_nome?.trim() || 'Contato', email: lead.contato_email?.trim() || null }
+  const nosso = { nome: msg.autor?.trim() || responsavel.nome, email: responsavel.email }
+  const remetente = msg.entrada ? contatoLead : nosso
+  const destinatario = msg.entrada ? nosso : contatoLead
+
+  return (
+    <article className={`${styles.email} ${msg.entrada ? styles.emailEntrada : styles.emailSaida}`}>
+      <header className={styles.emailCabecalho}>
+        <span className={styles.emailAvatar} aria-hidden="true">{iniciais(remetente.nome)}</span>
+        <span className={styles.emailRemetente}>{remetente.nome}</span>
+        <span className={`${styles.emailDirecao} ${msg.entrada ? styles.emailDirecaoEntrada : styles.emailDirecaoSaida}`}>
+          {msg.entrada ? 'Recebido' : 'Enviado'}
+        </span>
+        <time className={styles.emailQuando} dateTime={msg.em}>{dataHoraCompleta(msg.em)}</time>
+      </header>
+
+      <dl className={styles.emailEnvelope}>
+        <dt>De</dt>
+        <dd><Pessoa nome={remetente.nome} email={remetente.email} /></dd>
+        <dt>Para</dt>
+        <dd><Pessoa nome={destinatario.nome} email={destinatario.email} /></dd>
+      </dl>
+
+      {msg.assunto ? (
+        <div className={styles.emailAssunto}>
+          <span className={styles.emailAssuntoRotulo}>Assunto</span>
+          <h3 className={styles.emailAssuntoValor}>{msg.assunto}</h3>
+        </div>
+      ) : null}
+
+      <div className={styles.emailCorpo}>
+        {paragrafos.length === 0
+          ? <p><em className={styles.emailSemTexto}>(sem texto)</em></p>
+          : paragrafos.map((p, i) => <p key={i}>{p}</p>)}
+      </div>
+      {longa ? (
+        <button type="button" className={styles.verMaisMsg} onClick={() => setExpandida((v) => !v)}>
+          {expandida ? 'Mostrar menos' : 'Mostrar mensagem completa'}
+        </button>
+      ) : null}
+
+      {citacao ? (
+        <div className={styles.citacao}>
+          <button type="button" className={styles.citacaoToggle} onClick={() => setCitacaoAberta((v) => !v)} aria-expanded={citacaoAberta}>
+            {citacaoAberta ? '▾ Ocultar histórico anterior' : `▸ Mostrar histórico anterior (${citacao.split('\n').length} linhas)`}
+          </button>
+          {citacaoAberta ? <pre className={styles.citacaoCorpo}>{citacao}</pre> : null}
+        </div>
+      ) : null}
+    </article>
+  )
+}
+
+// Balão de WHATSAPP — inalterado.
 function Mensagem({ msg }: { msg: MensagemConversa }) {
   const [expandida, setExpandida] = useState(false)
   const longa = msg.corpo.length > LIMITE_CORPO
@@ -155,6 +296,9 @@ export default function CentralRespostasView({
   const [canalAtivo, setCanalAtivo] = useState<'email' | 'whatsapp'>('email')
 
   const [templates, setTemplates] = useState<Template[]>([])
+  // Usuários da organização (tabela pequena, uma leitura): dá o e-mail real do
+  // responsável para as linhas De/Para dos e-mails. Falha = só o nome.
+  const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [assunto, setAssunto] = useState('')
   const [texto, setTexto] = useState('')
   const [copiado, setCopiado] = useState(false)
@@ -212,6 +356,7 @@ export default function CentralRespostasView({
   useEffect(() => { carregarConversasRef.current = carregarConversas }, [carregarConversas])
 
   useEffect(() => { getTemplates().then(setTemplates).catch(() => setTemplates([])) }, [])
+  useEffect(() => { getUsuarios().then(setUsuarios).catch(() => setUsuarios([])) }, [])
 
   const visiveis = useMemo(() => {
     const termo = buscaLista.trim().toLowerCase()
@@ -347,6 +492,29 @@ export default function CentralRespostasView({
   }, [ativa, canalUltimaResposta])
 
   const fioDoCanal = useMemo(() => fio.filter((m) => m.canal === canalAtivo), [fio, canalAtivo])
+
+  // Responsável do lead ativo, com e-mail real quando ele existe em `usuarios`.
+  // Lead legado sem responsavel_id cai no nome em texto, sem e-mail.
+  const responsavelDaConversa = useMemo(() => {
+    const lead = conversaAtiva?.lead
+    const usuario = lead?.responsavel_id ? usuarios.find((u) => u.id === lead.responsavel_id) : undefined
+    return {
+      nome: usuario?.nome?.trim() || lead?.usuarios?.nome?.trim() || lead?.responsavel_nome?.trim() || 'Você',
+      email: usuario?.email?.trim() || null,
+    }
+  }, [conversaAtiva, usuarios])
+
+  // Assunto de RESPOSTA: ao abrir uma conversa (ou depois de enviar, quando o
+  // composer é limpo), sugere "Re: <último assunto do fio>". Só preenche campo
+  // vazio — nunca sobrescreve o que o usuário digitou. Fica visível e editável.
+  useEffect(() => {
+    if (assunto.trim()) return
+    const ultimoEmail = [...fio].reverse().find((m) => m.canal === 'email' && m.assunto?.trim())
+    if (!ultimoEmail?.assunto) return
+    const base = ultimoEmail.assunto.replace(/^\s*(re|res|fwd?|enc)\s*:\s*/i, '').trim()
+    setAssunto(`Re: ${base}`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fio])
 
   useEffect(() => {
     fimDoFioRef.current?.scrollIntoView({ block: 'end' })
@@ -772,7 +940,7 @@ export default function CentralRespostasView({
               </div>
             </header>
 
-            <div className={styles.fio}>
+            <div className={`${styles.fio} ${canalAtivo === 'email' ? styles.fioEmail : ''}`}>
               {fioCarregando ? (
                 <div className={styles.vazio}><Loader2 size={16} className={styles.spinner} /> Carregando conversa...</div>
               ) : fioDoCanal.length === 0 ? (
@@ -787,7 +955,9 @@ export default function CentralRespostasView({
                   return (
                     <div key={msg.id} style={{ display: 'contents' }}>
                       {novoDia ? <span className={styles.separadorData}>{diaPorExtenso(msg.em)}</span> : null}
-                      <Mensagem msg={msg} />
+                      {msg.canal === 'email'
+                        ? <MensagemEmail msg={msg} lead={conversaAtiva.lead} responsavel={responsavelDaConversa} />
+                        : <Mensagem msg={msg} />}
                     </div>
                   )
                 })
@@ -816,9 +986,9 @@ export default function CentralRespostasView({
                     <MessageCircle size={12} /> WhatsApp
                   </button>
                 </div>
-              </div>
 
-              <div className={styles.templateLinha}>
+                {/* Template na MESMA linha do canal: composer mais baixo. */}
+                <div className={styles.templateLinha}>
                 <select
                   className={styles.templateSelect}
                   value={templateId}
@@ -852,24 +1022,28 @@ export default function CentralRespostasView({
                     <Eye size={13} /> Visualizar
                   </button>
                 ) : null}
+                </div>
               </div>
 
               {/* E-mail tem assunto; WhatsApp é conversacional e não tem. */}
               {canalComposer === 'email' ? (
-                <input
-                  className={styles.campoAssunto}
-                  value={assunto}
-                  onChange={(e) => setAssunto(e.target.value)}
-                  placeholder="Assunto"
-                  aria-label="Assunto do e-mail"
-                />
+                <label className={styles.assuntoLinha}>
+                  <span className={styles.assuntoRotulo}>Assunto</span>
+                  <input
+                    className={styles.assuntoCampo}
+                    value={assunto}
+                    onChange={(e) => setAssunto(e.target.value)}
+                    placeholder="Assunto do e-mail"
+                    aria-label="Assunto do e-mail"
+                  />
+                </label>
               ) : null}
 
               <textarea
-                className={styles.campoTexto}
+                className={`${styles.campoTexto} ${canalComposer === 'email' ? styles.campoTextoEmail : ''}`}
                 value={texto}
                 onChange={(e) => setTexto(e.target.value)}
-                placeholder={canalComposer === 'email' ? 'Escreva a resposta...' : 'Mensagem...'}
+                placeholder={canalComposer === 'email' ? 'Escreva sua mensagem aqui...' : 'Mensagem...'}
               />
 
               <div className={styles.composerAcoes}>
@@ -882,7 +1056,7 @@ export default function CentralRespostasView({
                     ? retornoEnvio.texto
                     : canalComposer === 'email'
                       ? (leadTemEmail
-                          ? <>Enviado pela conta de e-mail da organização, com a assinatura do responsável.</>
+                          ? <>O e-mail é enviado pela plataforma, com a assinatura do responsável, e registrado no histórico da conversa.</>
                           : <>Este lead não tem e-mail cadastrado.</>)
                       : <>Texto livre só dentro da janela de 24h após a última mensagem recebida do lead.</>}
                 </span>
@@ -1022,12 +1196,25 @@ export default function CentralRespostasView({
             <header className={styles.previaHeader}>
               <div>
                 <strong>Prévia do e-mail</strong>
-                {assunto ? <span className={styles.previaAssunto}>{assunto}</span> : null}
+                <span className={styles.previaSub}>
+                  {templateEscolhido ? <>Template aplicado: <b>{templateEscolhido.nome}</b> · </> : null}
+                  {pareceHtml(texto) ? 'Corpo em HTML' : 'Corpo em texto'} · assinatura do responsável incluída
+                </span>
               </div>
               <button type="button" onClick={() => setPrevia(false)} aria-label="Fechar prévia">
                 <X size={15} />
               </button>
             </header>
+            {/* Cabeçalho no estilo de cliente de e-mail: só dados reais. */}
+            <dl className={styles.previaEnvelope}>
+              <dt>Para</dt>
+              <dd>
+                {conversaAtiva?.lead.contato_nome?.trim() || 'Contato'}
+                {conversaAtiva?.lead.contato_email ? <span className={styles.pessoaEmail}> &lt;{conversaAtiva.lead.contato_email}&gt;</span> : null}
+              </dd>
+              <dt>Assunto</dt>
+              <dd className={styles.previaEnvelopeAssunto}>{assunto.trim() || <em>(sem assunto)</em>}</dd>
+            </dl>
             <iframe className={styles.previaFrame} sandbox="" title="Prévia do e-mail" srcDoc={htmlPrevia} />
           </div>
         </div>
