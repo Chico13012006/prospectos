@@ -25,6 +25,25 @@ describe('permissoes — efetivas e padrão por role', () => {
     expect(temPermissao('usuario', [], 'campaigns.tipos.avancados')).toBe(false)
   })
 
+  it('conversations.send: comercial e admin respondem lead pela Central, sem ganhar campaigns.operate', () => {
+    expect(isPermissao('conversations.send')).toBe(true)
+    // Os dois roles enviam pela Central…
+    expect(temPermissao('usuario', [], 'conversations.send')).toBe(true)
+    expect(temPermissao('admin', [], 'conversations.send')).toBe(true)
+    // …mas `campaigns.operate` (envio legado via Meta) segue só do admin.
+    // As rotas de campanha (criar/ativar/iniciar) usam `campaigns.manage`.
+    expect(temPermissao('usuario', [], 'campaigns.operate')).toBe(false)
+    expect(temPermissao('admin', [], 'campaigns.operate')).toBe(true)
+  })
+
+  it('perfil já backfillado (0015) SEM a linha nova não recebe conversations.send só pelo código', () => {
+    // É o motivo da migration 0040: com linhas na tabela, o padrão do role não
+    // é consultado — quem já existia precisa da linha gravada.
+    const grantsAntigos = ['campaigns.view', 'campaigns.manage', 'workflows.view', 'analytics.view']
+    expect(temPermissao('usuario', grantsAntigos, 'conversations.send')).toBe(false)
+    expect(temPermissao('usuario', [...grantsAntigos, 'conversations.send'], 'conversations.send')).toBe(true)
+  })
+
   it('usuario não configura o workspace nem gerencia workflows', () => {
     expect(temPermissao('usuario', [], 'workspace.configure')).toBe(false)
     expect(temPermissao('usuario', [], 'workflows.manage')).toBe(false)

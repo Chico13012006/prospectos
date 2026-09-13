@@ -26,8 +26,9 @@ const STATUS: Record<CodigoErroEnvioZapi, number> = {
 }
 
 export async function POST(req: Request) {
-  // Mesma permissão do outbound atual: efeito externo real, restrito por padrão.
-  const r = await exigirPermissao('campaigns.operate')
+  // `conversations.send`: envio operacional da Central, concedida ao comercial
+  // e ao admin. NÃO é `campaigns.operate` (admin-only, opera campanhas).
+  const r = await exigirPermissao('conversations.send')
   if ('erro' in r) return r.erro
   const { admin, org } = r.acesso
 

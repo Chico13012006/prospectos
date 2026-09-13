@@ -18,6 +18,12 @@ export const PERMISSOES = [
   'workflows.executions.manage',
   'workspace.configure',
   'analytics.view',
+  // Enviar mensagem a um lead pela Central de Respostas — WhatsApp e e-mail.
+  // É o envio OPERACIONAL de uma conversa, não a operação de campanhas: o
+  // comercial precisa responder o lead sem ganhar `campaigns.operate`
+  // (admin-only; hoje protege só o envio legado via Meta). Escopo: só as
+  // rotas da Central — /api/whatsapp/send, /api/whatsapp/status, /api/email/enviar.
+  'conversations.send',
 ] as const
 
 export type Permissao = (typeof PERMISSOES)[number]
@@ -38,10 +44,13 @@ export type RolePadrao = 'admin' | 'usuario'
 // follow-up, reativação e renovação mexem na esteira do motor e continuam sendo
 // de quem administra. Workflows e configuração do workspace seguem fora.
 //
-// ESPELHO do backfill das migrations 0015, 0033 e 0034 — manter em sincronia.
+// `conversations.send` entra nos dois roles: responder um lead é trabalho do
+// comercial. Não confundir com `campaigns.operate`, que segue só do admin.
+//
+// ESPELHO do backfill das migrations 0015, 0033, 0034 e 0040 — manter em sincronia.
 export const PERMISSOES_POR_ROLE: Record<RolePadrao, Permissao[]> = {
   admin: [...PERMISSOES],
-  usuario: ['campaigns.view', 'campaigns.manage', 'workflows.view', 'analytics.view'],
+  usuario: ['campaigns.view', 'campaigns.manage', 'workflows.view', 'analytics.view', 'conversations.send'],
 }
 
 // Permissões EFETIVAS de um usuário. `perfil_permissoes` é autoritativa: se há

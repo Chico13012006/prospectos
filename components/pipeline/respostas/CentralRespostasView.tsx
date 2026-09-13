@@ -311,6 +311,9 @@ export default function CentralRespostasView({
   // substitui o aviso do rodapé do composer até a próxima tentativa.
   const [enviando, setEnviando] = useState(false)
   const [retornoEnvio, setRetornoEnvio] = useState<{ tipo: 'erro' | 'atencao'; texto: string } | null>(null)
+  // Saúde da conexão Z-API (GET /api/whatsapp/status). Consultada ao entrar no
+  // modo WhatsApp e ao trocar de conversa; 'desconectado' bloqueia o Enviar.
+  const [zapiStatus, setZapiStatus] = useState<'verificando' | 'conectado' | 'desconectado'>('verificando')
 
   // Bloco de prospecção (rodapé da coluna esquerda): busca na base existente.
   const [prospBusca, setProspBusca] = useState('')
@@ -552,45 +555,66 @@ export default function CentralRespostasView({
     }
   }
 
-  // Envio de WhatsApp pela rota já existente (POST /api/whatsapp/enviar). A
-  // organização vem da SESSÃO no servidor; daqui vai só { leadId, texto }.
+  // Saúde da conexão Z-API. Reconsulta ao entrar no modo WhatsApp e ao trocar
+  // de conversa. Qualquer resposta que não afirme conectado = desconectado.
+  const verificarZapi = useCallback(async () => {
+    setZapiStatus('verificando')
+    try {
+      const res = await fetch('/api/whatsapp/status', { cache: 'no-store' })
+      const corpo = (await res.json().catch(() => ({}))) as { conectado?: boolean }
+      setZapiStatus(res.ok && corpo.conectado === true ? 'conectado' : 'desconectado')
+    } catch {
+      setZapiStatus('desconectado')
+    }
+  }, [])
+
+  useEffect(() => {
+    if (canalComposer === 'whatsapp') verificarZapi()
+  }, [canalComposer, ativa, verificarZapi])
+
+  const MSG_ZAPI_INDISPONIVEL = 'WhatsApp indisponível. A conexão precisa ser restabelecida.'
+
+  // Envio de WhatsApp pela Z-API (POST /api/whatsapp/send). A organização vem
+  // da SESSÃO no servidor; daqui vai só { lead_id, message }. Não há janela de
+  // 24h nem template obrigatório — o servidor confere a saúde da instância
+  // antes de enviar e grava a outbound em `whatsapp_mensagens`.
   // Dispara SÓ no clique. Sem retry: erro fica na tela com o texto preservado.
   // Em sucesso não há mensagem otimista — o fio é recarregado e a outbound
   // aparece vinda de `whatsapp_mensagens`.
-  const podeEnviarWhatsapp = canalComposer === 'whatsapp' && !!conversaAtiva && !!texto.trim() && !enviando
+  const podeEnviarWhatsapp = canalComposer === 'whatsapp'
+    && !!conversaAtiva && !!texto.trim() && !enviando && zapiStatus === 'conectado'
   const enviarWhatsapp = async () => {
     if (!podeEnviarWhatsapp || !conversaAtiva) return
     const leadId = conversaAtiva.lead.id
     setEnviando(true)
     setRetornoEnvio(null)
     try {
-      const res = await fetch('/api/whatsapp/enviar', {
+      const res = await fetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadId, texto }),
+        body: JSON.stringify({ lead_id: leadId, message: texto }),
       })
       const corpo = (await res.json().catch(() => ({}))) as {
-        erro?: string; codigo?: string; simulado?: boolean
+        ok?: boolean; erro?: string; codigo?: string; registrada?: boolean
       }
       // Usuário trocou de conversa enquanto enviava: não mexer no lead novo.
       if (ativaRef.current !== leadId) return
 
       if (!res.ok) {
-        setRetornoEnvio({
-          tipo: 'erro',
-          texto: corpo.codigo === 'fora_da_janela'
-            ? 'Fora da janela de 24h: o WhatsApp só aceita texto livre até 24h após a última mensagem recebida do lead. Será necessário usar um template aprovado do WhatsApp.'
-            : (corpo.erro ?? `Não foi possível enviar (erro ${res.status}).`),
-        })
+        // Instância caiu entre a verificação e o envio: refletir na UI.
+        if (corpo.codigo === 'zapi_desconectada' || corpo.codigo === 'zapi_status_falhou') {
+          setZapiStatus('desconectado')
+          setRetornoEnvio({ tipo: 'erro', texto: MSG_ZAPI_INDISPONIVEL })
+          return
+        }
+        setRetornoEnvio({ tipo: 'erro', texto: corpo.erro ?? `Não foi possível enviar (erro ${res.status}).` })
         return
       }
-      if (corpo.simulado) {
-        // WHATSAPP_MODO_ENSAIO: nada foi enviado nem gravado. Mantém o texto e
-        // diz isso — sem fingir sucesso.
-        setRetornoEnvio({ tipo: 'atencao', texto: 'Modo ensaio do WhatsApp: envio simulado — nada foi enviado nem gravado.' })
-        return
-      }
+      // A mensagem SAIU. Limpa o composer em qualquer caso — reenviar duplicaria.
       setTexto('')
+      if (corpo.registrada === false) {
+        setRetornoEnvio({ tipo: 'atencao', texto: 'Mensagem enviada, mas não foi possível registrá-la no histórico.' })
+      }
       await carregarFio(leadId, { silencioso: true })
     } catch (e) {
       if (ativaRef.current !== leadId) return
@@ -1058,7 +1082,11 @@ export default function CentralRespostasView({
                       ? (leadTemEmail
                           ? <>O e-mail é enviado pela plataforma, com a assinatura do responsável, e registrado no histórico da conversa.</>
                           : <>Este lead não tem e-mail cadastrado.</>)
-                      : <>Texto livre só dentro da janela de 24h após a última mensagem recebida do lead.</>}
+                      : zapiStatus === 'desconectado'
+                        ? <>{MSG_ZAPI_INDISPONIVEL}</>
+                        : zapiStatus === 'verificando'
+                          ? <>Verificando a conexão do WhatsApp...</>
+                          : <>Enviado pelo WhatsApp conectado à plataforma e registrado no histórico da conversa.</>}
                 </span>
                 <button type="button" className={styles.botaoSecundario} onClick={copiar} disabled={!texto.trim()}>
                   {copiado ? <><Check size={13} /> Copiado</> : <><Copy size={13} /> Copiar</>}
@@ -1069,7 +1097,13 @@ export default function CentralRespostasView({
                     className={styles.botaoPrincipal}
                     onClick={enviarWhatsapp}
                     disabled={!podeEnviarWhatsapp}
-                    title={enviando ? 'Enviando...' : !texto.trim() ? 'Escreva a mensagem para enviar.' : 'Enviar pelo WhatsApp'}
+                    title={
+                      enviando ? 'Enviando...'
+                      : zapiStatus === 'desconectado' ? MSG_ZAPI_INDISPONIVEL
+                      : zapiStatus === 'verificando' ? 'Verificando a conexão do WhatsApp...'
+                      : !texto.trim() ? 'Escreva a mensagem para enviar.'
+                      : 'Enviar pelo WhatsApp'
+                    }
                   >
                     {enviando
                       ? <><Loader2 size={13} className={styles.spinner} /> Enviando...</>

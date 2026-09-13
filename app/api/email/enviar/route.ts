@@ -24,8 +24,9 @@ const STATUS: Record<CodigoErroEmail, number> = {
 }
 
 export async function POST(req: Request) {
-  // Mesma permissão do envio de WhatsApp: efeito externo real, começa restrito.
-  const r = await exigirPermissao('campaigns.operate')
+  // `conversations.send`: envio operacional da Central (mesma do WhatsApp),
+  // concedida ao comercial e ao admin. Não é `campaigns.operate`.
+  const r = await exigirPermissao('conversations.send')
   if ('erro' in r) return r.erro
   const { admin, org, user } = r.acesso
 
