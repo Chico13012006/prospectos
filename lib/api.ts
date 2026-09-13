@@ -3,6 +3,15 @@ import { apenasTemplatesAutorais } from './campanhas/workflowsInternos'
 import { normalizarNicho } from './nichos/normalizar'
 import { createSupabaseBrowserClient } from './supabase-browser'
 import { ESTAGIOS_RESERVATORIO, estagiosDoStatus } from './pipeline-stages'
+import {
+  TIPOS_INTERACAO_ENVIO,
+  etapaAtualDaCadencia,
+  etapaPorEnvios,
+  type EtapaCadencia,
+} from './cadencia/classificacao'
+
+export { TIPOS_INTERACAO_ENVIO, etapaPorEnvios }
+export type { EtapaCadencia }
 
 // Camada de dados do browser. ANTES: usava o client anon "cru" de lib/supabase.ts
 // (createClient com anonKey, sessão em localStorage), que NÃO compartilhava o
@@ -133,13 +142,8 @@ export async function getLeadsPorEstagioPaginado(
 // suficiente para o volume atual e mantém a correção óbvia. O caminho de escala
 // é um contador denormalizado mantido pelos DOIS motores (hoje inexistente) —
 // decisão adiada de propósito, não esquecida.
-export const TIPOS_INTERACAO_ENVIO = ['abordagem', 'follow_up', 'nota']
-const ESTAGIOS_RESPONDEU_CADENCIA = ['interessado', 'respondeu', 'com_closer']
 const PAGINA_SUPABASE = 1000
 const LOTE_IDS = 150
-
-export type EtapaCadencia =
-  | 'a_iniciar' | 'contato1' | 'followup1' | 'followup2' | 'followup3' | 'followup4' | 'respondeu'
 
 export interface LeadCadencia extends Lead {
   etapa: EtapaCadencia
@@ -149,15 +153,6 @@ export interface LeadCadencia extends Lead {
 // nº de envios → etapa. 0 = inscrito e ainda sem envio: classificado como
 // 'a_iniciar', que HOJE não tem coluna no board (fica pronto para quando
 // decidirmos exibir "A iniciar", sem virar lead invisível por acidente).
-export function etapaPorEnvios(envios: number): EtapaCadencia {
-  if (envios <= 0) return 'a_iniciar'
-  if (envios === 1) return 'contato1'
-  if (envios === 2) return 'followup1'
-  if (envios === 3) return 'followup2'
-  if (envios === 4) return 'followup3'
-  return 'followup4'
-}
-
 // Leads com ao menos uma execução de workflow (= inscritos). Isolamento por
 // organização vem da RLS (client de browser com a sessão do usuário).
 async function idsInscritosEmWorkflow(): Promise<Set<string>> {
@@ -253,7 +248,7 @@ export async function getLeadsCadencia(filtros: PipelineColFiltros = {}): Promis
       ...lead,
       envios: n,
       // Respondeu vence a contagem de envios.
-      etapa: ESTAGIOS_RESPONDEU_CADENCIA.includes(lead.estagio ?? '') ? 'respondeu' : etapaPorEnvios(n),
+      etapa: etapaAtualDaCadencia(n, lead.estagio),
     }
   })
 }

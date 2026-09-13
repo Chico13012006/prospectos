@@ -15,12 +15,19 @@ import {
 import {
   agruparVencimentosPorCliente,
   filtroResponsavelDashboard,
+  parearCiclosRenovados,
   podeVerDashboardDaEquipe,
+  resumirInteracoesProspeccao,
   resumirEmpresasVencimento,
+  serieTemporal,
   situacaoRenovacao,
+  variacaoPercentual,
+  type InteracaoProspeccaoMetrica,
+  type LeadCadenciaProspeccaoMetrica,
   type RegistroControleVencimento,
   type SituacaoRenovacao,
 } from '@/lib/operacao/dashboard'
+import { TIPOS_INTERACAO_ENVIO } from '@/lib/cadencia/classificacao'
 
 export const runtime = 'nodejs'
 
@@ -81,14 +88,71 @@ interface UsuarioResponsavelRow {
   nome: string | null
 }
 
+interface LeadCicloRow {
+  id: string
+  empresa_id: string | null
+  empresa: string | null
+  responsavel_id: string | null
+  responsavel_nome: string | null
+}
+
+interface CicloLaudoDashboardRow {
+  id: string
+  lead_id: string
+  validade_em: string
+  renovado_em: string | null
+  criado_em: string
+  leads: LeadCicloRow | LeadCicloRow[] | null
+}
+
 interface AtividadeProspeccaoRow {
   id: string
   lead_id: string
   tipo: string
   canal: string | null
+  origem_acao: string | null
   descricao: string | null
   created_at: string
   leads: { id: string; empresa: string | null } | { id: string; empresa: string | null }[] | null
+}
+
+interface LeadMetricaProspeccaoRow {
+  id: string
+  empresa: string | null
+  created_at: string
+}
+
+interface LeadInteracaoMetricaRow {
+  id: string
+  segmento: string | null
+  estado: string | null
+}
+
+interface InteracaoMetricaProspeccaoRow {
+  id: string
+  lead_id: string
+  tipo: string
+  canal: string | null
+  origem_acao: string | null
+  created_at: string
+  leads: LeadInteracaoMetricaRow | LeadInteracaoMetricaRow[] | null
+}
+
+interface LeadExecucaoCadenciaRow {
+  id: string
+  estagio: string | null
+}
+
+interface ExecucaoCadenciaDashboardRow {
+  id: string
+  lead_id: string | null
+  iniciado_em: string
+  leads: LeadExecucaoCadenciaRow | LeadExecucaoCadenciaRow[] | null
+}
+
+interface OportunidadeMetricaProspeccaoRow {
+  id: string
+  criado_em: string
 }
 
 interface QueryComOr {
@@ -106,6 +170,25 @@ function aplicarFiltro<T extends QueryComOr>(
 
 function leadDaAtividade(valor: AtividadeProspeccaoRow['leads']) {
   return Array.isArray(valor) ? valor[0] ?? null : valor
+}
+
+function leadDaInteracaoMetrica(valor: InteracaoMetricaProspeccaoRow['leads']) {
+  return Array.isArray(valor) ? valor[0] ?? null : valor
+}
+
+function leadDaExecucaoCadencia(valor: ExecucaoCadenciaDashboardRow['leads']) {
+  return Array.isArray(valor) ? valor[0] ?? null : valor
+}
+
+function leadDoCiclo(valor: CicloLaudoDashboardRow['leads']): LeadCicloRow | null {
+  return Array.isArray(valor) ? valor[0] ?? null : valor
+}
+
+function tabelaCiclosIndisponivel(erro: { code?: string; message?: string } | null): boolean {
+  if (!erro) return false
+  return erro.code === '42P01'
+    || erro.code === 'PGRST205'
+    || erro.message?.includes("public.laudo_ciclos") === true
 }
 
 function inicioDoMesUTC(agora: Date): Date {
@@ -142,6 +225,8 @@ export async function GET(request: NextRequest) {
     const agora = new Date()
     const desde30 = new Date(agora)
     desde30.setUTCDate(desde30.getUTCDate() - 30)
+    const desde60 = new Date(agora)
+    desde60.setUTCDate(desde60.getUTCDate() - 60)
     const inicioMes = inicioDoMesUTC(agora)
     const head = { count: 'exact' as const, head: true }
 
@@ -225,7 +310,8 @@ export async function GET(request: NextRequest) {
     )
     const enviadosQPromise = aplicarFiltro(
       admin.from('interacoes').select(selectInteracaoContagem, head).eq('organizacao_id', org)
-        .in('tipo', ['abordagem', 'follow_up']).gte('created_at', desde30.toISOString()),
+        .in('tipo', TIPOS_INTERACAO_ENVIO).eq('canal', 'email').eq('origem_acao', 'ia')
+        .gte('created_at', desde30.toISOString()),
       filtroLead,
       filtroLead ? 'leads' : undefined,
     )
@@ -260,14 +346,86 @@ export async function GET(request: NextRequest) {
     )
     const atividadesProspeccaoPromise = aplicarFiltro(
       admin.from('interacoes')
-        .select('id, lead_id, tipo, canal, descricao, created_at, leads!inner(id, empresa, responsavel_id, responsavel_nome)')
+        .select('id, lead_id, tipo, canal, origem_acao, descricao, created_at, leads!inner(id, empresa, responsavel_id, responsavel_nome)')
         .eq('organizacao_id', org)
-        .in('tipo', ['abordagem', 'follow_up', 'resposta', 'reuniao'])
+        .in('tipo', [...TIPOS_INTERACAO_ENVIO, 'resposta', 'reuniao'])
         .gte('created_at', desde30.toISOString())
-        .order('created_at', { ascending: false }).order('id', { ascending: true }).limit(12),
+        .order('created_at', { ascending: false }).order('id', { ascending: true }).limit(24),
       filtroLead,
       filtroLead ? 'leads' : undefined,
     )
+    const novosAnteriorQPromise = aplicarFiltro(
+      admin.from('leads').select('id', head).eq('organizacao_id', org)
+        .gte('created_at', desde60.toISOString()).lt('created_at', desde30.toISOString()),
+      filtroLead,
+    )
+    const enviadosAnteriorQPromise = aplicarFiltro(
+      admin.from('interacoes').select(selectInteracaoContagem, head).eq('organizacao_id', org)
+        .in('tipo', TIPOS_INTERACAO_ENVIO).eq('canal', 'email').eq('origem_acao', 'ia')
+        .gte('created_at', desde60.toISOString()).lt('created_at', desde30.toISOString()),
+      filtroLead,
+      filtroLead ? 'leads' : undefined,
+    )
+    const respostasAnteriorQPromise = aplicarFiltro(
+      admin.from('interacoes').select(selectInteracaoContagem, head).eq('organizacao_id', org)
+        .eq('tipo', 'resposta')
+        .gte('created_at', desde60.toISOString()).lt('created_at', desde30.toISOString()),
+      filtroLead,
+      filtroLead ? 'leads' : undefined,
+    )
+
+    // A criação de uma oportunidade de prospecção é o evento persistido que
+    // representa o repasse de um lead qualificado ao comercial. Renovações são
+    // excluídas desse KPI; registros legados sem origem continuam incluídos.
+    const oportunidadesQualificadasBase = admin.from('oportunidades').select('id', head)
+      .eq('organizacao_id', org)
+      .or('origem.is.null,origem.neq.renovacao')
+      .gte('criado_em', desde30.toISOString()).lt('criado_em', agora.toISOString())
+    const oportunidadesQualificadasQPromise = escopoResponsavel
+      ? oportunidadesQualificadasBase.eq('responsavel_id', escopoResponsavel.id)
+      : oportunidadesQualificadasBase
+    const oportunidadesAnterioresBase = admin.from('oportunidades').select('id', head)
+      .eq('organizacao_id', org)
+      .or('origem.is.null,origem.neq.renovacao')
+      .gte('criado_em', desde60.toISOString()).lt('criado_em', desde30.toISOString())
+    const oportunidadesAnterioresQPromise = escopoResponsavel
+      ? oportunidadesAnterioresBase.eq('responsavel_id', escopoResponsavel.id)
+      : oportunidadesAnterioresBase
+
+    const leadsMetricasPromise = aplicarFiltro(
+      admin.from('leads').select('id, empresa, created_at')
+        .eq('organizacao_id', org)
+        .gte('created_at', desde60.toISOString()).lt('created_at', agora.toISOString())
+        .order('created_at', { ascending: false }).order('id', { ascending: true }).limit(5000),
+      filtroLead,
+    )
+    const interacoesMetricasPromise = aplicarFiltro(
+      admin.from('interacoes')
+        .select('id, lead_id, tipo, canal, origem_acao, created_at, leads!inner(id, segmento, estado, responsavel_id, responsavel_nome)')
+        .eq('organizacao_id', org)
+        .in('tipo', [...TIPOS_INTERACAO_ENVIO, 'resposta'])
+        .lt('created_at', agora.toISOString())
+        .order('created_at', { ascending: true }).order('id', { ascending: true }).limit(5000),
+      filtroLead,
+      filtroLead ? 'leads' : undefined,
+    )
+    const execucoesCadenciaBase = admin.from('workflow_execucoes')
+      .select('id, lead_id, iniciado_em, leads!inner(id, estagio, responsavel_id, responsavel_nome)')
+      .eq('organizacao_id', org)
+      .eq('leads.organizacao_id', org)
+      .not('lead_id', 'is', null)
+      .order('iniciado_em', { ascending: true }).order('id', { ascending: true }).limit(5000)
+    const execucoesCadenciaPromise = filtroLead
+      ? execucoesCadenciaBase.or(filtroLead, { referencedTable: 'leads' })
+      : execucoesCadenciaBase
+    const oportunidadesSerieBase = admin.from('oportunidades').select('id, criado_em')
+      .eq('organizacao_id', org)
+      .or('origem.is.null,origem.neq.renovacao')
+      .gte('criado_em', desde30.toISOString()).lt('criado_em', agora.toISOString())
+      .order('criado_em', { ascending: true }).order('id', { ascending: true }).limit(5000)
+    const oportunidadesSeriePromise = escopoResponsavel
+      ? oportunidadesSerieBase.eq('responsavel_id', escopoResponsavel.id)
+      : oportunidadesSerieBase
 
     const [
       leadsQ,
@@ -290,6 +448,15 @@ export async function GET(request: NextRequest) {
       campanhasRenovacaoQ,
       templatesRenovacaoQ,
       atividadesProspeccaoQ,
+      novosAnteriorQ,
+      enviadosAnteriorQ,
+      respostasAnteriorQ,
+      oportunidadesQualificadasQ,
+      oportunidadesAnterioresQ,
+      leadsMetricasQ,
+      interacoesMetricasQ,
+      execucoesCadenciaQ,
+      oportunidadesSerieQ,
     ] = await Promise.all([
       leadsQPromise,
       tarefasQPromise,
@@ -321,6 +488,15 @@ export async function GET(request: NextRequest) {
       admin.from('templates').select('id').eq('organizacao_id', org).eq('canal', 'email')
         .eq('tipo', renovacaoEfetiva(cfg).templateTipo).order('id', { ascending: true }).limit(20),
       atividadesProspeccaoPromise,
+      novosAnteriorQPromise,
+      enviadosAnteriorQPromise,
+      respostasAnteriorQPromise,
+      oportunidadesQualificadasQPromise,
+      oportunidadesAnterioresQPromise,
+      leadsMetricasPromise,
+      interacoesMetricasPromise,
+      execucoesCadenciaPromise,
+      oportunidadesSeriePromise,
     ])
 
     const consultasEssenciais = [
@@ -329,6 +505,9 @@ export async function GET(request: NextRequest) {
       contatadosMesQ, reunioesMesQ, tarefasProspeccaoRowsQ, tarefasRenovacaoRowsQ,
       campanhasRenovacaoQ, templatesRenovacaoQ,
       atividadesProspeccaoQ,
+      novosAnteriorQ, enviadosAnteriorQ, respostasAnteriorQ,
+      oportunidadesQualificadasQ, oportunidadesAnterioresQ,
+      leadsMetricasQ, interacoesMetricasQ, execucoesCadenciaQ, oportunidadesSerieQ,
     ]
     const primeiraFalha = consultasEssenciais.find((query) => query.error)?.error
     if (primeiraFalha) throw primeiraFalha
@@ -337,6 +516,30 @@ export async function GET(request: NextRequest) {
     const leadsLegados = (validadesLegadasQ.data ?? []) as LeadValidadeRow[]
     const validades = consolidarValidades(servicos, leadsLegados)
     const validade = resumirValidades(validades, agora)
+
+    // O histórico é consultado separadamente da fila aberta. `laudo_ciclos`
+    // registra o ciclo anterior e o seguinte, sem alterar a fonte autoritativa
+    // da validade atual nem a classificação operacional já existente.
+    const ciclosLaudoQ = await aplicarFiltro(
+      admin.from('laudo_ciclos')
+        .select('id, lead_id, validade_em, renovado_em, criado_em, leads!inner(id, empresa_id, empresa, responsavel_id, responsavel_nome)')
+        .eq('organizacao_id', org)
+        .eq('leads.organizacao_id', org)
+        .order('criado_em', { ascending: false })
+        .order('id', { ascending: true })
+        .limit(500),
+      filtroLead,
+      filtroLead ? 'leads' : undefined,
+    )
+    const historicoCiclosDisponivel = !tabelaCiclosIndisponivel(ciclosLaudoQ.error)
+    if (ciclosLaudoQ.error && historicoCiclosDisponivel) throw ciclosLaudoQ.error
+    const ciclosLaudoRows = historicoCiclosDisponivel
+      ? (ciclosLaudoQ.data ?? []) as CicloLaudoDashboardRow[]
+      : []
+    const leadsCiclos = [...new Map(ciclosLaudoRows.flatMap((ciclo) => {
+      const lead = leadDoCiclo(ciclo.leads)
+      return lead ? [[lead.id, lead] as const] : []
+    })).values()]
 
     // Só resolve os clientes que podem aparecer na fila visível. As contagens
     // continuam completas, mas nomes/lead focal ficam numa leitura limitada.
@@ -427,7 +630,10 @@ export async function GET(request: NextRequest) {
       lead.id,
       lead.empresa_id ? `empresa:${lead.empresa_id}` : `lead:${lead.id}`,
     ]))
-    const responsavelIds = [...new Set(leadsOperacao.flatMap((lead) => lead.responsavel_id ? [lead.responsavel_id] : []))]
+    const responsavelIds = [...new Set([
+      ...leadsOperacao.flatMap((lead) => lead.responsavel_id ? [lead.responsavel_id] : []),
+      ...leadsCiclos.flatMap((lead) => lead.responsavel_id ? [lead.responsavel_id] : []),
+    ])]
 
     const execucoesRecentesPromise = campanhaIds.length
       ? admin.from('workflow_execucoes').select('id, lead_id, campanha_id, status, proxima_verificacao_em, iniciado_em, atualizado_em')
@@ -504,6 +710,26 @@ export async function GET(request: NextRequest) {
     const responsavelNome = new Map(
       ((responsaveisQ.data ?? []) as UsuarioResponsavelRow[]).map((usuario) => [usuario.id, usuario.nome]),
     )
+    const leadCicloPorId = new Map(leadsCiclos.map((lead) => [lead.id, lead]))
+    const ciclosRenovados = parearCiclosRenovados(ciclosLaudoRows.map((ciclo) => ({
+      id: ciclo.id,
+      leadId: ciclo.lead_id,
+      validadeEm: String(ciclo.validade_em).slice(0, 10),
+      renovadoEm: ciclo.renovado_em,
+      criadoEm: ciclo.criado_em,
+    }))).flatMap((ciclo) => {
+      const lead = leadCicloPorId.get(ciclo.leadId)
+      if (!lead) return []
+      const nomeResponsavel = (lead.responsavel_id ? responsavelNome.get(lead.responsavel_id) : null)
+        ?? lead.responsavel_nome
+        ?? null
+      return [{
+        ...ciclo,
+        empresa: lead.empresa?.trim() || 'Cliente sem nome',
+        tipo: 'Laudo',
+        responsavel: nomeResponsavel ? { id: lead.responsavel_id, nome: nomeResponsavel } : null,
+      }]
+    })
     const leadsPorCliente = new Map<string, LeadOperacaoRow[]>()
     for (const lead of leadsOperacao) {
       const chave = chaveClientePorLead.get(lead.id)
@@ -659,7 +885,43 @@ export async function GET(request: NextRequest) {
     const nomeLead = new Map(tarefaLeads.map((lead) => [lead.id, lead.empresa]))
     const pipeline = (oportRows.data ?? []).reduce((s: number, row: { valor: number | null }) => s + (row.valor ?? 0), 0)
     const habilitados = cfg.dashboardWidgets?.length ? cfg.dashboardWidgets : [...TODOS_WIDGETS]
-    const atividadesProspeccao = ((atividadesProspeccaoQ.data ?? []) as AtividadeProspeccaoRow[])
+    const leadsMetricas = (leadsMetricasQ.data ?? []) as LeadMetricaProspeccaoRow[]
+    const interacoesMetricas = ((interacoesMetricasQ.data ?? []) as InteracaoMetricaProspeccaoRow[])
+      .flatMap<InteracaoProspeccaoMetrica>((interacao) => {
+        const lead = leadDaInteracaoMetrica(interacao.leads)
+        if (!lead) return []
+        return [{
+          id: interacao.id,
+          leadId: interacao.lead_id,
+          tipo: interacao.tipo,
+          canal: interacao.canal,
+          origemAcao: interacao.origem_acao,
+          criadaEm: interacao.created_at,
+          segmento: lead.segmento,
+          estado: lead.estado,
+        }]
+      })
+    const leadsCadencia = ((execucoesCadenciaQ.data ?? []) as ExecucaoCadenciaDashboardRow[])
+      .flatMap<LeadCadenciaProspeccaoMetrica>((execucao) => {
+        const lead = leadDaExecucaoCadencia(execucao.leads)
+        if (!lead || !execucao.lead_id) return []
+        return [{
+          leadId: execucao.lead_id,
+          estagio: lead.estagio,
+          inscritoEm: execucao.iniciado_em,
+        }]
+      })
+    const metricasInteracoes = resumirInteracoesProspeccao(
+      interacoesMetricas,
+      desde60,
+      desde30,
+      agora,
+      leadsCadencia,
+    )
+    const oportunidadesSerie = (oportunidadesSerieQ.data ?? []) as OportunidadeMetricaProspeccaoRow[]
+    const atividadesInteracoes = ((atividadesProspeccaoQ.data ?? []) as AtividadeProspeccaoRow[])
+      .filter((atividade) => atividade.tipo !== 'nota'
+        || (atividade.canal === 'email' && atividade.origem_acao === 'ia'))
       .map((atividade) => {
         const lead = leadDaAtividade(atividade.leads)
         return {
@@ -672,6 +934,31 @@ export async function GET(request: NextRequest) {
           realizadaEm: atividade.created_at,
         }
       })
+    const atividadesNovos = leadsMetricas.flatMap((lead) => {
+      const timestamp = new Date(lead.created_at).getTime()
+      if (Number.isNaN(timestamp) || timestamp < desde30.getTime() || timestamp >= agora.getTime()) return []
+      return [{
+        id: `lead:${lead.id}`,
+        leadId: lead.id,
+        empresa: lead.empresa?.trim() || 'Cliente sem nome',
+        tipo: 'novo_lead',
+        canal: null,
+        descricao: 'Lead incluído na base de prospecção.',
+        realizadaEm: lead.created_at,
+      }]
+    })
+    const atividadesProspeccao = [...atividadesInteracoes, ...atividadesNovos]
+      .sort((a, b) => new Date(b.realizadaEm).getTime() - new Date(a.realizadaEm).getTime() || a.id.localeCompare(b.id))
+      .slice(0, 6)
+
+    const novosAtual = novosQ.count ?? 0
+    const mensagensAtual = enviadosQ.count ?? 0
+    const respostasAtual = respostasQ.count ?? 0
+    const oportunidadesAtual = oportunidadesQualificadasQ.count ?? 0
+    const novosAnterior = novosAnteriorQ.count ?? 0
+    const mensagensAnterior = enviadosAnteriorQ.count ?? 0
+    const respostasAnterior = respostasAnteriorQ.count ?? 0
+    const oportunidadesAnterior = oportunidadesAnterioresQ.count ?? 0
 
     return NextResponse.json({
       atualizadoEm: agora.toISOString(),
@@ -700,18 +987,49 @@ export async function GET(request: NextRequest) {
         validade,
       },
       prospeccao: {
-        novos: novosQ.count ?? 0,
+        novos: novosAtual,
         clientesContatados: contatadosQ.count ?? 0,
-        mensagensEnviadas: enviadosQ.count ?? 0,
-        respostas: respostasQ.count ?? 0,
+        mensagensEnviadas: mensagensAtual,
+        respostas: respostasAtual,
         reunioes: reunioesQ.count ?? 0,
         atividades: atividadesProspeccao,
+        indicadores: {
+          novos: {
+            atual: novosAtual,
+            anterior: novosAnterior,
+            variacao: variacaoPercentual(novosAtual, novosAnterior),
+            serie: serieTemporal(leadsMetricas.map((lead) => lead.created_at), desde30, agora),
+          },
+          mensagens: {
+            atual: mensagensAtual,
+            anterior: mensagensAnterior,
+            variacao: variacaoPercentual(mensagensAtual, mensagensAnterior),
+            serie: metricasInteracoes.series.mensagens,
+          },
+          respostas: {
+            atual: respostasAtual,
+            anterior: respostasAnterior,
+            variacao: variacaoPercentual(respostasAtual, respostasAnterior),
+            serie: metricasInteracoes.series.respostas,
+          },
+          oportunidades: {
+            atual: oportunidadesAtual,
+            anterior: oportunidadesAnterior,
+            variacao: variacaoPercentual(oportunidadesAtual, oportunidadesAnterior),
+            serie: serieTemporal(oportunidadesSerie.map((item) => item.criado_em), desde30, agora),
+          },
+        },
+        followUps: metricasInteracoes.followUps,
+        nichos: metricasInteracoes.nichos.slice(0, 4),
+        respostasPorNichoRegiao: metricasInteracoes.respostasPorNichoRegiao.slice(0, 4),
       },
       renovacoes: {
         renovadosMes: renovadosQ.count ?? 0,
         empresas: empresasVencimento,
         comunicacoes: comunicacoesRenovacao,
         situacoes,
+        ciclosRenovados,
+        historicoCiclosDisponivel,
       },
       metasAtuais: {
         contatos: contatadosMesQ.count ?? 0,

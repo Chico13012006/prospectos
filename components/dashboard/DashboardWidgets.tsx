@@ -1,29 +1,42 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertTriangle,
   ArrowRight,
+  BarChart3,
   BriefcaseBusiness,
   CalendarCheck,
   CalendarClock,
   CheckCircle2,
+  ChevronRight,
   CircleAlert,
   Clock3,
   ListTodo,
+  Mail,
   MailCheck,
+  MapPin,
   MessageSquare,
+  Minus,
+  MoreVertical,
   RefreshCw,
   Search,
   Send,
+  ShoppingCart,
+  Store,
   Target,
+  TrendingDown,
+  TrendingUp,
   UserRound,
   Users,
+  Utensils,
 } from 'lucide-react'
 import { formatarDataIsoSemFuso } from '@/lib/servicos/vencimento'
 import type { ClienteControleVencimento, SituacaoRenovacao } from '@/lib/operacao/dashboard'
 import type { ObjetivoOperacional } from '@/lib/config/workspaceConfig'
+import VencimentosRenovacoes from '@/components/dashboard/renewals/VencimentosRenovacoes'
+import styles from './ProspeccaoDashboard.module.css'
 
 interface ComunicacaoRenovacao {
   id: string
@@ -71,6 +84,19 @@ interface AtividadeProspeccaoDashboard {
   realizadaEm: string
 }
 
+interface IndicadorProspeccaoDashboard {
+  atual: number
+  anterior: number
+  variacao: number
+  serie: number[]
+}
+
+interface DistribuicaoProspeccaoDashboard {
+  nome: string
+  quantidade: number
+  percentual: number
+}
+
 interface ResumoDashboard {
   atualizadoEm: string
   antecedenciaDias: number
@@ -110,6 +136,21 @@ interface ResumoDashboard {
     respostas: number
     reunioes: number
     atividades: AtividadeProspeccaoDashboard[]
+    indicadores: {
+      novos: IndicadorProspeccaoDashboard
+      mensagens: IndicadorProspeccaoDashboard
+      respostas: IndicadorProspeccaoDashboard
+      oportunidades: IndicadorProspeccaoDashboard
+    }
+    followUps: {
+      clientes: number
+      clientesAnteriores: number
+      retornos: number
+      retornosAnteriores: number
+      serie: number[]
+    }
+    nichos: DistribuicaoProspeccaoDashboard[]
+    respostasPorNichoRegiao: DistribuicaoProspeccaoDashboard[]
   }
   renovacoes: {
     renovadosMes: number
@@ -122,6 +163,17 @@ interface ResumoDashboard {
     }
     comunicacoes: ComunicacaoRenovacao[]
     situacoes: Record<SituacaoRenovacao, number>
+    ciclosRenovados: {
+      id: string
+      leadId: string
+      empresa: string
+      tipo: string
+      validadeAnterior: string
+      novaValidade: string | null
+      renovadoEm: string
+      responsavel: { id: string | null; nome: string } | null
+    }[]
+    historicoCiclosDisponivel: boolean
   }
   metasAtuais: { contatos: number; reunioes: number; renovacoes: number }
   vencimentos: ClienteVencimentoDashboard[]
@@ -131,6 +183,17 @@ interface ResumoDashboard {
 const ROTULO_OBJETIVO: Record<ObjetivoOperacional, string> = {
   prospeccao: 'Prospecção',
   vencimentos_laudos: 'Vencimentos e renovações',
+}
+
+function CabecalhoDashboard() {
+  return (
+    <header>
+      <h1 className="text-2xl font-bold text-slate-100">Dashboard</h1>
+      <p className="mt-0.5 text-sm text-slate-400">
+        Acompanhe cada área da operação em seu próprio painel.
+      </p>
+    </header>
+  )
 }
 
 type JanelaRenovacao = 'todas' | 'vencidas' | 'ate_30' | 'de_31_a_60'
@@ -215,7 +278,9 @@ function formatarDataHora(valor: string) {
 }
 
 const ROTULO_ATIVIDADE: Record<string, { label: string; cls: string }> = {
+  novo_lead: { label: 'Novo lead', cls: styles.activityBadgeLead },
   abordagem: { label: 'Prospecção enviada', cls: 'bg-indigo-500/15 text-indigo-300' },
+  nota: { label: 'Mensagem enviada', cls: 'bg-indigo-500/15 text-indigo-300' },
   follow_up: { label: 'Follow-up realizado', cls: 'bg-sky-500/15 text-sky-300' },
   resposta: { label: 'Resposta recebida', cls: 'bg-emerald-500/15 text-emerald-300' },
   reuniao: { label: 'Reunião registrada', cls: 'bg-violet-500/15 text-violet-300' },
@@ -253,78 +318,188 @@ function ProximasAcoes({ tarefas, titulo }: { tarefas: TarefaDashboard[]; titulo
   )
 }
 
+function variacaoVisual(atual: number, anterior: number) {
+  if (anterior <= 0) return atual > 0 ? 100 : 0
+  return Math.round(((atual - anterior) / anterior) * 100)
+}
+
+function Tendencia({ valor, legenda = 'vs. 30 dias anteriores' }: { valor: number; legenda?: string }) {
+  const Icon = valor > 0 ? TrendingUp : valor < 0 ? TrendingDown : Minus
+  const sinal = valor > 0 ? '+' : ''
+  return (
+    <div className={styles.trendBlock}>
+      <span className={`${styles.trendValue} ${valor > 0 ? styles.trendPositive : valor < 0 ? styles.trendNegative : styles.trendNeutral}`}>
+        <Icon size={14} aria-hidden="true" /> {sinal}{valor}%
+      </span>
+      <span className={styles.trendCaption}>{legenda}</span>
+    </div>
+  )
+}
+
+function caminhoDaSerie(serie: number[], largura: number, altura: number, margem: number) {
+  const valores = serie.length > 1 ? serie : [0, ...(serie.length ? serie : [0])]
+  const maximo = Math.max(1, ...valores)
+  return valores.map((valor, indice) => {
+    const x = margem + (indice / (valores.length - 1)) * (largura - margem * 2)
+    const y = altura - margem - (valor / maximo) * (altura - margem * 2)
+    return { x, y }
+  })
+}
+
+function MiniGrafico({ serie, tipo = 'linha' }: { serie: number[]; tipo?: 'linha' | 'barras' }) {
+  const gradienteId = useId().replace(/:/g, '')
+  if (tipo === 'barras') {
+    const maximo = Math.max(1, ...serie)
+    return (
+      <div className={styles.miniBars} aria-hidden="true">
+        {serie.map((valor, indice) => (
+          <span key={indice} style={{ height: `${Math.round((valor / maximo) * 100)}%` }} />
+        ))}
+      </div>
+    )
+  }
+
+  const pontos = caminhoDaSerie(serie, 120, 42, 3)
+  const linha = pontos.map((ponto, indice) => `${indice === 0 ? 'M' : 'L'} ${ponto.x} ${ponto.y}`).join(' ')
+  const area = `${linha} L ${pontos[pontos.length - 1].x} 42 L ${pontos[0].x} 42 Z`
+  return (
+    <svg className={styles.miniLine} viewBox="0 0 120 42" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id={gradienteId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="currentColor" stopOpacity="0.32" />
+          <stop offset="1" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gradienteId})`} />
+      <path d={linha} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+const KPI_TONS = {
+  cyan: styles.kpiCyan,
+  violet: styles.kpiViolet,
+  emerald: styles.kpiEmerald,
+  amber: styles.kpiAmber,
+}
+
+function KpiProspeccao({
+  titulo,
+  subtitulo,
+  indicador,
+  Icon,
+  tom,
+  grafico = 'linha',
+}: {
+  titulo: string
+  subtitulo: string
+  indicador: IndicadorProspeccaoDashboard
+  Icon: typeof Users
+  tom: keyof typeof KPI_TONS
+  grafico?: 'linha' | 'barras'
+}) {
+  return (
+    <article className={`${styles.kpiCard} ${KPI_TONS[tom]}`}>
+      <div className={styles.kpiTop}>
+        <span className={styles.kpiIcon}><Icon size={25} strokeWidth={1.8} aria-hidden="true" /></span>
+        <div className={styles.kpiIdentity}>
+          <span className={styles.kpiLabel}>{titulo}</span>
+          <strong>{indicador.atual.toLocaleString('pt-BR')}</strong>
+        </div>
+        <ChevronRight className={styles.kpiArrow} size={22} aria-hidden="true" />
+      </div>
+      <div className={styles.kpiMiddle}>
+        <Tendencia valor={indicador.variacao} />
+        <MiniGrafico serie={indicador.serie} tipo={grafico} />
+      </div>
+      <span className={styles.kpiSubtitle}>{subtitulo}</span>
+    </article>
+  )
+}
+
+function GraficoFollowUps({ serie }: { serie: number[] }) {
+  const pontos = caminhoDaSerie(serie, 360, 78, 5)
+  const linha = pontos.map((ponto, indice) => `${indice === 0 ? 'M' : 'L'} ${ponto.x} ${ponto.y}`).join(' ')
+  const area = `${linha} L ${pontos[pontos.length - 1].x} 78 L ${pontos[0].x} 78 Z`
+  return (
+    <div className={styles.followChart}>
+      <svg viewBox="0 0 360 78" preserveAspectRatio="none" aria-label="Evolução de follow-ups nos últimos 30 dias">
+        <defs>
+          <linearGradient id="dashboard-follow-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#8b5cf6" stopOpacity="0.48" />
+            <stop offset="1" stopColor="#8b5cf6" stopOpacity="0.03" />
+          </linearGradient>
+        </defs>
+        <line x1="0" y1="76" x2="360" y2="76" className={styles.chartGridLine} />
+        <line x1="0" y1="39" x2="360" y2="39" className={styles.chartGridLine} />
+        <path d={area} fill="url(#dashboard-follow-area)" />
+        <path d={linha} className={styles.followLine} />
+      </svg>
+      <div className={styles.chartLabels}><span>30 dias</span><span>15 dias</span><span>Hoje</span></div>
+    </div>
+  )
+}
+
+function formatarNomeAgrupamento(nome: string) {
+  return nome.replace(/(^|\s)([a-zá-ú])/g, (_, espaco: string, letra: string) => `${espaco}${letra.toLocaleUpperCase('pt-BR')}`)
+}
+
+function iconeDoNicho(nome: string) {
+  const normalizado = nome.toLocaleLowerCase('pt-BR')
+  if (/aliment|restaurante|comida/.test(normalizado)) return Utensils
+  if (/varejo|loja|com[eé]rcio/.test(normalizado)) return ShoppingCart
+  if (/buffet|evento|festa/.test(normalizado)) return Store
+  return BriefcaseBusiness
+}
+
+function CabecalhoBloco({ Icon, titulo, subtitulo }: {
+  Icon: typeof Users
+  titulo: string
+  subtitulo: string
+}) {
+  return (
+    <div className={styles.sectionHeading}>
+      <span className={styles.sectionIcon}><Icon size={19} aria-hidden="true" /></span>
+      <div><h2>{titulo}</h2><p>{subtitulo}</p></div>
+    </div>
+  )
+}
+
 function PainelProspeccao({
   dados,
-  responsavelSelecionado,
-  onResponsavelChange,
 }: {
   dados: ResumoDashboard
-  responsavelSelecionado: string
-  onResponsavelChange: (authId: string) => void
 }) {
-  const metas = dados.operacao.metasMensais
-  const tarefas = dados.tarefas.filter((tarefa) => tarefa.tipo !== 'renovacao')
+  const indicadores = dados.prospeccao.indicadores
+  const followUps = dados.prospeccao.followUps
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-100">Dashboard de prospecção</h2>
-          <p className="mt-0.5 text-sm text-slate-500">
-            {dados.visaoProspeccao.modo === 'individual'
-              ? `Leads, mensagens e resultados da carteira de ${dados.visaoProspeccao.responsavel?.nome ?? 'comercial'}.`
-              : 'Aquisição, contatos, respostas e avanço comercial da equipe nos últimos 30 dias.'}
-          </p>
-        </div>
-        {dados.visaoProspeccao.podeVerEquipe ? (
-          <label className="min-w-56">
-            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-600">Visualizar carteira</span>
-            <select value={responsavelSelecionado} onChange={(evento) => onResponsavelChange(evento.target.value)}
-              className="w-full rounded-lg border border-[#2a3147] bg-[#1a1f2e] px-3 py-2 text-xs text-slate-300 outline-none focus:border-indigo-500">
-              <option value="">Toda a equipe</option>
-              {dados.visaoProspeccao.responsaveis.map((item) => <option key={item.authId} value={item.authId}>{item.nome}</option>)}
-            </select>
-          </label>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1.5 text-xs text-indigo-300">
-            <UserRound size={12} /> Minha carteira
-          </span>
-        )}
-      </div>
+    <div className={styles.dashboardContent}>
+      <section className={styles.kpiGrid} aria-label="Indicadores de prospecção">
+        <KpiProspeccao titulo="Novos leads" subtitulo="Últimos 30 dias" indicador={indicadores.novos} Icon={Users} tom="cyan" />
+        <KpiProspeccao titulo="Mensagens enviadas" subtitulo="Abordagens e follow-ups" indicador={indicadores.mensagens} Icon={Mail} tom="violet" grafico="barras" />
+        <KpiProspeccao titulo="Respostas recebidas" subtitulo="Últimos 30 dias" indicador={indicadores.respostas} Icon={MessageSquare} tom="emerald" />
+        <KpiProspeccao titulo="Oportunidades qualificadas" subtitulo="Repassadas ao comercial" indicador={indicadores.oportunidades} Icon={Target} tom="amber" grafico="barras" />
+      </section>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Kpi label="Novos leads" valor={dados.prospeccao.novos} Icon={Users} cor="text-indigo-400" detalhe="Últimos 30 dias" />
-        <Kpi label="Clientes contatados" valor={dados.prospeccao.clientesContatados} Icon={Send} cor="text-cyan-400" detalhe="Últimos 30 dias" />
-        <Kpi label="Mensagens enviadas" valor={dados.prospeccao.mensagensEnviadas} Icon={MailCheck} cor="text-sky-400" detalhe="Abordagens e follow-ups" />
-        <Kpi label="Respostas recebidas" valor={dados.prospeccao.respostas} Icon={MessageSquare} cor="text-emerald-400" detalhe="Últimos 30 dias" />
-        <Kpi label="Reuniões agendadas" valor={dados.prospeccao.reunioes} Icon={CalendarCheck} cor="text-violet-400" detalhe="Últimos 30 dias" />
-        <Kpi label="Tarefas comerciais" valor={tarefas.length} Icon={ListTodo} cor="text-amber-400" detalhe="Próximas ações visíveis" />
-      </div>
-
-      <section className="overflow-hidden rounded-xl border border-[#2a3147] bg-[#1a1f2e]">
-        <div className="flex items-start justify-between gap-3 border-b border-[#2a3147] px-5 py-4">
-          <div>
-            <h2 className="flex items-center gap-2 font-semibold text-slate-100"><MailCheck size={16} className="text-sky-400" /> Atividade comercial registrada</h2>
-            <p className="mt-1 text-xs text-slate-500">Últimas prospecções, follow-ups, respostas e reuniões da carteira selecionada.</p>
-          </div>
-          <Link href="/automacao?tab=execucoes" className="shrink-0 text-xs text-indigo-400 hover:underline">Ver histórico <ArrowRight className="inline" size={11} /></Link>
+      <section className={styles.activityCard}>
+        <div className={styles.activityHeader}>
+          <CabecalhoBloco Icon={ListTodo} titulo="Atividade comercial registrada" subtitulo="Últimas mensagens, respostas e movimentações da carteira selecionada." />
+          <Link href="/automacao?tab=execucoes" className={styles.historyLink}>Ver histórico <ArrowRight size={14} aria-hidden="true" /></Link>
         </div>
         {dados.prospeccao.atividades.length === 0 ? (
-          <div className="px-5 py-10 text-center text-sm text-slate-500">Nenhuma atividade registrada nos últimos 30 dias.</div>
+          <div className={styles.emptyState}>Nenhuma atividade registrada nos últimos 30 dias.</div>
         ) : (
-          <div className="divide-y divide-[#2a3147]">
-            {dados.prospeccao.atividades.map((atividade) => {
-              const visual = ROTULO_ATIVIDADE[atividade.tipo] ?? { label: 'Atividade registrada', cls: 'bg-slate-500/15 text-slate-300' }
+          <div className={styles.activityList}>
+            {dados.prospeccao.atividades.slice(0, 2).map((atividade) => {
+              const visual = ROTULO_ATIVIDADE[atividade.tipo] ?? { label: 'Atividade registrada', cls: styles.activityBadgeDefault }
               return (
-                <Link key={atividade.id} href={`/leads/${atividade.leadId}`} className="grid gap-2 px-5 py-3 transition-colors hover:bg-[#0f1117] md:grid-cols-[minmax(0,1fr)_auto]">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${visual.cls}`}>{visual.label}</span>
-                      <span className="truncate text-sm font-medium text-slate-200">{atividade.empresa}</span>
-                    </div>
-                    {atividade.descricao && <p className="mt-1 line-clamp-1 text-xs text-slate-500">{atividade.descricao}</p>}
-                  </div>
-                  <time className="self-center text-xs text-slate-500" dateTime={atividade.realizadaEm}>{formatarDataHora(atividade.realizadaEm)}</time>
+                <Link key={atividade.id} href={`/leads/${atividade.leadId}`} className={styles.activityRow}>
+                  <span className={`${styles.activityBadge} ${visual.cls}`}>{visual.label}</span>
+                  <strong>{atividade.empresa}</strong>
+                  <span className={styles.activityDescription}>{atividade.descricao || 'Movimentação registrada no histórico do lead.'}</span>
+                  <time dateTime={atividade.realizadaEm}>{formatarDataHora(atividade.realizadaEm)}</time>
+                  <MoreVertical size={17} aria-hidden="true" />
                 </Link>
               )
             })}
@@ -332,44 +507,69 @@ function PainelProspeccao({
         )}
       </section>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-5">
-        <section className="rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-5 xl:col-span-3">
-          <h2 className="flex items-center gap-2 font-semibold text-slate-100"><Target size={16} className="text-indigo-400" /> Metas de prospecção</h2>
-          <p className="mt-1 text-xs text-slate-500">Resultados reais do mês. Campos sem meta não geram progresso artificial.</p>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <MetaCard label="Empresas contatadas" atual={dados.metasAtuais.contatos} meta={metas.contatos} cor="text-emerald-400" />
-            <MetaCard label="Reuniões agendadas" atual={dados.metasAtuais.reunioes} meta={metas.reunioes} cor="text-violet-400" />
+      <div className={styles.insightsGrid}>
+        <section className={styles.insightCard}>
+          <CabecalhoBloco Icon={RefreshCw} titulo="Follow-ups" subtitulo="Situação operacional da carteira ativa." />
+          <div className={styles.followSummary}>
+            <article className={styles.followMetric}>
+              <Users size={23} aria-hidden="true" />
+              <span>Clientes em FUP</span>
+              <div><strong>{followUps.clientes.toLocaleString('pt-BR')}</strong><Tendencia valor={variacaoVisual(followUps.clientes, followUps.clientesAnteriores)} legenda="vs. mês anterior" /></div>
+            </article>
+            <article className={styles.followMetric}>
+              <Clock3 size={23} aria-hidden="true" />
+              <span>Retornos de FUP</span>
+              <div><strong>{followUps.retornos.toLocaleString('pt-BR')}</strong><Tendencia valor={variacaoVisual(followUps.retornos, followUps.retornosAnteriores)} legenda="vs. mês anterior" /></div>
+            </article>
           </div>
+          <p className={styles.chartTitle}>Evolução de follow-ups (últimos 30 dias)</p>
+          <GraficoFollowUps serie={followUps.serie} />
         </section>
 
-        <section className="rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-5 xl:col-span-2">
-          <h2 className="flex items-center gap-2 font-semibold text-slate-100"><BriefcaseBusiness size={16} className="text-cyan-400" /> Resumo comercial</h2>
-          <dl className="mt-4 divide-y divide-[#2a3147] text-sm">
-            <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Oportunidades abertas</dt><dd className="font-semibold text-slate-200">{dados.resumo.oportAbertas.toLocaleString('pt-BR')}</dd></div>
-            <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Pipeline</dt><dd className="font-semibold text-slate-200">{dados.resumo.pipeline.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</dd></div>
-            <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Campanhas ativas</dt><dd className="font-semibold text-slate-200">{dados.resumo.campanhasAtivas.toLocaleString('pt-BR')}</dd></div>
-          </dl>
+        <section className={styles.insightCard}>
+          <CabecalhoBloco Icon={BarChart3} titulo="Nichos abordados" subtitulo="Distribuição dos leads trabalhados por segmento." />
+          {dados.prospeccao.nichos.length === 0 ? (
+            <div className={styles.emptyState}>Nenhum nicho abordado nos últimos 30 dias.</div>
+          ) : (
+            <div className={styles.barList}>
+              {dados.prospeccao.nichos.map((item) => {
+                const Icon = iconeDoNicho(item.nome)
+                return (
+                  <div className={styles.barRow} key={item.nome}>
+                    <Icon size={20} aria-hidden="true" />
+                    <span title={item.nome}>{formatarNomeAgrupamento(item.nome)}</span>
+                    <div className={styles.barTrack}><i style={{ width: `${item.percentual}%` }} /></div>
+                    <strong>{item.quantidade.toLocaleString('pt-BR')}</strong>
+                    <small>{item.percentual}%</small>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </section>
-      </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <section className="rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-5">
-          <h2 className="flex items-center gap-2 font-semibold text-slate-100"><AlertTriangle size={16} className="text-amber-400" /> Alertas de prospecção</h2>
-          <div className="mt-4">
-            {dados.prospeccao.clientesContatados > 0 && dados.prospeccao.respostas === 0 ? (
-              <div className="flex items-center gap-3 rounded-lg border border-sky-500/20 bg-sky-500/10 p-3">
-                <MessageSquare size={16} className="shrink-0 text-sky-400" />
-                <span className="text-sm text-slate-300">Há contatos no período, mas nenhuma resposta registrada.</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3">
-                <CheckCircle2 size={16} className="text-emerald-400" />
-                <span className="text-sm text-slate-300">Nenhum alerta crítico de prospecção com os dados atuais.</span>
-              </div>
-            )}
+        <section className={styles.insightCard}>
+          <CabecalhoBloco Icon={MapPin} titulo="Resposta por nicho / região" subtitulo="Onde a prospecção está gerando retorno." />
+          {dados.prospeccao.respostasPorNichoRegiao.length === 0 ? (
+            <div className={styles.responseEmpty}>Nenhuma resposta com nicho e região no período.</div>
+          ) : (
+            <div className={styles.responseList}>
+              {dados.prospeccao.respostasPorNichoRegiao.map((item) => (
+                <div className={styles.responseRow} key={item.nome}>
+                  <span title={item.nome}>{formatarNomeAgrupamento(item.nome)}</span>
+                  <div className={styles.responseTrack}><i style={{ width: `${item.percentual}%` }} /></div>
+                  <strong>{item.quantidade.toLocaleString('pt-BR')}</strong>
+                  <small>{item.percentual}%</small>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className={styles.responseTotal}>
+            <BarChart3 size={23} aria-hidden="true" />
+            <div><span>Total de respostas recebidas</span><strong>{dados.prospeccao.respostas.toLocaleString('pt-BR')}</strong></div>
+            <Tendencia valor={indicadores.respostas.variacao} />
           </div>
         </section>
-        <ProximasAcoes tarefas={tarefas} titulo="Próximas ações comerciais" />
       </div>
     </div>
   )
@@ -687,23 +887,29 @@ export default function DashboardWidgets() {
 
   if (carregando && !dados) {
     return (
-      <div className="space-y-4">
-        <div className="h-10 animate-pulse rounded-lg bg-[#1a1f2e]" />
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((item) => <div key={item} className="h-28 animate-pulse rounded-xl bg-[#1a1f2e]" />)}
+      <div className="space-y-5 p-6">
+        <CabecalhoDashboard />
+        <div className="space-y-4">
+          <div className="h-10 animate-pulse rounded-lg bg-[#1a1f2e]" />
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((item) => <div key={item} className="h-28 animate-pulse rounded-xl bg-[#1a1f2e]" />)}
+          </div>
+          <div className="h-72 animate-pulse rounded-xl bg-[#1a1f2e]" />
         </div>
-        <div className="h-72 animate-pulse rounded-xl bg-[#1a1f2e]" />
       </div>
     )
   }
 
   if (!dados || erro) {
     return (
-      <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-8 text-center">
-        <CircleAlert className="mx-auto text-red-400" size={24} />
-        <h2 className="mt-3 font-semibold text-slate-100">Painel indisponível</h2>
-        <p className="mt-1 text-sm text-slate-500">{erro || 'Não foi possível carregar os dados.'}</p>
-        <button type="button" onClick={carregar} className="mt-4 rounded-lg border border-[#2a3147] px-3 py-2 text-sm text-slate-300 hover:bg-[#1a1f2e]">Tentar novamente</button>
+      <div className="space-y-5 p-6">
+        <CabecalhoDashboard />
+        <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-8 text-center">
+          <CircleAlert className="mx-auto text-red-400" size={24} />
+          <h2 className="mt-3 font-semibold text-slate-100">Painel indisponível</h2>
+          <p className="mt-1 text-sm text-slate-500">{erro || 'Não foi possível carregar os dados.'}</p>
+          <button type="button" onClick={carregar} className="mt-4 rounded-lg border border-[#2a3147] px-3 py-2 text-sm text-slate-300 hover:bg-[#1a1f2e]">Tentar novamente</button>
+        </div>
       </div>
     )
   }
@@ -715,26 +921,67 @@ export default function DashboardWidgets() {
       : abas[0]
   const atualizado = new Date(dados.atualizadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
+  if (abaAtiva === 'vencimentos_laudos') {
+    return (
+      <div className="p-4 sm:p-6">
+        <VencimentosRenovacoes
+          atualizadoEm={dados.atualizadoEm}
+          vencimentos={dados.vencimentos}
+          tarefas={dados.tarefas}
+          ciclosRenovados={dados.renovacoes.ciclosRenovados}
+          historicoCiclosDisponivel={dados.renovacoes.historicoCiclosDisponivel}
+          atualizando={carregando}
+          onAtualizar={carregar}
+          onVoltarProspeccao={abas.includes('prospeccao') ? () => setAba('prospeccao') : undefined}
+        />
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center rounded-lg border border-[#2a3147] bg-[#1a1f2e] p-0.5" aria-label="Módulo do dashboard">
+    <div className={styles.page}>
+      <header className={styles.pageHeader}>
+        <nav className={styles.breadcrumb} aria-label="Navegação estrutural">
+          <span>Prospecção</span><ChevronRight size={13} aria-hidden="true" /><strong>Dashboard</strong>
+        </nav>
+        <div className={styles.titleRow}>
+          <div>
+            <h1>Dashboard</h1>
+            <p>Acompanhe cada área da operação em seu próprio painel.</p>
+          </div>
+          <button type="button" onClick={carregar} disabled={carregando} className={styles.refreshButton}>
+            <RefreshCw size={17} className={carregando ? 'animate-spin' : ''} aria-hidden="true" /> Atualizado às {atualizado}
+          </button>
+        </div>
+        <div className={styles.controlRow}>
+          <div className={styles.tabs} aria-label="Módulo do dashboard">
           {abas.map((item) => (
             <button key={item} type="button" onClick={() => setAba(item)} aria-pressed={abaAtiva === item}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${abaAtiva === item ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-500 hover:text-slate-200'}`}>
+              className={abaAtiva === item ? styles.tabActive : undefined}>
               {ROTULO_OBJETIVO[item]}
             </button>
           ))}
+          </div>
+          {dados.visaoProspeccao.podeVerEquipe ? (
+            <label className={styles.portfolioField}>
+              <span>Visualizar carteira</span>
+              <div><Users size={17} aria-hidden="true" />
+                <select value={responsavelProspeccao} onChange={(evento) => setResponsavelProspeccao(evento.target.value)}>
+                  <option value="">Toda a equipe</option>
+                  {dados.visaoProspeccao.responsaveis.map((item) => <option key={item.authId} value={item.authId}>{item.nome}</option>)}
+                </select>
+              </div>
+            </label>
+          ) : (
+            <div className={styles.portfolioField}>
+              <span>Visualizar carteira</span>
+              <div><UserRound size={17} aria-hidden="true" /><strong>Minha carteira</strong></div>
+            </div>
+          )}
         </div>
-        <button type="button" onClick={carregar} disabled={carregando}
-          className="inline-flex items-center gap-2 rounded-lg border border-[#2a3147] bg-[#1a1f2e] px-3 py-2 text-xs text-slate-500 hover:text-slate-300 disabled:opacity-50">
-          <RefreshCw size={12} className={carregando ? 'animate-spin' : ''} /> Atualizado às {atualizado}
-        </button>
-      </div>
+      </header>
 
-      {abaAtiva === 'vencimentos_laudos'
-        ? <PainelRenovacoes dados={dados} />
-        : <PainelProspeccao dados={dados} responsavelSelecionado={responsavelProspeccao} onResponsavelChange={setResponsavelProspeccao} />}
+      <PainelProspeccao dados={dados} />
     </div>
   )
 }
