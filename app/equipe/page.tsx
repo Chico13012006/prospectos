@@ -88,7 +88,7 @@ export default function EquipePage() {
   const [role, setRole] = useState<'admin' | 'usuario'>('usuario');
   const [nicho, setNicho] = useState('');
   const [carregando, setCarregando] = useState(false);
-  const [feedback, setFeedback] = useState<{ tipo: 'sucesso' | 'erro'; msg: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ tipo: 'sucesso' | 'aviso' | 'erro'; msg: string } | null>(null);
 
   // Ações por membro
   const [menuAberto, setMenuAberto] = useState<string | null>(null);
@@ -197,7 +197,22 @@ export default function EquipePage() {
       if (!res.ok) {
         setFeedback({ tipo: 'erro', msg: data.erro || 'Erro ao enviar convite' });
       } else {
-        setFeedback({ tipo: 'sucesso', msg: `Convite enviado para ${email}` });
+        // A API só confirma envio de fato quando saiu pela conta Gmail
+        // principal (emailEnviado). Em ensaio ou sem credencial, o usuário já
+        // foi criado, mas ninguém recebeu nada — não afirmar um envio que não
+        // ocorreu (link fica disponível para repasse manual).
+        if (data.emailEnviado) {
+          setFeedback({ tipo: 'sucesso', msg: `Convite enviado para ${email}` });
+        } else if (data.simulado) {
+          setFeedback({ tipo: 'aviso', msg: `Usuário criado, mas o e-mail NÃO foi enviado (MODO_ENSAIO ativo).` });
+        } else {
+          setFeedback({
+            tipo: 'aviso',
+            msg: data.link
+              ? `Usuário criado, mas o e-mail não pôde ser enviado. Copie o link e envie manualmente: ${data.link}`
+              : 'Usuário criado, mas o e-mail não pôde ser enviado.',
+          });
+        }
         setEmail(''); setNome(''); setNicho(''); setRole('usuario');
         setMostrarConvite(false);
         await carregarMembros();
@@ -320,8 +335,12 @@ export default function EquipePage() {
               </button>
             </div>
             {feedback && (
-              <p className={`text-sm mt-2 ${feedback.tipo === 'sucesso' ? 'text-green-400' : 'text-red-500'}`}>
-                {feedback.tipo === 'sucesso' ? '✓' : '✗'} {feedback.msg}
+              <p className={`text-sm mt-2 break-all ${
+                feedback.tipo === 'sucesso' ? 'text-green-400'
+                : feedback.tipo === 'aviso' ? 'text-yellow-400'
+                : 'text-red-500'
+              }`}>
+                {feedback.tipo === 'sucesso' ? '✓' : feedback.tipo === 'aviso' ? '⚠' : '✗'} {feedback.msg}
               </p>
             )}
           </form>

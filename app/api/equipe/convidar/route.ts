@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { exigirPermissao, ressincronizarPermissoes } from '@/lib/rbac/servidor';
+import { GmailProvider, lerCredenciaisGmail } from '@/lib/engine/email/gmailProvider';
+import { engineConfig } from '@/lib/engine/config';
+import { montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha';
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,11 +22,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ erro: 'Papel inválido' }, { status: 400 });
     }
 
-    const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/definir-senha`,
+    // `generateLink` cria o usuário de auth (igual `inviteUserByEmail`), mas NÃO
+    // dispara o e-mail padrão do Supabase (remetente genérico, rate-limited).
+    // O e-mail de convite sai abaixo, pela conta Gmail PRINCIPAL (mesma do
+    // motor/Central — GMAIL_USER/GMAIL_APP_PASSWORD), a pedido do usuário.
+    const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'invite',
+      email,
+      options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/definir-senha` },
     });
 
-    if (error) return NextResponse.json({ erro: error.message }, { status: 400 });
+    if (error || !data?.user) {
+      return NextResponse.json({ erro: error?.message ?? 'Falha ao gerar convite' }, { status: 400 });
+    }
 
     await supabaseAdmin.from('perfis').upsert({
       id: data.user.id,
@@ -62,7 +73,48 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ ok: true });
+    // Envio do convite pela conta Gmail principal. O usuário e as linhas de
+    // perfis/usuarios acima já existem mesmo se o e-mail falhar — nunca
+    // desfazemos o convite por isso; devolvemos o link p/ o admin repassar
+    // manualmente se o envio não sair (sem credencial ou falha de SMTP).
+    const actionLink = data.properties?.action_link ?? null;
+    const cred = lerCredenciaisGmail();
+    if (!cred) {
+      console.error('[equipe/convidar] GMAIL_USER/GMAIL_APP_PASSWORD ausentes — convite criado, e-mail não enviado.');
+      return NextResponse.json({ ok: true, emailEnviado: false, link: actionLink });
+    }
+
+    const { data: orgRow } = await supabaseAdmin
+      .from('organizacoes').select('nome, configuracoes').eq('id', org).maybeSingle();
+    const orgData = orgRow as { nome?: string; configuracoes?: Record<string, unknown> } | null;
+    const nomenclaturas = orgData?.configuracoes?.['nomenclaturas'] as Record<string, string> | undefined;
+    const nomeServico = nomenclaturas?.['nome_servico'] ?? orgData?.nome ?? 'ProspectOS';
+
+    const corpoTexto = `Você foi convidado para acessar a plataforma ${nomeServico}.\n\nAcesse o link abaixo para definir sua senha e ativar seu acesso:\n${actionLink}\n\nSe você não esperava este convite, ignore este e-mail.`;
+    const htmlPersonalizado = `
+      <p>Você foi convidado para acessar a plataforma <strong>${nomeServico}</strong>.</p>
+      <p>Clique no botão abaixo para definir sua senha e ativar seu acesso:</p>
+      <p><a href="${actionLink}" style="display:inline-block;background:#4f46e5;color:#ffffff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Definir senha e acessar</a></p>
+      <p style="color:#64748b;font-size:12px;">Se o botão não funcionar, copie e cole este link no navegador:<br>${actionLink}</p>
+      <p style="color:#64748b;font-size:12px;">Se você não esperava este convite, ignore este e-mail.</p>
+    `;
+    const html = montarEmailCampanhaHtml(corpoTexto, { nomeServico }, htmlPersonalizado);
+
+    try {
+      await new GmailProvider(cred).enviar(email, `Convite para acessar ${nomeServico}`, corpoTexto, html);
+    } catch (e) {
+      console.error('[equipe/convidar] falha ao enviar e-mail de convite:', e);
+      return NextResponse.json({ ok: true, emailEnviado: false, link: actionLink });
+    }
+
+    // GmailProvider.enviar já respeita MODO_ENSAIO (só loga, não envia) — a
+    // resposta reflete isso pra UI não afirmar um envio que não saiu.
+    return NextResponse.json({
+      ok: true,
+      emailEnviado: !engineConfig.modoEnsaio,
+      simulado: engineConfig.modoEnsaio,
+      link: actionLink,
+    });
   } catch (err) {
     console.error('[equipe/convidar] erro interno:', err);
     return NextResponse.json({ erro: 'Erro interno' }, { status: 500 });
