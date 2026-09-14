@@ -7,7 +7,9 @@ import {
   resumirNichosImportacao,
 } from '@/lib/leads/importarCsv'
 import { resolverResponsavelPorAuthId } from '@/lib/leads/responsavelServer'
-import { camposBaseImportacao, montarAvisoImportacao } from '@/lib/leads/importacaoOperacional'
+import { montarAvisoImportacao, montarLeadsImportacao } from '@/lib/leads/importacaoOperacional'
+import { ESTAGIO_RENOVACAO, estagioInicialLead, regraRenovacaoPorValidadeAtiva } from '@/lib/leads/estagioInicial'
+import { parseWorkspaceConfig } from '@/lib/config/workspaceConfig'
 import { criarCiclosIniciais } from '@/lib/laudos/ciclos'
 
 // Importação de leads em LOTE pela tela (2.2). Roda server-side com service role
@@ -57,6 +59,17 @@ export async function POST(req: NextRequest) {
     const novos = unicos.filter((l) => !existentes.has(l.contato_email))
     const jaExistentes = unicos.length - novos.length
 
+    // Regra da organização, resolvida no servidor a partir do blob tipado: com
+    // features.estagioRenovacaoPorValidade, lead com validade do laudo nasce em
+    // `renovacao` (lib/leads/estagioInicial.ts). Sem a flag, tudo em novos_leads.
+    const { data: orgRow, error: orgError } = await admin
+      .from('organizacoes')
+      .select('configuracoes')
+      .eq('id', org)
+      .maybeSingle()
+    if (orgError) throw orgError
+    const renovacaoPorValidade = regraRenovacaoPorValidadeAtiva(parseWorkspaceConfig(orgRow?.configuracoes))
+
     // A prévia deixa explícito se cada nicho do arquivo já tem uma mensagem de
     // primeiro contato ativa. Importar continua permitido; o motor bloqueia o
     // primeiro envio daquele nicho até o template existir, sem usar um texto
@@ -94,6 +107,9 @@ export async function POST(req: NextRequest) {
       // arquivo — célula preenchida que não virou data. Nenhum dos dois
       // bloqueia a importação.
       comValidade: novos.filter((lead) => !!lead.data_validade).length,
+      // Quantos dos novos nascem em `renovacao` pela regra da organização
+      // (fora da prospecção). Sem a flag, é sempre 0.
+      emRenovacao: novos.filter((lead) => estagioInicialLead(lead.data_validade, renovacaoPorValidade) === ESTAGIO_RENOVACAO).length,
       validadeInvalida,
     }
 
@@ -122,22 +138,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ inseridos: 0, resumo, responsavel: { nome: vinculo.usuario.nome } })
     }
 
-    const base = camposBaseImportacao(org)
-    const payload = novos.map((l) => ({
-      ...base,
-      contato_nome: l.contato_nome,
-      contato_email: l.contato_email,
-      empresa: l.empresa,
-      segmento: l.segmento,
-      origem: l.origem,
-      contato_telefone: l.contato_telefone,
-      contato_cargo: l.contato_cargo,
-      cidade: l.cidade,
-      estado: l.estado,
-      data_validade: l.data_validade,
-      responsavel_id: vinculo.usuario.id,
-      responsavel_nome: vinculo.usuario.nome,
-    }))
+    const payload = montarLeadsImportacao(novos, {
+      organizacaoId: org,
+      responsavel: vinculo.usuario,
+      estagioRenovacaoPorValidade: renovacaoPorValidade,
+    })
 
     let inseridos = 0
     for (let i = 0; i < payload.length; i += LOTE) {

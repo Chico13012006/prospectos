@@ -82,6 +82,9 @@ export const ESTAGIO_LABELS: Record<string, string> = {
   perdido: 'Perdido',
   descartado: 'Descartado',
   sem_resposta: 'Sem Resposta',
+  // Cliente com validade de laudo (lib/leads/estagioInicial.ts). Fica FORA das
+  // COLUNAS acima de propósito: não é prospecção nem follow-up.
+  renovacao: 'Renovação',
 }
 export function labelEstagio(estagio?: string | null): string {
   if (!estagio) return '—'
@@ -106,6 +109,7 @@ export function corEstagio(estagio?: string | null): string {
   if (!estagio) return '#64748b'
   if (estagio === 'perdido' || estagio === 'descartado') return '#ef4444'
   if (estagio === 'sem_resposta') return '#94a3b8'
+  if (estagio === 'renovacao') return '#14b8a6'
   const coluna = COLUNAS.find(c => c.estagios.includes(estagio))
   return coluna?.color ?? '#64748b'
 }
@@ -146,6 +150,7 @@ export const STATUS_COMERCIAL_OPCOES: { value: string; label: string }[] = [
   { value: 'com_closer', label: 'Com o Closer' },
   { value: 'reuniao_agendada', label: 'Reunião Agendada' },
   { value: 'ganho', label: 'Ganho' },
+  { value: 'renovacao', label: 'Renovação' },
   { value: 'sem_resposta', label: 'Sem Resposta' },
   { value: 'perdido', label: 'Perdido' },
 ]

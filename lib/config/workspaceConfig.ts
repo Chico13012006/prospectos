@@ -90,6 +90,9 @@ export interface RenovacaoConfig {
 // antes era env var (a resolução por env quebrou em produção).
 export interface FeaturesConfig {
   empresaContatoReads?: boolean   // lê Empresa/Contato via entidades no LeadPanel
+  // Importação: lead com data_validade nasce no estágio `renovacao` em vez de
+  // `novos_leads` (lib/leads/estagioInicial.ts). Ausente = comportamento padrão.
+  estagioRenovacaoPorValidade?: boolean
 }
 
 // ROI (Fase 8): custo operacional de referência p/ comparar com a receita das
@@ -140,7 +143,7 @@ export interface WorkspaceConfig {
 
 // Chaves de feature conhecidas (tipadas). Só estas são aceitas na leitura do
 // blob — valor com tipo errado ou chave desconhecida é descartado.
-const FEATURES_BOOLEANAS: (keyof FeaturesConfig)[] = ['empresaContatoReads']
+const FEATURES_BOOLEANAS: (keyof FeaturesConfig)[] = ['empresaContatoReads', 'estagioRenovacaoPorValidade']
 
 // Padrões de renovação (usados quando o workspace não configurou). NÃO hardcoda
 // no motor: são defaults do produto, sobrescrevíveis por org via o jsonb.

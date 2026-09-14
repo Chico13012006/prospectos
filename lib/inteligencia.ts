@@ -57,11 +57,11 @@ export const FILTROS_IC_PADRAO: FiltrosIC = {
 // Vocabulário de estágios deste projeto (mesmos do pipeline). "Respondeu" = já
 // deu sinal de vida (o motor move p/ 'interessado' ao detectar resposta; os
 // demais são estágios manuais posteriores). "Não prospectado" = ainda no
-// reservatório, sem 1º contato.
+// reservatório, sem 1º contato — ou cliente em renovação, que não é prospecção.
 const ESTAGIOS_RESPONDEU = new Set([
   'interessado', 'respondeu', 'com_closer', 'reuniao_agendada', 'ganho',
 ])
-const ESTAGIOS_NAO_PROSPECTADO = new Set(['novos_leads', 'novo'])
+const ESTAGIOS_NAO_PROSPECTADO = new Set(['novos_leads', 'novo', 'renovacao'])
 
 export function respondeu(estagio: string): boolean {
   return ESTAGIOS_RESPONDEU.has(estagio)

@@ -41,6 +41,16 @@ describe('inteligencia — KPIs', () => {
   it('conversão é 0 sem prospectados (não divide por zero)', () => {
     expect(calcularKpis([lead({ estagio: 'novos_leads' })]).conversao).toBe(0)
   })
+
+  it('cliente em renovação não conta como prospectado', () => {
+    const leads = [
+      lead({ empresa: 'Cliente', estagio: 'renovacao', score: 99 }),
+      lead({ empresa: 'Prospect', estagio: 'primeiro_contato', score: 40 }),
+    ]
+    expect(calcularKpis(leads).prospectados).toBe(1)
+    expect(performancePorCanal(leads)).toEqual([{ canal: 'email', prospectados: 1, responderam: 0, taxa: 0 }])
+    expect(topLeadsPorResposta(leads).map((l) => l.empresa)).toEqual(['Prospect'])
+  })
 })
 
 describe('inteligencia — filtros', () => {

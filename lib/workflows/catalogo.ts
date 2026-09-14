@@ -229,6 +229,7 @@ const ESTAGIO_OPCOES = [
   { valor: 'respondeu', label: 'Respondeu' },
   { valor: 'reuniao_agendada', label: 'Reunião agendada' },
   { valor: 'ganho', label: 'Ganho' },
+  { valor: 'renovacao', label: 'Renovação' },
   { valor: 'perdido', label: 'Perdido' },
 ]
 

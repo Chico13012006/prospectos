@@ -16,6 +16,7 @@ type Resumo = {
   nichos: Array<{ nicho: string; leads: number; templateAtivo: boolean }>
   semSegmento: number
   comValidade: number
+  emRenovacao: number
   validadeInvalida: number
 }
 const MOTIVO_LABEL: Record<string, string> = {
@@ -145,6 +146,12 @@ export default function ImportarLeadsModal({
                   <div className="flex justify-between gap-3">
                     <span className="text-slate-400">Com validade do laudo</span>
                     <span className="text-slate-300 tabular-nums">{resumo.comValidade}</span>
+                  </div>
+                )}
+                {resumo.emRenovacao > 0 && (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-400">Entram em Renovação</span>
+                    <span className="text-slate-300 tabular-nums">{resumo.emRenovacao}</span>
                   </div>
                 )}
                 {resumo.validadeInvalida > 0 && (
