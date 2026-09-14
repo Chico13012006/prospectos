@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Sparkles, Search, X, Loader2, Check, ClipboardList, AlertTriangle, Target,
-  ListChecks, CalendarClock, Mail, ArrowRight, Copy, MessageSquare,
+  ListChecks, CalendarClock, Mail, ArrowRight, Copy, MessageSquare, Lightbulb,
 } from 'lucide-react';
 import { getLeads, registrarNota, atualizarEstagio, analisarReuniaoCopiloto } from '@/lib/api';
 import type { Lead } from '@/lib/supabase';
@@ -121,7 +121,7 @@ export default function CopilotoPanel() {
             </p>
           </div>
         ) : (
-          <Resultado analise={analise} lead={leadSel} />
+          <Resultado analise={analise} lead={leadSel} transcricao={transcricao} />
         )}
       </div>
     </div>
@@ -155,7 +155,11 @@ function ListaBullets({ itens, vazio }: { itens: string[]; vazio: string }) {
   );
 }
 
-function Resultado({ analise, lead }: { analise: AnaliseReuniao; lead: Lead | null }) {
+function Resultado({ analise, lead, transcricao }: {
+  analise: AnaliseReuniao;
+  lead: Lead | null;
+  transcricao: string;
+}) {
   const [registrado, setRegistrado] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [estagioAplicado, setEstagioAplicado] = useState(false);
@@ -172,10 +176,13 @@ function Resultado({ analise, lead }: { analise: AnaliseReuniao; lead: Lead | nu
     const linhas = [`${MARCADOR} ${analise.resumo}`];
     if (analise.dores.length) linhas.push(`\nDores: ${analise.dores.join('; ')}`);
     if (analise.objecoes.length) linhas.push(`Objeções: ${analise.objecoes.join('; ')}`);
-    if (analise.equipamentos.length) linhas.push(`Equipamentos: ${analise.equipamentos.map((e) => `${e.quantidade}x ${nomeProduto(e.produto)}`).join(', ')}`);
+    if (analise.lacunasDescoberta.length) linhas.push(`Pontos não tratados: ${analise.lacunasDescoberta.join('; ')}`);
+    if (analise.equipamentos.length) linhas.push(`Equipamentos: ${analise.equipamentos.map((e) => `${e.quantidade}x ${nomeProduto(e.produto)} (${e.origem})`).join(', ')}`);
     if (analise.proximosPassos.length) linhas.push(`Próximos passos: ${analise.proximosPassos.join('; ')}`);
     if (analise.tarefas.length) linhas.push(`Tarefas: ${analise.tarefas.join('; ')}`);
     if (analise.proximoFollowup) linhas.push(`Próximo follow-up sugerido: ${analise.proximoFollowup}`);
+    const transcricaoLimpa = transcricao.trim();
+    if (transcricaoLimpa) linhas.push(`\nTranscrição da reunião:\n${transcricaoLimpa}`);
     return linhas.join('\n');
   }
 
@@ -222,16 +229,22 @@ function Resultado({ analise, lead }: { analise: AnaliseReuniao; lead: Lead | nu
         </Bloco>
       </div>
 
-      <Bloco Icon={Target} titulo="Equipamentos mencionados" cor="text-emerald-400">
+      <Bloco Icon={Target} titulo="Equipamentos avaliados" cor="text-emerald-400">
         {analise.equipamentos.length === 0 ? (
           <p className="text-xs text-slate-600">Nenhum equipamento identificado.</p>
         ) : (
           <>
-            <div className="flex flex-wrap gap-1.5 mb-2">
+            <div className="space-y-1.5 mb-2">
               {analise.equipamentos.map((e, i) => (
-                <span key={i} className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-300">
-                  {e.quantidade}x {nomeProduto(e.produto)}
-                </span>
+                <div key={i} className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="font-medium px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-300">
+                    {e.quantidade}x {nomeProduto(e.produto)}
+                  </span>
+                  <span className={e.origem === 'recomendado' ? 'text-amber-300' : 'text-slate-500'}>
+                    {e.origem === 'recomendado' ? 'Recomendação do Copiloto' : 'Mencionado na reunião'}
+                  </span>
+                  {e.justificativa && <span className="w-full text-slate-500">{e.justificativa}</span>}
+                </div>
               ))}
             </div>
             {simuladorHref && (
@@ -241,6 +254,10 @@ function Resultado({ analise, lead }: { analise: AnaliseReuniao; lead: Lead | nu
             )}
           </>
         )}
+      </Bloco>
+
+      <Bloco Icon={Lightbulb} titulo="Pontos não tratados na reunião" cor="text-amber-400">
+        <ListaBullets itens={analise.lacunasDescoberta} vazio="Nenhuma lacuna relevante identificada." />
       </Bloco>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -294,7 +311,7 @@ function Resultado({ analise, lead }: { analise: AnaliseReuniao; lead: Lead | nu
             className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 py-2 rounded-lg transition-colors"
           >
             {salvando ? <Loader2 size={14} className="animate-spin" /> : registrado ? <Check size={14} /> : <ClipboardList size={14} />}
-            {registrado ? `Registrado em ${lead.empresa}` : `Registrar análise no lead (${lead.empresa})`}
+            {registrado ? `Registrado em ${lead.empresa}` : `Registrar análise e transcrição no lead (${lead.empresa})`}
           </button>
         ) : (
           <p className="text-xs text-slate-500 text-center">Selecione um lead acima para registrar esta análise na timeline dele.</p>

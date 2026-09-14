@@ -6,7 +6,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { iaConfigurada } from '@/lib/ia/cliente'
-import { analisarReuniao } from '@/lib/ia/copilotoReuniao'
+import { analisarReuniao, type ContextoLeadCopiloto } from '@/lib/ia/copilotoReuniao'
 
 export const runtime = 'nodejs'
 
@@ -40,12 +40,54 @@ export async function POST(req: NextRequest) {
     }
 
     // Contexto do lead (opcional) — só se o lead for da org do usuário.
-    let contexto: { empresa?: string | null; contato?: string | null } | undefined
+    let contexto: ContextoLeadCopiloto | undefined
     if (leadId) {
-      const { data: lead } = await admin
-        .from('leads').select('empresa, contato_nome')
-        .eq('id', leadId).eq('organizacao_id', org).maybeSingle()
-      if (lead) contexto = { empresa: lead.empresa, contato: lead.contato_nome }
+      const [leadQ, historicoQ] = await Promise.all([
+        admin
+          .from('leads')
+          .select('empresa, segmento, cidade, estado, contato_nome, contato_cargo, origem, estagio, ultimo_contato, proxima_acao, proxima_acao_data, responsavel_id, responsavel_nome')
+          .eq('id', leadId).eq('organizacao_id', org).maybeSingle(),
+        admin
+          .from('interacoes')
+          .select('tipo, canal, descricao, created_at')
+          .eq('lead_id', leadId).eq('organizacao_id', org)
+          .order('created_at', { ascending: false }).limit(8),
+      ])
+      if (leadQ.error) throw leadQ.error
+      if (historicoQ.error) throw historicoQ.error
+
+      const lead = leadQ.data
+      let responsavel = lead?.responsavel_nome ?? null
+      if (lead?.responsavel_id) {
+        const { data: usuario, error: usuarioError } = await admin
+          .from('usuarios').select('nome')
+          .eq('id', lead.responsavel_id).eq('organizacao_id', org).maybeSingle()
+        if (usuarioError) throw usuarioError
+        responsavel = usuario?.nome ?? responsavel
+      }
+
+      if (lead) {
+        contexto = {
+          empresa: lead.empresa,
+          segmento: lead.segmento,
+          cidade: lead.cidade,
+          estado: lead.estado,
+          contato: lead.contato_nome,
+          cargo: lead.contato_cargo,
+          origem: lead.origem,
+          estagioAtual: lead.estagio,
+          ultimoContato: lead.ultimo_contato,
+          proximaAcao: lead.proxima_acao,
+          proximaAcaoEm: lead.proxima_acao_data,
+          responsavel,
+          historico: (historicoQ.data ?? []).map((interacao) => ({
+            tipo: interacao.tipo,
+            canal: interacao.canal,
+            descricao: interacao.descricao ?? '',
+            realizadaEm: interacao.created_at,
+          })),
+        }
+      }
     }
 
     const analise = await analisarReuniao(transcricao, contexto)
