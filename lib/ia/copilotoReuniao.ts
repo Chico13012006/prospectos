@@ -1,11 +1,12 @@
 // Copiloto de IA pós-reunião (sprint item 8). SEM Google Meet, SEM áudio: o
-// vendedor cola a transcrição (já gerada pelo Meet) e a IA (Opus — qualidade)
-// devolve uma leitura estruturada da conversa. SERVER-ONLY.
+// vendedor cola a transcrição (já gerada pelo Meet) e a IA (papel "copiloto" da
+// camada ./jsonEstruturado, provider conforme AI_PROVIDER) devolve uma leitura
+// estruturada da conversa. SERVER-ONLY.
 //
 // Nada aqui envia e-mail nem muda o lead sozinho: a saída é SUGESTÃO. Quem aplica
 // (estágio, e-mail, proposta) é o vendedor, na tela. O vocabulário de equipamentos
 // casa com o simulador (item 6) — mesmos ProdutoId — para pré-preencher a proposta.
-import { getIaClient, MODELO_COPILOTO } from './cliente'
+import { gerarJsonEstruturado } from './jsonEstruturado'
 import { PRODUTOS, type ProdutoId } from '@/lib/simulador'
 import { conhecimentoInovaCode, playbookComercialInovaCode } from './contextoCopiloto'
 
@@ -212,23 +213,19 @@ export async function analisarReuniao(
   transcricao: string,
   contexto?: ContextoLeadCopiloto,
 ): Promise<AnaliseReuniao> {
-  const client = getIaClient()
   const prompt = montarPromptAnalise(transcricao, contexto)
-  const resp = await client.messages.create({
-    model: MODELO_COPILOTO,
+  const dados = await gerarJsonEstruturado({
+    papel: 'copiloto',
+    system: prompt.system,
+    user: prompt.user,
+    schema: SCHEMA,
+    nomeSchema: 'analise_reuniao',
     // Análises de transcrições longas podem ultrapassar 2 mil tokens mesmo com
     // saída estruturada. Um limite cortado produz JSON incompleto e impede a
     // análise inteira; o custo continua baseado nos tokens efetivamente usados.
-    max_tokens: 6000,
-    system: prompt.system,
-    output_config: { format: { type: 'json_schema', schema: SCHEMA } },
-    messages: [
-      { role: 'user', content: prompt.user },
-    ],
+    maxTokens: 6000,
   })
-  const bloco = resp.content.find((b) => b.type === 'text')
-  const raw = bloco && bloco.type === 'text' ? bloco.text : '{}'
-  return normalizarAnalise(JSON.parse(raw))
+  return normalizarAnalise(dados)
 }
 
 // Normaliza + valida a saída bruta da IA. PURA (testável sem rede): descarta

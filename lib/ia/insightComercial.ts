@@ -1,8 +1,9 @@
 // Insight comercial por lead (item 4 — bloco "Inteligência Comercial" do painel).
-// Gera, via Claude (Haiku, barato), uma leitura curta e acionável do lead:
+// Gera, via IA (papel "insight" da camada ./jsonEstruturado: Claude Haiku ou
+// OpenAI, conforme AI_PROVIDER), uma leitura curta e acionável do lead:
 // aderência à solução (RFID/automação de estoque da iNOVACODE), oportunidade,
 // dor provável e abordagem sugerida. SERVER-ONLY.
-import { getIaClient, MODELO_INSIGHT } from './cliente'
+import { gerarJsonEstruturado } from './jsonEstruturado'
 
 export type Aderencia = 'alta' | 'media' | 'baixa'
 
@@ -62,27 +63,18 @@ const SISTEMA =
   'cautela (não invente fatos sobre a empresa).'
 
 export async function gerarInsightComercial(lead: LeadParaInsight): Promise<InsightComercial> {
-  const client = getIaClient()
-  const resp = await client.messages.create({
-    model: MODELO_INSIGHT,
-    max_tokens: 700,
+  const dados = (await gerarJsonEstruturado({
+    papel: 'insight',
     system: SISTEMA,
-    output_config: { format: { type: 'json_schema', schema: SCHEMA } },
-    messages: [
-      {
-        role: 'user',
-        content:
-          `Lead:\n${resumoLead(lead)}\n\n` +
-          'Responda: aderência (alta/media/baixa) do lead à nossa solução, a ' +
-          'oportunidade concreta, a dor provável do negócio e a abordagem sugerida ' +
-          'para o primeiro contato.',
-      },
-    ],
-  })
-
-  const bloco = resp.content.find((b) => b.type === 'text')
-  const texto = bloco && bloco.type === 'text' ? bloco.text : '{}'
-  const dados = JSON.parse(texto) as InsightComercial
+    user:
+      `Lead:\n${resumoLead(lead)}\n\n` +
+      'Responda: aderência (alta/media/baixa) do lead à nossa solução, a ' +
+      'oportunidade concreta, a dor provável do negócio e a abordagem sugerida ' +
+      'para o primeiro contato.',
+    schema: SCHEMA,
+    nomeSchema: 'insight_comercial',
+    maxTokens: 700,
+  })) as InsightComercial
   return {
     aderencia: (['alta', 'media', 'baixa'] as const).includes(dados.aderencia) ? dados.aderencia : 'media',
     oportunidade: dados.oportunidade?.trim() || '—',

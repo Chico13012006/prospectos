@@ -1,8 +1,10 @@
-// Implementação Claude (Haiku) do ClassificadorIa — SERVER-ONLY. Mesmo padrão
-// de lib/ia/contatosAlternativos: saída estruturada por json_schema, texto
+// Implementação do ClassificadorIa sobre a camada central de IA (papel
+// "insight", provider conforme AI_PROVIDER) — SERVER-ONLY. Mesmo padrão de
+// lib/ia/contatosAlternativos: saída estruturada por json_schema, texto
 // truncado, e NUNCA lança (null = não conseguiu classificar).
 import 'server-only'
-import { getIaClient, iaConfigurada, MODELO_INSIGHT } from '@/lib/ia/cliente'
+import { iaConfigurada } from '@/lib/ia/cliente'
+import { gerarJsonEstruturado } from '@/lib/ia/jsonEstruturado'
 import type { ClassificadorIa, RespostaParaClassificar } from './classificarResposta'
 
 const SCHEMA = {
@@ -26,22 +28,29 @@ const SISTEMA =
   'encaminhamento sem opinião, "vou ver depois" sem compromisso).\n' +
   'Na dúvida entre positivo e neutro, escolha neutro. Não invente contexto.'
 
+// AI_PROVIDER inválido faz iaConfigurada() lançar; aqui isso vira "IA não
+// configurada" (→ indeterminado, sem handoff) para não derrubar a detecção.
+function iaDisponivel(): boolean {
+  try {
+    return iaConfigurada()
+  } catch {
+    return false
+  }
+}
+
 export function criarClassificadorIa(): ClassificadorIa | null {
-  if (!iaConfigurada()) return null
+  if (!iaDisponivel()) return null
   return async (resposta: RespostaParaClassificar) => {
     try {
-      const client = getIaClient()
       const texto = `Assunto: ${resposta.assunto.slice(0, 300)}\n\nResposta:\n${resposta.corpo.slice(0, 4000)}`
-      const resp = await client.messages.create({
-        model: MODELO_INSIGHT,
-        max_tokens: 200,
+      const dados = (await gerarJsonEstruturado({
+        papel: 'insight',
         system: SISTEMA,
-        output_config: { format: { type: 'json_schema', schema: SCHEMA } },
-        messages: [{ role: 'user', content: texto }],
-      })
-      const bloco = resp.content.find((b) => b.type === 'text')
-      const raw = bloco && bloco.type === 'text' ? bloco.text : '{}'
-      const dados = JSON.parse(raw) as { classificacao?: unknown }
+        user: texto,
+        schema: SCHEMA,
+        nomeSchema: 'classificacao_resposta',
+        maxTokens: 200,
+      })) as { classificacao?: unknown }
       const c = dados.classificacao
       return c === 'positivo' || c === 'negativo' || c === 'neutro' ? c : null
     } catch {

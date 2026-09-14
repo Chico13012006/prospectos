@@ -8,8 +8,9 @@
 // resto; IA indisponível → 'indeterminado' = SEM handoff (o motor segue
 // pausando a cadência e avisando o closer como sempre fez).
 //
-// Este módulo é PURO na regra e injeta a IA — a implementação Claude vive em
-// ./classificadorIa.ts (server-only) e os testes usam um fake.
+// Este módulo é PURO na regra e injeta a IA — a implementação real (camada
+// central lib/ia, provider por AI_PROVIDER) vive em ./classificadorIa.ts
+// (server-only) e os testes usam um fake.
 
 export type ClassificacaoResposta = 'positivo' | 'negativo' | 'neutro' | 'indeterminado'
 

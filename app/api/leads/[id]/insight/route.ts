@@ -1,6 +1,7 @@
 // Inteligência Comercial por lead (sprint item 4). Gera, sob demanda, uma leitura
-// comercial curta via Claude (Haiku, barato) — aderência, oportunidade, dor e
-// abordagem. SERVER-ONLY: a ANTHROPIC_API_KEY vive só aqui, nunca no browser.
+// comercial curta via IA (Claude Haiku ou OpenAI, conforme AI_PROVIDER) —
+// aderência, oportunidade, dor e abordagem. SERVER-ONLY: as chaves de IA vivem
+// só no servidor, nunca no browser.
 //
 // Auth = sessão do usuário (cookie/SSR), mesmo padrão de app/api/leads/route.ts.
 // O lead é buscado com service role MAS escopado à organização do usuário logado
@@ -17,10 +18,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params
   try {
     if (!iaConfigurada()) {
-      return NextResponse.json(
-        { erro: 'IA não configurada (ANTHROPIC_API_KEY ausente).' },
-        { status: 503 },
-      )
+      // Motivo só no log do servidor; o frontend recebe mensagem neutra.
+      console.error('[leads/insight POST] IA não configurada: falta a chave de API do provider ativo.')
+      return NextResponse.json({ erro: 'IA não configurada.' }, { status: 503 })
     }
 
     const acc = await resolverAcesso()

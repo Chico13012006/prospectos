@@ -1,12 +1,13 @@
 // Copiloto pós-reunião (sprint item 8). Recebe a transcrição colada + o lead,
-// chama a IA (Opus) e devolve a análise estruturada. Auth por sessão; o lead
-// (para contexto) é lido escopado à organização do usuário. SERVER-ONLY.
+// chama a IA (papel "copiloto", provider conforme AI_PROVIDER) e devolve a
+// análise estruturada. Auth por sessão; o lead (para contexto) é lido escopado
+// à organização do usuário. SERVER-ONLY.
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { iaConfigurada } from '@/lib/ia/cliente'
 import { analisarReuniao, type ContextoLeadCopiloto } from '@/lib/ia/copilotoReuniao'
+import { ErroJsonEstruturado } from '@/lib/ia/jsonEstruturado'
 
 export const runtime = 'nodejs'
 
@@ -20,7 +21,9 @@ export const maxDuration = 60
 export async function POST(req: NextRequest) {
   try {
     if (!iaConfigurada()) {
-      return NextResponse.json({ erro: 'IA não configurada (ANTHROPIC_API_KEY ausente).' }, { status: 503 })
+      // Motivo só no log do servidor; o frontend recebe mensagem neutra.
+      console.error('[copiloto POST] IA não configurada: falta a chave de API do provider ativo.')
+      return NextResponse.json({ erro: 'IA não configurada.' }, { status: 503 })
     }
     const server = await createSupabaseServerClient()
     const { data: { user } } = await server.auth.getUser()
@@ -94,17 +97,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ analise })
   } catch (err) {
     console.error('[copiloto POST] erro:', err)
-    // Erros da API da Anthropic têm classe tipada: traduz os que a pessoa
-    // consegue agir sobre, sem vazar detalhe interno. O resto fica genérico.
-    if (err instanceof Anthropic.AuthenticationError) {
-      return NextResponse.json({ erro: 'Chave da IA inválida ou revogada. Verifique ANTHROPIC_API_KEY no ambiente.' }, { status: 502 })
-    }
-    if (err instanceof Anthropic.RateLimitError) {
-      return NextResponse.json({ erro: 'Limite de uso da IA atingido. Aguarde um minuto e tente de novo.' }, { status: 429 })
-    }
-    if (err instanceof Anthropic.APIError) {
-      return NextResponse.json({ erro: `A IA recusou a requisição (${err.status}). Tente uma transcrição menor.` }, { status: 502 })
-    }
-    return NextResponse.json({ erro: 'Erro ao analisar a reunião.' }, { status: 500 })
+    return respostaDeErroIa(err) ?? NextResponse.json({ erro: 'Erro ao analisar a reunião.' }, { status: 500 })
   }
+}
+
+// Tradução neutra (OpenAI ou Anthropic) das falhas da IA que a pessoa consegue
+// agir sobre. Erros HTTP dos SDKs trazem `status`; falhas validadas pela camada
+// central (recusa, resposta incompleta, JSON inválido) são ErroJsonEstruturado.
+// Nunca cita variável de ambiente, chave ou detalhe interno. Não usa 502/504:
+// o cliente (lib/api.ts) trata esses status como estouro de tempo da Vercel.
+function respostaDeErroIa(err: unknown): NextResponse | null {
+  const status = err instanceof Error ? (err as { status?: unknown }).status : undefined
+  if (status === 401 || status === 403) {
+    return NextResponse.json({ erro: 'Chave da IA inválida ou revogada.' }, { status: 503 })
+  }
+  if (status === 429) {
+    return NextResponse.json({ erro: 'Limite de uso da IA atingido. Tente novamente em alguns instantes.' }, { status: 429 })
+  }
+  if (typeof status === 'number' || err instanceof ErroJsonEstruturado) {
+    return NextResponse.json({ erro: 'A IA recusou a requisição.' }, { status: 500 })
+  }
+  return null
 }

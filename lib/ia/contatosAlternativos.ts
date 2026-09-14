@@ -1,11 +1,12 @@
 // Extração de contato(s) alternativo(s) de um auto-reply de ausência/férias
 // (sprint item 7). Respostas de "estou de férias, fale com Fulano" têm texto
-// livre e variado — por isso usamos a IA (Haiku, barato) em vez de regex rígido,
-// validando cada e-mail com regex antes de confiar. SERVER-ONLY.
+// livre e variado — por isso usamos a IA (papel "insight" da camada
+// ./jsonEstruturado, modelo barato) em vez de regex rígido, validando cada
+// e-mail com regex antes de confiar. SERVER-ONLY.
 //
 // v1 NÃO auto-cadastra: o motor só registra uma SUGESTÃO no lead para o
 // comercial revisar (ver lib/engine/flows/detectarResposta.ts).
-import { getIaClient, MODELO_INSIGHT } from './cliente'
+import { gerarJsonEstruturado } from './jsonEstruturado'
 
 export interface ContatoAlternativo {
   nome: string
@@ -52,17 +53,14 @@ export async function extrairContatosAlternativos(corpo: string): Promise<Contat
   const texto = (corpo ?? '').trim()
   if (!texto) return []
   try {
-    const client = getIaClient()
-    const resp = await client.messages.create({
-      model: MODELO_INSIGHT,
-      max_tokens: 500,
+    const dados = (await gerarJsonEstruturado({
+      papel: 'insight',
       system: SISTEMA,
-      output_config: { format: { type: 'json_schema', schema: SCHEMA } },
-      messages: [{ role: 'user', content: `E-mail automático recebido:\n\n${texto.slice(0, 4000)}` }],
-    })
-    const bloco = resp.content.find((b) => b.type === 'text')
-    const raw = bloco && bloco.type === 'text' ? bloco.text : '{}'
-    const dados = JSON.parse(raw) as { contatos?: Array<{ nome?: unknown; email?: unknown }> }
+      user: `E-mail automático recebido:\n\n${texto.slice(0, 4000)}`,
+      schema: SCHEMA,
+      nomeSchema: 'contatos_alternativos',
+      maxTokens: 500,
+    })) as { contatos?: Array<{ nome?: unknown; email?: unknown }> }
     const contatos = Array.isArray(dados.contatos) ? dados.contatos : []
     // Normaliza + valida: e-mail obrigatório e plausível; dedupe por e-mail.
     const vistos = new Set<string>()
