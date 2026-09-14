@@ -9,6 +9,8 @@ import {
   type ModeloComercial, type ProdutoId, type ItemProposta,
 } from '@/lib/simulador';
 import { getLeads, registrarNota } from '@/lib/api';
+import { montarDadosProposta } from '@/lib/proposta/dados';
+import GerarProposta from '@/components/comercial/GerarProposta';
 import type { Lead } from '@/lib/supabase';
 
 // Aba "Simulador" do módulo Comercial. Sem H1/padding próprios — a página
@@ -48,6 +50,9 @@ export default function SimuladorPanel() {
   const [valorFinalOv, setValorFinalOv] = useState<number | null>(null);
   const [mensalFinalOv, setMensalFinalOv] = useState<number | null>(null);
   const [entradaFinalOv, setEntradaFinalOv] = useState<number | null>(null);
+  // Lead de "Registrar no lead": vive aqui porque também nomeia o arquivo da
+  // proposta em PDF (proposta-{empresa}-{data}.pdf). Selecionar não registra.
+  const [leadSel, setLeadSel] = useState<Lead | null>(null);
 
   const itens: ItemProposta[] = useMemo(
     () => PRODUTOS.map((p) => ({ produto: p.id, qtd: qtds[p.id] })).filter((i) => i.qtd > 0),
@@ -207,12 +212,23 @@ export default function SimuladorPanel() {
             </>
           )}
 
+          {/* PDF para o cliente: só os valores FINAIS (override ou sugestão);
+              tabela e descontos ficam internos. */}
+          {temItens && <GerarProposta
+            dados={montarDadosProposta({
+              modelo, itens, valorFinal, mensalFinal, entradaFinal, prazoMeses: comodato.prazoMeses,
+            })}
+            empresa={leadSel?.empresa}
+          />}
+
           {temItens && <RegistrarProposta
             resumo={montarResumo(modelo, itens, {
               valorFinal, mensalFinal, entradaFinal, totalContrato,
               refCompra, refMensal, refEntrada,
               descontoCompra, descontoMensal, descontoEntrada,
             })}
+            leadSel={leadSel}
+            onLeadSel={setLeadSel}
           />}
         </div>
       </div>
@@ -330,10 +346,12 @@ function montarResumo(
 
 // Registro da proposta: liga a um lead e grava como interação (nota) na timeline
 // do LeadPanel. v1 não tem entidade "proposta" própria — reaproveita interacoes.
-function RegistrarProposta({ resumo }: { resumo: string }) {
+// O lead selecionado é controlado pelo painel (também nomeia o PDF).
+function RegistrarProposta({ resumo, leadSel, onLeadSel }: {
+  resumo: string; leadSel: Lead | null; onLeadSel: (l: Lead | null) => void;
+}) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [busca, setBusca] = useState('');
-  const [leadSel, setLeadSel] = useState<Lead | null>(null);
   const [aberto, setAberto] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [feito, setFeito] = useState(false);
@@ -368,7 +386,7 @@ function RegistrarProposta({ resumo }: { resumo: string }) {
       {leadSel ? (
         <div className="flex items-center gap-2 border border-indigo-500/40 bg-indigo-500/5 rounded-lg px-3 py-2">
           <span className="flex-1 text-sm text-slate-200 truncate">{leadSel.empresa}</span>
-          <button onClick={() => { setLeadSel(null); setFeito(false); }} className="text-slate-500 hover:text-slate-300">
+          <button onClick={() => { onLeadSel(null); setFeito(false); }} className="text-slate-500 hover:text-slate-300">
             <X size={14} />
           </button>
         </div>
@@ -388,7 +406,7 @@ function RegistrarProposta({ resumo }: { resumo: string }) {
             <div className="absolute z-10 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-[#2a3147] bg-[#161b28] shadow-xl">
               {filtrados.map((l) => (
                 <button key={l.id}
-                  onClick={() => { setLeadSel(l); setAberto(false); setBusca(''); }}
+                  onClick={() => { onLeadSel(l); setAberto(false); setBusca(''); }}
                   className="w-full text-left px-3 py-2 hover:bg-[#0f1117] text-sm text-slate-200 border-b border-[#2a3147] last:border-0">
                   <div className="truncate">{l.empresa}</div>
                   <div className="text-xs text-slate-500 truncate">{l.contato_nome}</div>
