@@ -1,0 +1,75 @@
+import { describe, it, expect } from 'vitest'
+import { WORKSPACE_CONFIG_SCHEMA_VERSION, mesclarWorkspaceConfig, parseWorkspaceConfig } from '../workspaceConfig'
+
+// Grupo de avisos do handoff comercial (Fase 2) no blob por organização.
+describe('workspaceConfig.comercial', () => {
+  it('lê o grupo quando é string não vazia; descarta tipo errado/vazio', () => {
+    expect(parseWorkspaceConfig({ comercial: { grupoWhatsappId: ' 120363019502650977-group ' } }).comercial)
+      .toEqual({ grupoWhatsappId: '120363019502650977-group' })
+    expect(parseWorkspaceConfig({ comercial: { grupoWhatsappId: '' } }).comercial).toBeUndefined()
+    expect(parseWorkspaceConfig({ comercial: { grupoWhatsappId: 123 } }).comercial).toBeUndefined()
+    expect(parseWorkspaceConfig({ comercial: 'x' }).comercial).toBeUndefined()
+  })
+
+  it('blob antigo (v3) migra para v4 preservando o resto', () => {
+    const r = parseWorkspaceConfig({ _schema_version: 3, roi: { custoMensal: 10 } })
+    expect(r._schema_version).toBe(WORKSPACE_CONFIG_SCHEMA_VERSION)
+    expect(r.roi).toEqual({ custoMensal: 10 })
+    expect(r.comercial).toBeUndefined()
+  })
+
+  it('mesclar define, preserva quando ausente e limpa com null/vazio', () => {
+    const base = parseWorkspaceConfig({ roi: { custoMensal: 5 } })
+    const definido = mesclarWorkspaceConfig(base, { comercialGrupoWhatsappId: '120363019502650977-group' })
+    expect(definido.comercial).toEqual({ grupoWhatsappId: '120363019502650977-group' })
+    expect(definido.roi).toEqual({ custoMensal: 5 })
+    expect(mesclarWorkspaceConfig(definido, { roiCustoMensal: 7 }).comercial).toEqual({ grupoWhatsappId: '120363019502650977-group' })
+    expect(mesclarWorkspaceConfig(definido, { comercialGrupoWhatsappId: null }).comercial).toBeUndefined()
+    expect(mesclarWorkspaceConfig(definido, { comercialGrupoWhatsappId: '  ' }).comercial).toBeUndefined()
+  })
+})
+
+// Fase 3: janela do check-in (minutos), padrão 7 dias.
+import { HANDOFF_REVISAO_MINUTOS_PADRAO, handoffRevisaoMinutosEfetivo } from '../workspaceConfig'
+
+describe('workspaceConfig.comercial.handoffRevisaoMinutos', () => {
+  it('ausente/inválido → 7 dias; inteiro positivo → valor da org', () => {
+    expect(HANDOFF_REVISAO_MINUTOS_PADRAO).toBe(10080)
+    expect(handoffRevisaoMinutosEfetivo(parseWorkspaceConfig({}))).toBe(10080)
+    expect(handoffRevisaoMinutosEfetivo(parseWorkspaceConfig({ comercial: { handoffRevisaoMinutos: 5 } }))).toBe(5)
+    expect(handoffRevisaoMinutosEfetivo(parseWorkspaceConfig({ comercial: { handoffRevisaoMinutos: 0 } }))).toBe(10080)
+    expect(handoffRevisaoMinutosEfetivo(parseWorkspaceConfig({ comercial: { handoffRevisaoMinutos: -3 } }))).toBe(10080)
+    expect(handoffRevisaoMinutosEfetivo(parseWorkspaceConfig({ comercial: { handoffRevisaoMinutos: 2.5 } }))).toBe(10080)
+    expect(handoffRevisaoMinutosEfetivo(parseWorkspaceConfig({ comercial: { handoffRevisaoMinutos: '5' } }))).toBe(10080)
+    expect(handoffRevisaoMinutosEfetivo(null)).toBe(10080)
+  })
+
+  it('mesclar define a janela sem perder o grupo, e null volta ao padrão', () => {
+    const base = mesclarWorkspaceConfig(parseWorkspaceConfig({}), { comercialGrupoWhatsappId: '120363019502650977-group' })
+    const comJanela = mesclarWorkspaceConfig(base, { comercialHandoffRevisaoMinutos: 5 })
+    expect(comJanela.comercial).toEqual({ grupoWhatsappId: '120363019502650977-group', handoffRevisaoMinutos: 5 })
+    // Salvar os dois juntos (tela) preserva ambos.
+    const juntos = mesclarWorkspaceConfig(base, { comercialGrupoWhatsappId: '120363019502650977-group', comercialHandoffRevisaoMinutos: 5 })
+    expect(juntos.comercial).toEqual({ grupoWhatsappId: '120363019502650977-group', handoffRevisaoMinutos: 5 })
+    const limpo = mesclarWorkspaceConfig(comJanela, { comercialHandoffRevisaoMinutos: null })
+    expect(limpo.comercial).toEqual({ grupoWhatsappId: '120363019502650977-group' })
+    expect(handoffRevisaoMinutosEfetivo(limpo)).toBe(10080)
+    // Outra org (outro blob) não é afetada: o valor vive no blob de cada uma.
+    expect(handoffRevisaoMinutosEfetivo(parseWorkspaceConfig({}))).toBe(10080)
+  })
+})
+
+// Fase 4: campanha de follow-up de retorno.
+describe('workspaceConfig.comercial.campanhaRetornoId', () => {
+  it('lê/define/limpa sem perder grupo e janela', () => {
+    expect(parseWorkspaceConfig({ comercial: { campanhaRetornoId: ' camp-1 ' } }).comercial).toEqual({ campanhaRetornoId: 'camp-1' })
+    expect(parseWorkspaceConfig({ comercial: { campanhaRetornoId: 7 } }).comercial).toBeUndefined()
+    const base = mesclarWorkspaceConfig(parseWorkspaceConfig({}), { comercialGrupoWhatsappId: '120363019502650977-group', comercialHandoffRevisaoMinutos: 5 })
+    const com = mesclarWorkspaceConfig(base, { comercialCampanhaRetornoId: 'camp-1' })
+    expect(com.comercial).toEqual({ grupoWhatsappId: '120363019502650977-group', handoffRevisaoMinutos: 5, campanhaRetornoId: 'camp-1' })
+    // Salvar os três juntos (tela) preserva todos.
+    const juntos = mesclarWorkspaceConfig(parseWorkspaceConfig({}), { comercialGrupoWhatsappId: '120363019502650977-group', comercialHandoffRevisaoMinutos: 5, comercialCampanhaRetornoId: 'camp-1' })
+    expect(juntos.comercial).toEqual(com.comercial)
+    expect(mesclarWorkspaceConfig(com, { comercialCampanhaRetornoId: null }).comercial).toEqual({ grupoWhatsappId: '120363019502650977-group', handoffRevisaoMinutos: 5 })
+  })
+})

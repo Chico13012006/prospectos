@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { SlidersHorizontal, Save, Kanban, ShieldCheck, Check, Loader2, Plus, Pencil, X } from 'lucide-react';
+import { SlidersHorizontal, Save, Kanban, ShieldCheck, Users, Check, Loader2, Plus, Pencil, X } from 'lucide-react';
+import DistribuicaoComercialPanel from './DistribuicaoComercialPanel';
 
 // Painel de Processo comercial — Nomenclaturas, parâmetros de renovação/ROI,
-// pipelines editáveis e permissões. Dado real de /api/configuracoes/workspace,
-// /api/pipelines e /api/rbac/permissoes.
+// pipelines editáveis, distribuição comercial (round-robin do handoff) e
+// permissões. Dado real de /api/configuracoes/workspace, /api/pipelines,
+// /api/configuracoes/distribuicao-comercial e /api/rbac/permissoes.
 
-type Aba = 'geral' | 'pipelines' | 'permissoes';
+type Aba = 'geral' | 'pipelines' | 'distribuicao' | 'permissoes';
 
 interface Config {
   nomenclaturas?: Record<string, string>;
@@ -152,6 +154,7 @@ export default function ProcessoComercialPanel() {
   const TABS: { id: Aba; label: string; icon: typeof SlidersHorizontal }[] = [
     { id: 'geral', label: 'Geral', icon: SlidersHorizontal },
     { id: 'pipelines', label: 'Pipelines', icon: Kanban },
+    { id: 'distribuicao', label: 'Distribuição', icon: Users },
     { id: 'permissoes', label: 'Permissões', icon: ShieldCheck },
   ];
 
@@ -299,6 +302,8 @@ export default function ProcessoComercialPanel() {
           )}
         </div>
       )}
+
+      {aba === 'distribuicao' && <DistribuicaoComercialPanel />}
 
       {aba === 'permissoes' && rbac && (
         <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-5">

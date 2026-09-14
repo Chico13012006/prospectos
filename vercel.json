@@ -19,6 +19,16 @@
           "initialDelaySeconds": 0
         }
       ]
+    },
+    "app/api/queues/comercial-acompanhamento/route.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "comercial-acompanhamento-v1",
+          "retryAfterSeconds": 60,
+          "initialDelaySeconds": 0
+        }
+      ]
     }
   },
   "crons": [
@@ -41,6 +51,10 @@
     {
       "path": "/api/engine/relatorio-semanal",
       "schedule": "0 12 * * 1"
+    },
+    {
+      "path": "/api/comercial/handoff/acompanhamento",
+      "schedule": "45 12 * * *"
     }
   ]
 }

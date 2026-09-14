@@ -27,10 +27,36 @@ export async function PUT(req: Request) {
     modulos: b.modulos && typeof b.modulos === 'object' ? b.modulos : undefined,
     renovacaoAntecedenciaDias: typeof b.renovacaoAntecedenciaDias === 'number' ? b.renovacaoAntecedenciaDias : undefined,
     roiCustoMensal: typeof b.roiCustoMensal === 'number' ? b.roiCustoMensal : undefined,
+    // string limpa/define; null limpa; ausente não toca.
+    comercialGrupoWhatsappId: typeof b.comercialGrupoWhatsappId === 'string' || b.comercialGrupoWhatsappId === null
+      ? b.comercialGrupoWhatsappId
+      : undefined,
+    // Janela do check-in em minutos; null volta ao padrão (7 dias).
+    comercialHandoffRevisaoMinutos: typeof b.comercialHandoffRevisaoMinutos === 'number' || b.comercialHandoffRevisaoMinutos === null
+      ? b.comercialHandoffRevisaoMinutos
+      : undefined,
+    // Campanha de follow-up de retorno (Fase 4); null limpa.
+    comercialCampanhaRetornoId: typeof b.comercialCampanhaRetornoId === 'string' || b.comercialCampanhaRetornoId === null
+      ? b.comercialCampanhaRetornoId
+      : undefined,
     camposUI: Array.isArray(b.camposUI) ? b.camposUI : undefined,
     operacao: b.operacao && typeof b.operacao === 'object' ? b.operacao : undefined,
   })
+  // Um grupo comercial pertence a NO MÁXIMO uma organização: o callback de
+  // grupo resolve a org pelo grupo, então a ambiguidade tem de ser barrada
+  // aqui (e pelo índice único da migration 0044, que é o backstop).
+  const grupoNovo = novo.comercial?.grupoWhatsappId ?? null
+  if (grupoNovo && grupoNovo !== atual.comercial?.grupoWhatsappId) {
+    const { data: donos } = await admin
+      .from('organizacoes').select('id').eq('configuracoes->comercial->>grupoWhatsappId', grupoNovo).neq('id', org).limit(1)
+    if ((donos?.length ?? 0) > 0) {
+      return NextResponse.json({ erro: 'Este grupo já está configurado em outra organização.' }, { status: 409 })
+    }
+  }
   const { error } = await admin.from('organizacoes').update({ configuracoes: novo }).eq('id', org)
-  if (error) return NextResponse.json({ erro: error.message }, { status: 400 })
+  if (error) {
+    const conflito = error.message.includes('uniq_organizacoes_grupo_comercial')
+    return NextResponse.json({ erro: conflito ? 'Este grupo já está configurado em outra organização.' : error.message }, { status: conflito ? 409 : 400 })
+  }
   return NextResponse.json({ ok: true, config: novo })
 }

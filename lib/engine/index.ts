@@ -16,6 +16,9 @@ import { executarAcao } from './flows/executarAcao'
 import { marcarExecucaoFollowup, verificarSaudeFollowup } from './saude'
 import { enviarRelatorioSemanal, coletarKpisSemana, montarEmailRelatorio } from './relatorioSemanal'
 import { extrairContatosAlternativos } from '@/lib/ia/contatosAlternativos'
+import { classificarResposta } from '@/lib/comercial/respostas/classificarResposta'
+import { criarClassificadorIa } from '@/lib/comercial/respostas/classificadorIa'
+import { montarHookHandoffProspeccao, reprocessarAlertasHandoff } from '@/lib/comercial/handoff/composicao'
 
 export interface Motor {
   store: Store
@@ -62,9 +65,16 @@ export function criarMotor(organizacaoId: string, overrides?: Partial<Motor>): M
 }
 
 async function detectarEEncaminharRespostas(motor: Motor) {
+  // Handoff comercial (Fase 2): classificador (regras + IA) e gatilho de
+  // handoff/aviso ao grupo, compostos sobre o client admin. Sem org (store em
+  // memória) o gatilho fica desligado — o motor se comporta como antes.
+  const admin = motor.store.organizacaoId ? createSupabaseAdminClient() : null
+  const classificadorIa = criarClassificadorIa()
   const resultado = await detectarResposta(motor.store, motor.email, motor.fila, {
     extrairContatos: extrairContatosAlternativos,
     adiarConfirmacaoLeitura: true,
+    classificarResposta: (r) => classificarResposta(r, classificadorIa),
+    handoffProspeccao: admin ? montarHookHandoffProspeccao(admin) : undefined,
   })
   await motor.fila.processar()
   const jobsComErro = motor.fila.escaninhoErro().length
@@ -72,7 +82,19 @@ async function detectarEEncaminharRespostas(motor: Motor) {
     throw new Error(`Falha ao encaminhar ${jobsComErro} resposta(s) ao responsável.`)
   }
   await motor.email.confirmarLeitura?.()
-  return { ...resultado, jobsComErro }
+  // Recuperação dos avisos ao grupo que ficaram para trás (Z-API fora, grupo
+  // sem config). Best-effort: nunca derruba a detecção, que já persistiu tudo.
+  // (O check-in de 7 dias — Fase 3 — NÃO roda aqui: tem scheduler próprio,
+  // independente de atividade de e-mail. Ver lib/comercial/handoff/acompanhamentoScheduler.)
+  let alertasReprocessados: unknown = null
+  if (admin && motor.store.organizacaoId) {
+    try {
+      alertasReprocessados = await reprocessarAlertasHandoff(admin, motor.store.organizacaoId)
+    } catch (e) {
+      log.aviso('Falha ao reprocessar avisos pendentes do handoff.', { erro: e instanceof Error ? e.message : String(e) })
+    }
+  }
+  return { ...resultado, jobsComErro, alertasReprocessados }
 }
 
 // Organizações ativas (para o cron varrer todas). service_role: bypassa RLS,

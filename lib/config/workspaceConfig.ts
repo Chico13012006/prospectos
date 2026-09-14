@@ -15,7 +15,7 @@
 // junto com as fases). Se a superfície crescer muito, aí sim avaliamos um zod.
 
 // Suba este número ao mudar o formato do blob, e adicione o passo em `migrar()`.
-export const WORKSPACE_CONFIG_SCHEMA_VERSION = 3
+export const WORKSPACE_CONFIG_SCHEMA_VERSION = 4
 
 // Objetivos que o produto já consegue medir de ponta a ponta. Novos objetivos
 // só entram nesta allowlist quando houver dado operacional real para dashboard,
@@ -98,6 +98,30 @@ export interface RoiConfig {
   custoMensal?: number
 }
 
+// Handoff comercial (Fase 2): para onde vai o aviso de "novo lead interessado".
+// ID do grupo do WhatsApp na Z-API (ex.: 120363019502650977-group). É
+// configuração da organização — preferência flexível, cabe no blob — e nunca
+// um env global: cada org tem o seu grupo. Ausência = aviso fica pendente
+// (configuracao_ausente), o handoff em si não é afetado.
+export interface ComercialConfig {
+  grupoWhatsappId?: string
+  // Fase 3: minutos após `comercial_handoffs.atribuido_em` para a ProspectOS
+  // perguntar o status no grupo (check-in). Ausência = 7 dias. Só a org de
+  // teste muda para 5 — nenhuma outra é afetada.
+  handoffRevisaoMinutos?: number
+  // Fase 4: campanha de FOLLOW-UP (tipo 'followup', ativa, envio real) para
+  // onde o lead volta quando o grupo responde "#CODIGO 2". Ausente = usa a
+  // única campanha de follow-up ativa da org; com mais de uma, é obrigatório.
+  campanhaRetornoId?: string
+}
+
+export const HANDOFF_REVISAO_MINUTOS_PADRAO = 10080 // 7 dias
+
+export function handoffRevisaoMinutosEfetivo(cfg: WorkspaceConfig | null | undefined): number {
+  const v = cfg?.comercial?.handoffRevisaoMinutos
+  return typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : HANDOFF_REVISAO_MINUTOS_PADRAO
+}
+
 export interface WorkspaceConfig {
   _schema_version: number
   // Chaves das preferências. Todas OPCIONAIS — ausência = padrão do produto.
@@ -109,6 +133,7 @@ export interface WorkspaceConfig {
   renovacao?: RenovacaoConfig
   operacao?: OperacaoConfig
   roi?: RoiConfig
+  comercial?: ComercialConfig
   // Configuração de campos por workspace (Personalização > Campos). Ausência = todos no padrão.
   camposUI?: CampoUI[]
 }
@@ -142,6 +167,8 @@ function migrar(bruto: Record<string, unknown>): Record<string, unknown> {
   if (v < 2) cfg = { ...cfg, _schema_version: 2 }
   // v2 -> v3: adiciona operação/objetivos. Ausência preserva o padrão legado.
   if (v < 3) cfg = { ...cfg, _schema_version: 3 }
+  // v3 -> v4: adiciona comercial (grupo de avisos do handoff). Ausência = sem grupo.
+  if (v < 4) cfg = { ...cfg, _schema_version: 4 }
   return cfg
 }
 
@@ -180,6 +207,16 @@ export function parseWorkspaceConfig(bruto: unknown): WorkspaceConfig {
     const roi: RoiConfig = {}
     if (typeof r.custoMensal === 'number' && r.custoMensal >= 0) roi.custoMensal = r.custoMensal
     if (Object.keys(roi).length > 0) out.roi = roi
+  }
+  if (ehObjeto(obj.comercial)) {
+    const c = obj.comercial as Record<string, unknown>
+    const comercial: ComercialConfig = {}
+    if (typeof c.grupoWhatsappId === 'string' && c.grupoWhatsappId.trim()) comercial.grupoWhatsappId = c.grupoWhatsappId.trim()
+    if (typeof c.handoffRevisaoMinutos === 'number' && Number.isInteger(c.handoffRevisaoMinutos) && c.handoffRevisaoMinutos > 0) {
+      comercial.handoffRevisaoMinutos = c.handoffRevisaoMinutos
+    }
+    if (typeof c.campanhaRetornoId === 'string' && c.campanhaRetornoId.trim()) comercial.campanhaRetornoId = c.campanhaRetornoId.trim()
+    if (Object.keys(comercial).length > 0) out.comercial = comercial
   }
   if (Array.isArray(obj.camposUI)) {
     out.camposUI = (obj.camposUI as unknown[]).filter(ehObjeto).map((c) => ({
@@ -267,6 +304,12 @@ export interface WorkspaceConfigEditavel {
   modulos?: Record<string, boolean>
   renovacaoAntecedenciaDias?: number
   roiCustoMensal?: number
+  // Grupo de avisos do handoff comercial. String vazia/null LIMPA a configuração.
+  comercialGrupoWhatsappId?: string | null
+  // Janela do check-in (minutos). null LIMPA (volta ao padrão de 7 dias).
+  comercialHandoffRevisaoMinutos?: number | null
+  // Campanha de follow-up de retorno. String vazia/null LIMPA.
+  comercialCampanhaRetornoId?: string | null
   camposUI?: CampoUI[]
   operacao?: OperacaoConfig
 }
@@ -280,6 +323,21 @@ export function mesclarWorkspaceConfig(atual: WorkspaceConfig, patch: WorkspaceC
   }
   if (typeof patch.roiCustoMensal === 'number' && patch.roiCustoMensal >= 0) {
     next.roi = { ...atual.roi, custoMensal: patch.roiCustoMensal }
+  }
+  if (patch.comercialGrupoWhatsappId !== undefined) {
+    const grupo = typeof patch.comercialGrupoWhatsappId === 'string' ? patch.comercialGrupoWhatsappId.trim() : ''
+    const { grupoWhatsappId: _anterior, ...resto } = next.comercial ?? atual.comercial ?? {}
+    next.comercial = grupo ? { ...resto, grupoWhatsappId: grupo } : resto
+  }
+  if (patch.comercialHandoffRevisaoMinutos !== undefined) {
+    const min = patch.comercialHandoffRevisaoMinutos
+    const { handoffRevisaoMinutos: _anterior, ...resto } = next.comercial ?? atual.comercial ?? {}
+    next.comercial = typeof min === 'number' && Number.isInteger(min) && min > 0 ? { ...resto, handoffRevisaoMinutos: min } : resto
+  }
+  if (patch.comercialCampanhaRetornoId !== undefined) {
+    const id = typeof patch.comercialCampanhaRetornoId === 'string' ? patch.comercialCampanhaRetornoId.trim() : ''
+    const { campanhaRetornoId: _anterior, ...resto } = next.comercial ?? atual.comercial ?? {}
+    next.comercial = id ? { ...resto, campanhaRetornoId: id } : resto
   }
   if (Array.isArray(patch.camposUI)) next.camposUI = patch.camposUI
   if (patch.operacao) next.operacao = patch.operacao

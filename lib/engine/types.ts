@@ -68,6 +68,10 @@ export interface ContextoCampanhaResposta {
   execucaoId?: string | null
   iniciadoEm?: string | null
   execucaoStatus?: string | null
+  // Identidade do ciclo da execução (workflow_execucoes.ciclo_chave). Fase 4:
+  // 'handoff_retorno:<id>' marca o follow-up de RETORNO do handoff — a
+  // resposta positiva a ele reativa o mesmo comercial.
+  cicloChave?: string | null
   nome: string
   tipo: string | null
   responsavel: UsuarioBasico | null

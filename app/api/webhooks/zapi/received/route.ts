@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { interpretarReceivedCallback, persistirMensagemZapi, validarSegredoWebhook } from '@/lib/whatsapp/zapiInbound'
+import { interpretarCallbackGrupo } from '@/lib/comercial/grupo/callbackGrupo'
+import { processarComandoGrupoZapi } from '@/lib/comercial/grupo/composicao'
 
 export const runtime = 'nodejs'
 
@@ -50,6 +52,13 @@ export async function POST(req: NextRequest) {
   if (leitura.tipo === 'invalido') {
     return NextResponse.json({ erro: leitura.motivo }, { status: 400 })
   }
+  // GRUPO (Fase 4): mensagens do grupo comercial NÃO são conversas de lead
+  // (nunca entram em whatsapp_mensagens). Viram, no máximo, um comando de
+  // resposta ao check-in, auditado em comercial_grupo_comandos. Qualquer outro
+  // grupo ou texto sem "#referência" é ignorado com 200.
+  if (leitura.tipo === 'ignorar' && leitura.motivo === 'grupo') {
+    return tratarGrupo(corpo, instanceId)
+  }
   if (leitura.tipo === 'ignorar') {
     // Instância desconhecida merece aviso: provavelmente configuração errada.
     if (leitura.motivo === 'instancia_desconhecida') {
@@ -81,6 +90,31 @@ export async function POST(req: NextRequest) {
     console.error(JSON.stringify({
       ts: new Date().toISOString(), nivel: 'erro', escopo: 'webhook.zapi',
       msg: 'Exceção ao processar callback.', erro: e instanceof Error ? e.message : String(e),
+    }))
+    return NextResponse.json({ erro: 'Falha interna.' }, { status: 500 })
+  }
+}
+
+// Ramo de GRUPO: interpreta o callback como evento de grupo e entrega ao
+// domínio comercial. 200 para ignorados/duplicados/rejeitados (não há por que
+// a Z-API reenviar); 500 só em falha de infraestrutura — o reenvio é bem-vindo
+// porque o comando é idempotente por messageId.
+async function tratarGrupo(corpo: unknown, instanceId: string) {
+  const leitura = interpretarCallbackGrupo(corpo, instanceId)
+  if (leitura.tipo === 'invalido') return NextResponse.json({ erro: leitura.motivo }, { status: 400 })
+  if (leitura.tipo === 'ignorar') return NextResponse.json({ ok: true, ignorado: `grupo:${leitura.motivo}` })
+  try {
+    const r = await processarComandoGrupoZapi(createSupabaseAdminClient(), leitura.evento)
+    console.log(JSON.stringify({
+      ts: new Date().toISOString(), nivel: r.tipo === 'falhou' ? 'erro' : 'info', escopo: 'webhook.zapi.grupo',
+      msg: 'Callback de grupo processado.', providerMessageId: leitura.evento.providerMessageId,
+      resultado: r.tipo, ...('motivo' in r ? { motivo: r.motivo } : {}), ...('resultado' in r ? { comando: r.resultado } : {}),
+    }))
+    return NextResponse.json({ ok: true, resultado: r.tipo, ...('motivo' in r ? { motivo: r.motivo } : {}) })
+  } catch (e) {
+    console.error(JSON.stringify({
+      ts: new Date().toISOString(), nivel: 'erro', escopo: 'webhook.zapi.grupo',
+      msg: 'Exceção ao processar comando de grupo.', erro: e instanceof Error ? e.message : String(e),
     }))
     return NextResponse.json({ erro: 'Falha interna.' }, { status: 500 })
   }

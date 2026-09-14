@@ -84,12 +84,17 @@ export class MemoryStore implements Store {
     ).length
   }
 
+  // Espelha a guarda do SupabaseStore: lead com execução de workflow ativa
+  // não entra na esteira legada (testes registram aqui os ids "ocupados").
+  public leadsEmWorkflowAtivo = new Set<string>()
+
   async leadsParaFollowup(): Promise<Lead[]> {
     const agora = Date.now()
     const intervaloMs = engineConfig.horasEntreFollowups * 3600_000
     const elegiveis: Lead[] = []
     for (const lead of this.leads) {
       if (lead.owner !== OWNER_ENGINE) continue
+      if (this.leadsEmWorkflowAtivo.has(lead.id)) continue
       if (lead.perdido) continue
       if (lead.bounced) continue
       if (!ESTAGIOS_EM_CADENCIA.includes(lead.estagio as never)) continue
@@ -111,6 +116,7 @@ export class MemoryStore implements Store {
     const esgotados: Lead[] = []
     for (const lead of this.leads) {
       if (lead.owner !== OWNER_ENGINE) continue
+      if (this.leadsEmWorkflowAtivo.has(lead.id)) continue
       if (lead.perdido) continue
       if (lead.bounced) continue
       if (!ESTAGIOS_EM_CADENCIA.includes(lead.estagio as never)) continue

@@ -186,6 +186,55 @@ export async function sendText(
   return { ok: true, ...ids }
 }
 
+// --- Envio para GRUPO --------------------------------------------------------
+
+export type CodigoErroEnvioGrupoZapi =
+  | CodigoErroZapi
+  | 'texto_vazio'
+  | 'grupo_invalido'
+  | 'zapi_status_falhou'
+  | 'zapi_desconectada'
+
+export type ResultadoEnvioGrupoZapi =
+  | ({ ok: true } & IdsZapi)
+  | { ok: false; codigo: CodigoErroEnvioGrupoZapi; mensagem: string; status?: number }
+
+// ID de grupo como a Z-API devolve/aceita: "<dígitos>-group" ou o JID
+// "<dígitos>@g.us". Não é telefone: um número puro aqui é erro de configuração.
+export function grupoIdValido(valor: string): boolean {
+  return /^\d{10,30}-group$/.test(valor) || /^\d{10,30}@g\.us$/.test(valor)
+}
+
+/**
+ * Envia UMA mensagem de texto a um GRUPO. Na Z-API o endpoint é o mesmo do
+ * texto individual (send-text) com o id do grupo no campo `phone`. Consulta a
+ * saúde da instância antes, pelo mesmo motivo do envio a lead: instância
+ * desconectada devolve 200 + ids e a mensagem não chega. Não grava nada — quem
+ * registra o efeito é o chamador (outbox do handoff).
+ */
+export async function sendGroupText(
+  entrada: { groupId: string; message: string },
+  deps: DepsZapi = {},
+): Promise<ResultadoEnvioGrupoZapi> {
+  const message = entrada.message?.trim()
+  if (!message) return { ok: false, codigo: 'texto_vazio', mensagem: 'A mensagem está vazia.' }
+  const groupId = entrada.groupId?.trim() ?? ''
+  if (!grupoIdValido(groupId)) {
+    return { ok: false, codigo: 'grupo_invalido', mensagem: 'ID de grupo inválido: use o formato "<id>-group" da Z-API.' }
+  }
+
+  const status = await getStatus(deps)
+  if (!status.ok) {
+    return { ok: false, codigo: status.codigo === 'config_ausente' ? 'config_ausente' : 'zapi_status_falhou', status: status.status, mensagem: `Não foi possível verificar a instância Z-API: ${status.mensagem}` }
+  }
+  if (status.connected !== true || status.smartphoneConnected === false) {
+    const motivo = status.connected !== true ? 'instância desconectada' : 'celular desconectado'
+    return { ok: false, codigo: 'zapi_desconectada', mensagem: `Z-API indisponível para envio (${motivo}${status.erro ? `: ${status.erro}` : ''}).` }
+  }
+
+  return sendText({ phone: groupId, message }, deps)
+}
+
 // --- Envio para LEAD ---------------------------------------------------------
 
 export type CodigoErroEnvioZapi =

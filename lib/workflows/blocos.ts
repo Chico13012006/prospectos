@@ -118,6 +118,17 @@ export const acaoEnviarEmail: Acao = {
   async executar(ctx): Promise<ResultadoAcao> {
     if (!ctx.leadId) throw new Error("ação 'enviar_email' exige um lead")
     const template = String(ctx.config.template ?? ctx.config.tipo ?? 'follow_up_1')
+    // Re-checagem no momento do efeito: a execução foi lida no início do tick;
+    // se o lead respondeu nesse meio-tempo (resposta cancela a execução), o
+    // e-mail NÃO sai. O 'encerrar' abaixo não revive a execução: o store trata
+    // 'cancelado' como terminal.
+    if (ctx.execucao?.id) {
+      const atual = await ctx.store.buscarExecucao(ctx.execucao.id)
+      if (atual?.status === 'cancelado') {
+        await ctx.log('envio_pulado_execucao_cancelada', { template })
+        return { tipo: 'encerrar' }
+      }
+    }
     // Passa campanha_id para o ambiente verificar campanhas.dry_run antes de enviar.
     const chaveEnvio = ctx.execucao?.id && ctx.blocoId ? `${ctx.execucao.id}:${ctx.blocoId}` : null
     const r = await ctx.ambiente.enviarEmailTemplate(ctx.leadId, template, ctx.execucao?.campanha_id, chaveEnvio)

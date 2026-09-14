@@ -133,6 +133,8 @@ export class MemoryWorkflowStore implements WorkflowStore {
   async atualizarExecucao(id: string, patch: PatchExecucao): Promise<void> {
     const ex = this.execucoes.get(id)
     if (!ex) throw new Error(`execução ${id} não encontrada`)
+    // Espelha o Supabase: 'cancelado' é terminal (só outro cancelamento passa).
+    if (ex.status === 'cancelado' && patch.status !== 'cancelado') return
     this.execucoes.set(id, { ...ex, ...patch })
   }
 

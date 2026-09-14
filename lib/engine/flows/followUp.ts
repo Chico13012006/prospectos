@@ -7,7 +7,7 @@
 // (estagio='interessado'), e leadsParaFollowup só devolve estágios em cadência.
 import { getEngineConfig, proximaDataFollowup } from '../config'
 import { log } from '../logger'
-import { proximoEstagio } from '../templates'
+import { ESTAGIOS_EM_CADENCIA, proximoEstagio } from '../templates'
 import { montarEmail } from '../mensagem'
 import { corpoHtmlComOptout, rodapeTextoOptout } from '../optout'
 import type { EmailProvider } from '../email/provider'
@@ -62,6 +62,15 @@ export async function followUp(
     // Idempotência reforçada (corrida): revalida a contagem antes de enviar.
     const jaEnviados = await store.contarInteracoes(lead.id, 'follow_up')
     if (jaEnviados >= cfg.maxFollowups) continue
+
+    // Re-checagem no momento do efeito: a lista de elegíveis foi lida no início
+    // do lote; se o lead respondeu nesse meio-tempo (Fluxo 2 tira da cadência
+    // e o handoff comercial assume), o follow-up NÃO sai.
+    const atual = await store.buscarLead(lead.id)
+    if (!atual || !(ESTAGIOS_EM_CADENCIA as string[]).includes(atual.estagio) || atual.bounced || atual.perdido) {
+      log.info('Lead saiu da cadência antes do envio — follow-up pulado.', { leadId: lead.id, estagio: atual?.estagio ?? null })
+      continue
+    }
 
     const destino = proximoEstagio(lead.estagio)
     const msg = await montarEmail(store, lead, { tipo: 'follow_up', numero: jaEnviados + 1 })

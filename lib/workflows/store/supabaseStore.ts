@@ -169,11 +169,17 @@ export class SupabaseWorkflowStore implements WorkflowStore {
   }
 
   async atualizarExecucao(id: string, patch: PatchExecucao): Promise<void> {
-    const { error } = await this.db
+    // 'cancelado' é TERMINAL: uma resposta do lead cancela a execução (Fluxo 2)
+    // possivelmente no meio de um tick do executor, e as escritas de status do
+    // próprio executor (em_andamento/aguardando/concluido) não podem reviver a
+    // cadência. Só um patch que cancela passa sobre uma execução cancelada.
+    let q = this.db
       .from('workflow_execucoes')
       .update(patch)
       .eq('organizacao_id', this.organizacaoId)
       .eq('id', id)
+    if (patch.status !== 'cancelado') q = q.neq('status', 'cancelado')
+    const { error } = await q
     if (error) throw error
   }
 

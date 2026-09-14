@@ -2,8 +2,13 @@
 // Lê a caixa do Gmail. Quando um lead responde DE VERDADE:
 //  - ignora auto-respostas (férias, fora do escritório, devolvido/bounce)
 //  - casa a mensagem ao lead por e-mail EXATO ou por DOMÍNIO (encaminhamento)
-//  - PAUSA a cadência do lead (sai da esteira de follow-up)
-//  - enfileira o direcionamento ao closer (Fluxo 3)
+//  - ENCERRA a cadência do lead (sai da esteira de follow-up) — para TODA
+//    resposta humana, qualquer que seja a classificação
+//  - resposta de PROSPECÇÃO é classificada (Fase 2 do handoff comercial):
+//      positivo      → 'interessado' + handoff (lib/comercial) + Fluxo 3
+//      negativo      → 'perdido' (sem handoff, sem closer)
+//      neutro/indet. → 'respondeu' (pendente de tratamento; sem handoff, sem closer)
+//    Sem os hooks (scripts locais/testes antigos) toda resposta vale como interesse.
 // Quando um BOUNCE SMTP é detectado (migration 0027):
 //  - marca o lead como bounced=true
 //  - cancela todas as workflow_execucoes ativas do lead
@@ -15,6 +20,9 @@ import type { EmailProvider } from '../email/provider'
 import type { Store } from '../store/store'
 import type { Queue } from '../queue'
 import type { ContextoCampanhaResposta, MensagemRecebida, Lead, UsuarioBasico } from '../types'
+import type { RespostaParaClassificar, ResultadoClassificacao } from '@/lib/comercial/respostas/classificarResposta'
+import type { EntradaGatilhoProspeccao, ResultadoGatilhoProspeccao } from '@/lib/comercial/handoff/gatilhoProspeccao'
+import { ehCicloDeRetornoHandoff } from '@/lib/comercial/followup/retornoFollowup'
 
 // Heurística de auto-resposta: além da dica do provedor (msg.automatica),
 // reconhece os padrões clássicos de férias/ausência/devolução.
@@ -67,6 +75,83 @@ export interface DetectarRespostaOpts {
   // Orquestradores reais adiam o \Seen até a notificação ao responsável
   // terminar. Chamadas isoladas preservam o comportamento auto-contido.
   adiarConfirmacaoLeitura?: boolean
+  // HANDOFF COMERCIAL (Fase 2). Os dois juntos ligam o gatilho: a resposta de
+  // PROSPECÇÃO é classificada e, só quando POSITIVA, o lead é entregue ao
+  // comercial (lib/comercial/handoff) e o grupo é avisado. Ausentes (testes,
+  // scripts locais) → o motor se comporta como antes: pausa e avisa o closer.
+  classificarResposta?: (resposta: RespostaParaClassificar) => Promise<ResultadoClassificacao>
+  handoffProspeccao?: (entrada: EntradaGatilhoProspeccao) => Promise<ResultadoGatilhoProspeccao>
+}
+
+// Origem da resposta é PROSPECÇÃO (entra no handoff)? Usa o contexto REAL da
+// execução, e o contexto de CAMPANHA tem precedência sobre o estágio: um lead
+// importado só para follow-up pode estar num estágio de cadência e ainda assim
+// pertencer a uma campanha 'followup' — e esse NUNCA entra no handoff.
+//   campanha de prospecção            → sim
+//   execução de RETORNO do handoff    → sim (ciclo 'handoff_retorno:…', Fase 4)
+//   outra campanha (followup importado, reativação, renovação, comunicado) → não
+//   sem campanha: cadência legada do motor é prospecção por construção;
+//   `foraDaCadenciaLegada` = retomada de aviso pendente OU lead pendente de
+//   tratamento, que sem campanha só chegam aqui pela cadência legada.
+export function respostaVemDeProspeccao(
+  emCadencia: boolean,
+  contextoCampanha: ContextoCampanhaResposta | null,
+  foraDaCadenciaLegada: boolean,
+): boolean {
+  if (contextoCampanha) return contextoCampanha.tipo === 'prospeccao' || ehCicloDeRetornoHandoff(contextoCampanha.cicloChave)
+  if (emCadencia) return true
+  return foraDaCadenciaLegada
+}
+
+// "primeiro contato" / "follow-up N" / 'campanha "X"' — texto do aviso ao grupo.
+export function descreverEtapaCadencia(
+  followupsEnviados: number,
+  contextoCampanha: ContextoCampanhaResposta | null,
+  emCadencia: boolean,
+): string {
+  if (contextoCampanha && ehCicloDeRetornoHandoff(contextoCampanha.cicloChave)) return 'follow-up de retorno'
+  if (contextoCampanha && !emCadencia) return `campanha "${contextoCampanha.nome}"`
+  return followupsEnviados <= 0 ? 'primeiro contato' : `follow-up ${followupsEnviados}`
+}
+
+// Estados EXISTENTES usados conforme a classificação da resposta (nenhum novo):
+//   'interessado' — positivo (rótulo "Respondeu"; catálogo "Interessado")
+//   'perdido'     — negativo, com a flag/motivo do "Marcar como perdido"
+//   'respondeu'   — neutro/indeterminado: resposta recebida, pendente de
+//                   tratamento humano (rótulo "Respondeu"; catálogo "Respondeu")
+export const ESTAGIO_RESPONDEU_PENDENTE = 'respondeu'
+export const MOTIVO_PERDIDO_RESPOSTA_NEGATIVA = 'resposta negativa (classificação automática)'
+
+function descreverRespostaSemInteresse(c: ResultadoClassificacao): string {
+  switch (c.classificacao) {
+    case 'negativo':
+      return 'Resposta negativa (classificação automática): cadência encerrada e lead marcado como perdido. Sem handoff comercial.'
+    case 'neutro':
+      return 'Resposta recebida sem sinal claro de interesse (classificação automática): cadência encerrada; pendente de tratamento humano. Sem handoff comercial.'
+    default:
+      return `Resposta recebida, mas não foi possível classificar automaticamente (${c.motivo ?? 'sem motivo'}): cadência encerrada; revisar manualmente e decidir o handoff comercial.`
+  }
+}
+
+function descreverResultadoHandoff(r: ResultadoGatilhoProspeccao, etapa: string): string | null {
+  const aviso = (() => {
+    const n = r.notificacao
+    if (!n) return ''
+    if (n.tipo === 'enviada' || n.tipo === 'ja_enviada') return ' Aviso ao grupo comercial enviado.'
+    if (n.tipo === 'configuracao_ausente') return ' Aviso ao grupo pendente: grupo de avisos não configurado.'
+    if (n.tipo === 'falhou') return ` Aviso ao grupo pendente (falhou: ${n.erro}).`
+    return ' Aviso ao grupo pendente.'
+  })()
+  switch (r.handoff.tipo) {
+    case 'atribuido':
+      return r.handoff.motivo === 'reativacao'
+        ? `Handoff comercial: lead voltou a responder (${etapa}) e retorna ao mesmo responsável, ${r.handoff.responsavel.nome}.${aviso}`
+        : `Handoff comercial: lead direcionado a ${r.handoff.responsavel.nome} pelo rodízio (respondeu ao ${etapa}).${aviso}`
+    case 'aguardando_distribuicao':
+      return `Handoff comercial: nenhum comercial participa do rodízio — lead aguardando distribuição (respondeu ao ${etapa}).`
+    default:
+      return null
+  }
 }
 
 export async function detectarResposta(
@@ -184,9 +269,12 @@ export async function detectarResposta(
 
       // 4) Idempotência: uma tentativa anterior pode já ter persistido a resposta
       // e ainda estar aguardando a notificação ao closer. Fora da cadência, só
-      // aceitamos um lead ligado a campanha e sem resposta já registrada.
+      // aceitamos um lead ligado a campanha e sem resposta já registrada — ou um
+      // lead PENDENTE DE TRATAMENTO (estagio='respondeu': resposta anterior
+      // neutra/indeterminada), cuja nova resposta pode ser reclassificada.
       const retomandoEncaminhamento = lead.proxima_acao === 'aguardando_closer'
       const emCadencia = ESTAGIOS_EM_CADENCIA.includes(lead.estagio as never)
+      const pendenteDeTratamento = lead.estagio === ESTAGIO_RESPONDEU_PENDENTE
       const respostasNesteCiclo = contextoCampanha?.iniciadoEm
         ? await store.contarInteracoesDesde(lead.id, 'resposta', contextoCampanha.iniciadoEm)
         : await store.contarInteracoes(lead.id, 'resposta')
@@ -194,7 +282,7 @@ export async function detectarResposta(
         && !retomandoEncaminhamento
         && !!contextoCampanha
         && respostasNesteCiclo === 0
-      if (!emCadencia && !retomandoEncaminhamento && !respostaCampanhaPendente) {
+      if (!emCadencia && !retomandoEncaminhamento && !respostaCampanhaPendente && !pendenteDeTratamento) {
         log.info('Lead já havia respondido/saído da esteira. Sem nova ação.', {
           leadId: lead.id,
           estagio: lead.estagio,
@@ -203,12 +291,10 @@ export async function detectarResposta(
         continue
       }
 
-      // 5) Resposta real → PAUSAR a cadência na hora e registrar.
-      // Score dinâmico (item 2.8): respondeu + bônus por velocidade (tempo entre
-      // o último contato enviado e esta resposta).
+      // 5) Resposta real → registrar e CLASSIFICAR antes de mover o estágio.
+      // Registra antes de mudar o estágio: se a persistência falhar, a mensagem
+      // continua não lida e uma nova tentativa não perde o conteúdo da resposta.
       if (!retomandoEncaminhamento) {
-        // Registra antes de mudar o estágio: se a persistência falhar, a mensagem
-        // continua não lida e uma nova tentativa não perde o conteúdo da resposta.
         await store.registrarInteracao({
           lead_id: lead.id,
           tipo: 'resposta',
@@ -217,32 +303,125 @@ export async function detectarResposta(
           origem_acao: 'ia',
           responsavel_id: lead.responsavel_id ?? null,
         })
+      }
+
+      // Classificação (Fase 2) só para resposta de PROSPECÇÃO com os hooks
+      // ligados. Fora disso (renovação/comunicado, scripts sem hooks) vale a
+      // semântica antiga: toda resposta humana é tratada como interesse. No
+      // retry (proxima_acao='aguardando_closer') a decisão anterior já foi
+      // "positivo" — não reclassifica (a IA poderia divergir e mover o lead).
+      const deProspeccao = respostaVemDeProspeccao(emCadencia, contextoCampanha, retomandoEncaminhamento || pendenteDeTratamento)
+      let classificacao: ResultadoClassificacao = { classificacao: 'positivo', via: 'regra', motivo: 'sem classificador' }
+      if (opts.classificarResposta && opts.handoffProspeccao && deProspeccao && !retomandoEncaminhamento) {
+        classificacao = await opts.classificarResposta({ assunto: msg.assunto, corpo: msg.corpo })
+      }
+      const positiva = classificacao.classificacao === 'positivo'
+
+      // Estado do lead conforme a classificação — SEMPRE fora da cadência:
+      //   positivo      → 'interessado' + aguardando_closer (Fluxo 3 + handoff)
+      //   negativo      → 'perdido' (+ flag/motivo, como o "Marcar como perdido")
+      //   neutro/indet. → 'respondeu' (resposta recebida, pendente de tratamento)
+      if (!retomandoEncaminhamento) {
         const horas = horasEntre(lead.ultimo_contato, msg.em)
-        await store.atualizarLead(lead.id, {
-          estagio: 'interessado',
-          proxima_acao: 'aguardando_closer',
-          proxima_acao_data: null,
-          score: calcularScore({ respondeu: true, horasAteResposta: horas }),
-        })
+        const score = calcularScore({ respondeu: true, horasAteResposta: horas })
+        if (positiva) {
+          await store.atualizarLead(lead.id, {
+            estagio: 'interessado', proxima_acao: 'aguardando_closer', proxima_acao_data: null, score,
+          })
+        } else if (classificacao.classificacao === 'negativo') {
+          await store.atualizarLead(lead.id, {
+            estagio: 'perdido', perdido: true, perdido_motivo: MOTIVO_PERDIDO_RESPOSTA_NEGATIVA,
+            proxima_acao: null, proxima_acao_data: null,
+          })
+        } else {
+          await store.atualizarLead(lead.id, {
+            estagio: ESTAGIO_RESPONDEU_PENDENTE, proxima_acao: null, proxima_acao_data: null, score,
+          })
+        }
         respostas++
       } else {
         log.info('Retomando notificação pendente ao closer.', { leadId: lead.id })
       }
       // O estágio tira o lead da cadência legada; o cancelamento explícito faz o
       // mesmo para workflows persistentes. Também é repetido no retry, pois é
-      // idempotente e pode ter sido o ponto da falha anterior.
+      // idempotente e pode ter sido o ponto da falha anterior. Vale para TODA
+      // resposta humana: não fazer handoff nunca significa continuar a cadência.
       await store.cancelarExecucoesWorkflow(lead.id)
-      log.ok('RESPOSTA detectada — cadência pausada. Encaminhando ao closer.', {
+      log.ok('RESPOSTA detectada — cadência encerrada.', {
         leadId: lead.id,
         empresa: lead.empresa,
+        classificacao: classificacao.classificacao,
       })
 
-      // 5) Enfileirar o Fluxo 3 (direcionar ao closer), uma vez por lead.
+      if (!positiva) {
+        // Negativo/neutro/indeterminado: histórico preservado (interação +
+        // nota), mas NÃO é oportunidade — sem handoff, sem rodízio, sem grupo,
+        // sem Fluxo 3.
+        await store.registrarInteracao({
+          lead_id: lead.id, tipo: 'nota', canal: 'sistema', origem_acao: 'ia',
+          descricao: descreverRespostaSemInteresse(classificacao),
+          responsavel_id: lead.responsavel_id ?? null,
+        })
+        log.info('Resposta de prospecção sem interesse positivo — sem handoff nem aviso.', {
+          leadId: lead.id, classificacao: classificacao.classificacao, via: classificacao.via,
+        })
+        continue
+      }
+
+      // 5.1) HANDOFF COMERCIAL (Fase 2) — só resposta POSITIVA de PROSPECÇÃO.
+      // Roda DEPOIS de a cadência estar encerrada e ANTES de qualquer aviso:
+      // o handoff no banco é a fonte da verdade; o aviso ao grupo é efeito
+      // recuperável (outbox). No retry (mensagem liberada), repete idempotente
+      // pelo eventoId = identidade estável da mensagem.
+      let responsavelHandoff: UsuarioBasico | null = null
+      if (opts.handoffProspeccao && deProspeccao) {
+        const eventoId = chaveMensagem
+          ? `email:${chaveMensagem}`
+          : `email:${lead.id}:${new Date(msg.em).toISOString()}`
+        const etapa = descreverEtapaCadencia(
+          await store.contarInteracoes(lead.id, 'follow_up'), contextoCampanha, emCadencia,
+        )
+        const r = await opts.handoffProspeccao({
+          organizacaoId: store.organizacaoId ?? '',
+          leadId: lead.id,
+          eventoId,
+          empresa: lead.empresa ?? '',
+          contatoNome: lead.contato_nome ?? '',
+          etapaCadencia: etapa,
+        })
+        if (r.responsavel?.email) {
+          responsavelHandoff = { id: r.responsavel.id, nome: r.responsavel.nome, email: r.responsavel.email }
+        }
+        const nota = descreverResultadoHandoff(r, etapa)
+        if (nota) {
+          await store.registrarInteracao({
+            lead_id: lead.id, tipo: 'nota', canal: 'sistema', descricao: nota, origem_acao: 'ia',
+            responsavel_id: r.responsavel?.id ?? lead.responsavel_id ?? null,
+          })
+        }
+        if (r.handoff.tipo === 'conflito_concorrencia') {
+          log.erro('Handoff comercial não confirmou por concorrência persistente.', { leadId: lead.id, eventoId })
+        } else {
+          log.ok('Handoff comercial processado.', {
+            leadId: lead.id, resultado: r.handoff.tipo, notificacao: r.notificacao?.tipo ?? null,
+          })
+        }
+      }
+
+      // 6) Enfileirar o Fluxo 3 (direcionar ao closer), uma vez por lead — SÓ
+      // para resposta positiva. Se o handoff atribuiu um comercial, o aviso vai
+      // para ELE (prevalece sobre o responsável fixo da campanha e sobre o
+      // responsável antigo do lead).
       if (closerEnfileirado.has(lead.id)) {
         log.info('Closer já avisado deste lead nesta passada; não duplico o aviso.', { leadId: lead.id })
       } else {
         closerEnfileirado.add(lead.id)
-        fila.enfileirar('direcionar_closer', { leadId: lead.id, textoResposta: msg.corpo, responsavelCampanha, contextoCampanha })
+        fila.enfileirar('direcionar_closer', {
+          leadId: lead.id,
+          textoResposta: msg.corpo,
+          responsavelCampanha: responsavelHandoff ?? responsavelCampanha,
+          contextoCampanha,
+        })
       }
     } catch (erro) {
       // Falha no meio do processamento: devolve a mensagem para a próxima

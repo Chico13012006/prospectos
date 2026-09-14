@@ -154,6 +154,23 @@ export class SupabaseStore implements Store {
     return count ?? 0
   }
 
+  // Um lead está em UMA cadência: quem tem execução de workflow ativa
+  // (campanha, renovação, follow-up de retorno do handoff — Fase 4) fica fora da
+  // esteira legada, senão os dois motores enviariam. Também impede o legado de
+  // "esgotar" (sem_resposta) um lead que o workflow ainda está trabalhando.
+  private async semExecucaoAtiva(leads: Lead[]): Promise<Lead[]> {
+    if (leads.length === 0) return leads
+    const { data, error } = await this.db
+      .from('workflow_execucoes')
+      .select('lead_id')
+      .eq('organizacao_id', this.organizacaoId)
+      .in('status', ['em_andamento', 'aguardando'])
+      .in('lead_id', leads.map((l) => l.id))
+    if (error) throw error
+    const ocupados = new Set((data ?? []).map((e) => e.lead_id as string))
+    return ocupados.size === 0 ? leads : leads.filter((l) => !ocupados.has(l.id))
+  }
+
   async leadsParaFollowup(): Promise<Lead[]> {
     const cfg = await getEngineConfig(this.organizacaoId)
     const agora = Date.now()
@@ -171,7 +188,7 @@ export class SupabaseStore implements Store {
       .in('estagio', ESTAGIOS_EM_CADENCIA)
     if (error) throw error
 
-    const candidatos = (data as Lead[]) ?? []
+    const candidatos = await this.semExecucaoAtiva((data as Lead[]) ?? [])
     const elegiveis: Lead[] = []
     for (const lead of candidatos) {
       // Trava de máximo de follow-ups.
@@ -202,7 +219,7 @@ export class SupabaseStore implements Store {
       .in('estagio', ESTAGIOS_EM_CADENCIA)
     if (error) throw error
 
-    const candidatos = (data as Lead[]) ?? []
+    const candidatos = await this.semExecucaoAtiva((data as Lead[]) ?? [])
     const esgotados: Lead[] = []
     for (const lead of candidatos) {
       // Só os que ESGOTARAM os follow-ups.
@@ -236,7 +253,7 @@ export class SupabaseStore implements Store {
   async buscarContextoCampanhaAtiva(leadId: string): Promise<ContextoCampanhaResposta | null> {
     const { data: execucao, error: execError } = await this.db
       .from('workflow_execucoes')
-      .select('id, campanha_id, iniciado_em, status')
+      .select('id, campanha_id, iniciado_em, status, ciclo_chave')
       .eq('organizacao_id', this.organizacaoId)
       .eq('lead_id', leadId)
       // Inclui concluídas/canceladas: a execução termina ou é pausada antes que
@@ -295,6 +312,7 @@ export class SupabaseStore implements Store {
       execucaoId: (execucao as { id?: string | null }).id ?? null,
       iniciadoEm: (execucao as { iniciado_em?: string | null }).iniciado_em ?? null,
       execucaoStatus: (execucao as { status?: string | null }).status ?? null,
+      cicloChave: (execucao as { ciclo_chave?: string | null }).ciclo_chave ?? null,
       nome: campanhaRow.nome,
       tipo: campanhaRow.tipo,
       responsavel,
