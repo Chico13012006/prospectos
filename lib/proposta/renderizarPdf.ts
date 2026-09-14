@@ -39,9 +39,13 @@ export const LAYOUT = {
   // Conteúdo do card "Solução proposta" (abaixo do título fixo do card). Cada
   // linha tem a altura do seu conteúdo (thumbnail na largura da coluna ou
   // bloco de texto), entre linhaMin e alturaLinhaMax; se a soma passar de h,
-  // todas encolhem na mesma proporção.
+  // todas encolhem na mesma proporção — NUNCA esticam para preencher o
+  // espaço sobrando (escala é sempre ≤ 1). y/h medidos contra o
+  // base-proposta.png atual: o ícone+título fixos terminam em y≈334 e a
+  // borda inferior do card em y≈722 — margem de ~40px em cada ponta para
+  // não encostar nem com item único (altura natural máxima de uma linha).
   equipamentos: {
-    x: 120, y: 340, w: 730, h: 385,
+    x: 120, y: 374, w: 730, h: 326,
     linhaMin: 56, alturaLinhaMax: 180, padLinha: 2, gapDescricao: 4,
     thumb: { x: 140, w: 160, alturaMax: 172 },
     qtd: { x: 362 },
