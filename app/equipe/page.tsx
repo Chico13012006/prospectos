@@ -197,20 +197,26 @@ export default function EquipePage() {
       if (!res.ok) {
         setFeedback({ tipo: 'erro', msg: data.erro || 'Erro ao enviar convite' });
       } else {
-        // A API só confirma envio de fato quando saiu pela conta Gmail
-        // principal (emailEnviado). Em ensaio ou sem credencial, o usuário já
-        // foi criado, mas ninguém recebeu nada — não afirmar um envio que não
-        // ocorreu (link fica disponível para repasse manual).
+        // A API só confirma envio de fato quando saiu pela conta Gmail do
+        // workspace (emailEnviado) e diz qual conta foi (remetente). Em ensaio
+        // ou sem credencial, o usuário já foi criado, mas ninguém recebeu nada —
+        // não afirmar um envio que não ocorreu (link fica p/ repasse manual).
         if (data.emailEnviado) {
-          setFeedback({ tipo: 'sucesso', msg: `Convite enviado para ${email}` });
+          setFeedback({
+            tipo: 'sucesso',
+            msg: data.remetente ? `Convite enviado para ${email} (de ${data.remetente})` : `Convite enviado para ${email}`,
+          });
         } else if (data.simulado) {
           setFeedback({ tipo: 'aviso', msg: `Usuário criado, mas o e-mail NÃO foi enviado (MODO_ENSAIO ativo).` });
         } else {
+          const causa = data.motivo === 'credencial_ausente'
+            ? 'a conta de e-mail deste workspace não está configurada'
+            : 'o e-mail não pôde ser enviado';
           setFeedback({
             tipo: 'aviso',
             msg: data.link
-              ? `Usuário criado, mas o e-mail não pôde ser enviado. Copie o link e envie manualmente: ${data.link}`
-              : 'Usuário criado, mas o e-mail não pôde ser enviado.',
+              ? `Usuário criado, mas ${causa}. Copie o link e envie manualmente: ${data.link}`
+              : `Usuário criado, mas ${causa}.`,
           });
         }
         setEmail(''); setNome(''); setNicho(''); setRole('usuario');
