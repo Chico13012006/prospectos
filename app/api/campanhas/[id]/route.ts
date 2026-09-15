@@ -1,5 +1,5 @@
-// Lê / atualiza / transiciona uma campanha (Fase 7). GET requer campaigns.view;
-// PATCH requer campaigns.manage.
+// Lê / atualiza / transiciona / apaga uma campanha (Fase 7). GET requer
+// campaigns.view; PATCH e DELETE requerem campaigns.manage.
 import { NextResponse } from 'next/server'
 import { exigirPermissao, resolverAcesso } from '@/lib/rbac/servidor'
 import { atualizarCampanha, buscarCampanha } from '@/lib/campanhas/repository'
@@ -14,6 +14,7 @@ import {
 import { buscarPreviaPublicoCampanha, previaParaCliente } from '@/lib/campanhas/publicoServidor'
 import { engineConfig } from '@/lib/engine/config'
 import { buscarResumoExecucoesCampanha } from '@/lib/campanhas/resumoExecucoesServidor'
+import { apagarCampanha, ErroExclusaoCampanha } from '@/lib/campanhas/exclusaoServidor'
 
 export const runtime = 'nodejs'
 
@@ -128,6 +129,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     await atualizarCampanha(admin, org, id, b)
     return NextResponse.json({ ok: true, workflow_id: atual.workflow_id })
   } catch (e) {
+    return NextResponse.json({ erro: e instanceof Error ? e.message : 'Erro' }, { status: 400 })
+  }
+}
+
+// Exclusão definitiva pelo botão da lista. Mesma régua de quem cria: sem
+// `campaigns.tipos.avancados`, só comunicado. Travas e ordem das operações em
+// lib/campanhas/exclusaoServidor.ts.
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const acc = await exigirPermissao('campaigns.manage')
+  if ('erro' in acc) return acc.erro
+  const { admin, org } = acc.acesso
+  try {
+    const campanha = await buscarCampanha(admin, org, id)
+    if (!campanha) return NextResponse.json({ erro: 'Campanha não encontrada' }, { status: 404 })
+    if (!podeUsarTipoCampanha(campanha.tipo, acc.acesso.permissoes.has('campaigns.tipos.avancados'))) {
+      return NextResponse.json({ erro: 'Seu acesso permite apagar apenas campanhas de comunicado.' }, { status: 403 })
+    }
+    const resultado = await apagarCampanha(admin, org, id)
+    return NextResponse.json({ ok: true, ...resultado })
+  } catch (e) {
+    if (e instanceof ErroExclusaoCampanha) return NextResponse.json({ erro: e.message }, { status: e.status })
     return NextResponse.json({ erro: e instanceof Error ? e.message : 'Erro' }, { status: 400 })
   }
 }

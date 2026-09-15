@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   Plus, Play, Pause, CheckCircle2, Megaphone, Users, MessageSquare, Coins,
   Search, FileSpreadsheet, PencilLine, ArrowRight, Activity, Info,
-  CalendarDays, AlertTriangle,
+  CalendarDays, AlertTriangle, Trash2, Loader2,
 } from 'lucide-react';
 import ImportarLeadsModal from '@/components/leads/ImportarLeadsModal';
 import { type Campanha, STATUS_BADGE, STATUS_LABEL, resumoPublico } from './tiposCampanha';
@@ -16,6 +16,7 @@ import {
   execucoesPendentes,
   temFalhaOperacional,
 } from '@/lib/campanhas/situacaoDisparo';
+import { motivoBloqueioExclusao } from '@/lib/campanhas/exclusao';
 
 // Painel principal da aba Campanhas (mockup 01): KPIs, filtros, tabela densa,
 // "Próximas ações" e "Desempenho recente". Dado REAL de /api/campanhas. Métricas
@@ -51,6 +52,10 @@ export default function CampanhasPanel() {
   const [carregando, setCarregando] = useState(true);
   const [negado, setNegado] = useState(false);
   const [importar, setImportar] = useState(false);
+  const [apagando, setApagando] = useState<Campanha | null>(null);
+  const [confirmacaoExclusao, setConfirmacaoExclusao] = useState('');
+  const [excluindo, setExcluindo] = useState(false);
+  const [erroExclusao, setErroExclusao] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -83,6 +88,30 @@ export default function CampanhasPanel() {
     carregar();
   }
 
+  function abrirExclusao(c: Campanha, e: React.MouseEvent) {
+    e.stopPropagation();
+    setApagando(c);
+    setConfirmacaoExclusao('');
+    setErroExclusao(null);
+  }
+
+  async function confirmarExclusao() {
+    if (!apagando || confirmacaoExclusao !== 'APAGAR') return;
+    setExcluindo(true);
+    setErroExclusao(null);
+    try {
+      const res = await fetch(`/api/campanhas/${apagando.id}`, { method: 'DELETE' });
+      const dados = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(dados.erro || 'Não foi possível apagar a campanha.');
+      setApagando(null);
+      carregar();
+    } catch (e) {
+      setErroExclusao(e instanceof Error ? e.message : 'Não foi possível apagar a campanha.');
+    } finally {
+      setExcluindo(false);
+    }
+  }
+
   const filtrados = useMemo(
     () => itens.filter((c) => !busca.trim() || c.nome.toLowerCase().includes(busca.trim().toLowerCase())),
     [itens, busca],
@@ -111,6 +140,51 @@ export default function CampanhasPanel() {
   return (
     <div className="space-y-5">
       {importar && <ImportarLeadsModal onClose={() => setImportar(false)} onImported={() => setImportar(false)} />}
+
+      {/* Confirmação de exclusão definitiva */}
+      {apagando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm" onClick={() => { if (!excluindo) setApagando(null); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="apagar-campanha-titulo" onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md space-y-4 rounded-2xl border border-red-500/30 bg-[#1a1f2e] p-6 shadow-2xl">
+            <div className="flex items-center gap-2 text-red-400">
+              <Trash2 size={18} />
+              <h2 id="apagar-campanha-titulo" className="text-lg font-bold">Apagar campanha</h2>
+            </div>
+            <p className="text-sm leading-relaxed text-slate-300">
+              <b className="text-slate-100">{apagando.nome}</b> será apagada de vez, com os contatos inscritos, a linha do tempo e a cadência interna dela. Não dá para desfazer.
+            </p>
+            {(apagando.resumoExecucoes?.total ?? 0) > 0 && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-200">
+                Deixa de existir o registro de {apagando.resumoExecucoes!.total.toLocaleString('pt-BR')} contato(s) inscrito(s) e {apagando.resumoExecucoes!.emailsEnviados.toLocaleString('pt-BR')} mensagem(ns) enviada(s) por esta campanha.
+              </div>
+            )}
+            <p className="text-xs text-slate-500">Leads, o histórico de cada lead e as tarefas continuam.</p>
+            <div>
+              <label htmlFor="confirmar-exclusao" className="mb-1.5 block text-xs text-slate-400">
+                Para confirmar, digite <code className="rounded bg-red-500/20 px-1 text-red-300">APAGAR</code>
+              </label>
+              <input id="confirmar-exclusao" type="text" value={confirmacaoExclusao} onChange={(e) => setConfirmacaoExclusao(e.target.value)}
+                placeholder="APAGAR" autoFocus disabled={excluindo}
+                className="w-full rounded-lg border border-[#2a3147] bg-[#0f1117] px-3 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:border-red-500/60 focus:outline-none" />
+            </div>
+            {erroExclusao && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-xs text-red-300">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" /> {erroExclusao}
+              </div>
+            )}
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={() => setApagando(null)} disabled={excluindo}
+                className="flex-1 rounded-lg border border-[#2a3147] px-4 py-2.5 text-sm text-slate-300 transition-colors hover:bg-[#0f1117] disabled:opacity-40">
+                Cancelar
+              </button>
+              <button type="button" onClick={confirmarExclusao} disabled={confirmacaoExclusao !== 'APAGAR' || excluindo}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40">
+                {excluindo ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Apagar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Ações do topo */}
       <div className="flex items-center justify-between gap-3">
@@ -237,6 +311,19 @@ export default function CampanhasPanel() {
                           <Icon size={12} /> {label}
                         </button>
                       ))}
+                      {(() => {
+                        const bloqueio = motivoBloqueioExclusao(c.status, pendentes);
+                        // O span segura o clique (botão desabilitado não abre o
+                        // detalhe) e mostra o motivo mesmo sem hover no botão.
+                        return (
+                          <span title={bloqueio ?? 'Apagar registro da campanha'} onClick={(e) => e.stopPropagation()}>
+                            <button type="button" onClick={(e) => abrirExclusao(c, e)} disabled={!!bloqueio} aria-label={`Apagar ${c.nome}`}
+                              className="text-xs px-2 py-1.5 rounded-lg bg-[#252b3b] text-slate-400 hover:bg-red-500/15 hover:text-red-300 inline-flex items-center disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-[#252b3b] disabled:hover:text-slate-400">
+                              <Trash2 size={12} />
+                            </button>
+                          </span>
+                        );
+                      })()}
                       <ArrowRight size={13} className="text-slate-600" />
                     </div>
                   </td>
