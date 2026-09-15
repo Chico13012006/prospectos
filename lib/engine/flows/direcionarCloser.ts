@@ -13,6 +13,7 @@ import type { Store } from '../store/store'
 import type { ContextoCampanhaResposta, Lead, UsuarioBasico } from '../types'
 import { labelTipoCampanha } from '@/lib/campanhas/configuracaoGuiada'
 import { montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha'
+import { substituirVariaveis } from '../mensagem'
 
 export interface PayloadDirecionarCloser {
   leadId: string
@@ -21,25 +22,23 @@ export interface PayloadDirecionarCloser {
   contextoCampanha?: ContextoCampanhaResposta | null
 }
 
-function materializarModeloResposta(modelo: string, dados: Record<string, string>): string {
-  return Object.entries(dados).reduce(
-    (texto, [chave, valor]) => texto.replaceAll(`{${chave}}`, valor),
-    modelo,
-  )
-}
-
 function dadosModeloResposta(
   lead: Lead,
   payload: PayloadDirecionarCloser,
   responsavelNome: string,
 ): Record<string, string> {
+  const contato = lead.contato_nome?.trim() || 'Não configurado'
+  const resposta = payload.textoResposta.trim() || 'Não configurado'
   return {
     empresa: lead.empresa?.trim() || 'Não configurado',
-    contato: lead.contato_nome?.trim() || 'Não configurado',
+    contato,
+    // Apelidos usados por modelos HTML feitos fora do produto: mesmo dado.
+    nome_cliente: contato,
     email_contato: lead.contato_email?.trim() || 'Não configurado',
     nicho: lead.segmento?.trim() || 'Não configurado',
     score: Number.isFinite(lead.score) ? String(lead.score) : 'Não configurado',
-    resposta: payload.textoResposta.trim() || 'Não configurado',
+    resposta,
+    resposta_cliente: resposta,
     campanha: payload.contextoCampanha?.nome?.trim() || 'Não configurado',
     tipo_campanha: payload.contextoCampanha?.tipo
       ? labelTipoCampanha(payload.contextoCampanha.tipo)
@@ -85,13 +84,13 @@ export async function direcionarCloser(
   ].join('\n')
   const dadosModelo = dadosModeloResposta(lead, payload, closerNome)
   const assunto = payload.contextoCampanha?.emailAssunto?.trim()
-    ? materializarModeloResposta(payload.contextoCampanha.emailAssunto, dadosModelo)
+    ? substituirVariaveis(payload.contextoCampanha.emailAssunto, dadosModelo)
     : `[ProspectOS] Lead respondeu: ${lead.empresa}`
   const corpoNotificacao = payload.contextoCampanha?.emailCorpo?.trim()
-    ? materializarModeloResposta(payload.contextoCampanha.emailCorpo, dadosModelo)
+    ? substituirVariaveis(payload.contextoCampanha.emailCorpo, dadosModelo)
     : aviso
   const htmlPersonalizado = payload.contextoCampanha?.emailHtml?.trim()
-    ? materializarModeloResposta(payload.contextoCampanha.emailHtml, dadosModelo)
+    ? substituirVariaveis(payload.contextoCampanha.emailHtml, dadosModelo)
     : undefined
   const htmlNotificacao = montarEmailCampanhaHtml(corpoNotificacao, {}, htmlPersonalizado)
 

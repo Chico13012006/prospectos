@@ -38,6 +38,16 @@ describe('preencher', () => {
     const lead = makeLead({ data_validade: '2026-08-30' })
     expect(preencher('Validade: {data_validade}', lead)).toBe('Validade: 30/08/2026')
   })
+  it('aceita chave dupla, com ou sem espaços, junto com a chave simples', () => {
+    const lead = makeLead({ contato_nome: 'Geiza Souza', empresa: "Habib's", data_validade: '2026-09-19' })
+    expect(preencher('Olá, {{nome}}! O laudo da {{ empresa }} vence em {data_validade}.', lead))
+      .toBe("Olá, Geiza! O laudo da Habib's vence em 19/09/2026.")
+  })
+  it('chave desconhecida fica intacta e o valor inserido não é reprocessado', () => {
+    const lead = makeLead({ contato_nome: 'Ana', empresa: '{nome}' })
+    expect(preencher('{{desconhecida}} {inexistente} {{constructor}} {empresa}', lead))
+      .toBe('{{desconhecida}} {inexistente} {{constructor}} {nome}')
+  })
 })
 
 describe('montarEmail — seleção de primeiro contato', () => {

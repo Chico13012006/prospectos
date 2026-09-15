@@ -501,6 +501,33 @@ describe('Fluxo 3 — direcionarCloser', () => {
     expect(email.enviados[0].html).toContain('<strong>Acme</strong>: Quero renovar.')
   })
 
+  it('aceita chave dupla e os apelidos nome_cliente/resposta_cliente no aviso', async () => {
+    const responsavel = { id: 'u1', nome: 'Maria', email: 'maria@empresa.com' }
+    const lead = makeLead({ responsavel_id: 'u1', empresa: 'Acme', contato_nome: 'Ana', segmento: '' })
+    const store = new MemoryStore([lead], [responsavel])
+    const email = new SimulatedProvider()
+
+    await direcionarCloser(store, email, {
+      leadId: lead.id,
+      textoResposta: 'Quero renovar.',
+      responsavelCampanha: responsavel,
+      contextoCampanha: {
+        id: 'camp-1',
+        nome: 'Renovação 2026',
+        tipo: 'renovacao',
+        responsavel,
+        notificarResponsavel: true,
+        emailAssunto: 'Resposta de {{empresa}}',
+        emailCorpo: '{{ nome_cliente }} respondeu: {{resposta_cliente}}',
+        emailHtml: '<p>{{nome_cliente}} ({{empresa}}): {{resposta_cliente}}</p>',
+      },
+    })
+
+    expect(email.enviados[0].assunto).toBe('Resposta de Acme')
+    expect(email.enviados[0].corpo).toContain('Ana respondeu: Quero renovar.')
+    expect(email.enviados[0].html).toContain('<p>Ana (Acme): Quero renovar.</p>')
+  })
+
   it('usa o fallback CLOSER_EMAIL quando o lead não tem responsável', async () => {
     const lead = makeLead({ estagio: 'interessado', responsavel_id: undefined })
     const store = new MemoryStore([lead])

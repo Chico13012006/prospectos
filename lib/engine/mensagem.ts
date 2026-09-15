@@ -34,6 +34,17 @@ function primeiroNome(nomeCompleto?: string | null): string {
   return (nomeCompleto ?? '').trim().split(/\s+/)[0] || ''
 }
 
+// Troca `{chave}` e também `{{chave}}` (com ou sem espaços dentro) numa única
+// passada: modelos HTML feitos fora do produto costumam usar chave dupla, e
+// trocar só a interna deixava "{Geiza}" no e-mail enviado. Chave desconhecida
+// fica como está, e o valor inserido não é reprocessado.
+export function substituirVariaveis(texto: string, valores: Record<string, string>): string {
+  return texto.replace(/\{\{\s*(\w+)\s*\}\}|\{(\w+)\}/g, (original, dupla?: string, simples?: string) => {
+    const chave = dupla ?? simples ?? ''
+    return Object.prototype.hasOwnProperty.call(valores, chave) ? valores[chave] : original
+  })
+}
+
 // Substitui as variáveis do template pelos dados do lead e limpa resíduos de
 // campos vazios (ex.: "Olá , tudo bem?" → "Olá, tudo bem?").
 // `extras` injeta variáveis de nível-org (ex.: {nome_servico}) sem alterar a
@@ -48,8 +59,7 @@ export function preencher(texto: string, lead: Lead, extras?: Record<string, str
     data_validade: formatarDataIsoSemFuso(lead.data_validade),
     ...extras,
   }
-  return texto
-    .replace(/\{(\w+)\}/g, (m, chave: string) => (chave in valores ? valores[chave] : m))
+  return substituirVariaveis(texto, valores)
     .replace(/Olá ,/g, 'Olá,')
     .replace(/,\s*\./g, '.')
     .replace(/ {2,}/g, ' ')
