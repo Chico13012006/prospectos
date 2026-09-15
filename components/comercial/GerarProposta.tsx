@@ -3,14 +3,14 @@
 import { useState } from 'react';
 import { FileDown, Loader2 } from 'lucide-react';
 import { PROPOSTA_LIMITE_ITENS } from '@/lib/proposta/config';
-import { nomeArquivoProposta, type PropostaPdfData } from '@/lib/proposta/dados';
+import type { PropostaPdfData } from '@/lib/proposta/dados';
+import { baixarPropostaPdf } from '@/lib/proposta/baixarPdfNavegador';
 
-// Ação "Gerar proposta" do card Resumo (Comercial > Simulador). O renderizador
-// (pdf-lib) só é carregado no clique — import dinâmico — para não pesar a
-// tela. Download pelo mesmo padrão do export CSV (Blob + <a download>).
+// Ação "Gerar proposta" do card Resumo (Comercial > Simulador): baixa o PDF da
+// proposta que está na tela, sem salvar nada (lib/proposta/baixarPdfNavegador).
 export default function GerarProposta({ dados, empresa }: {
   dados: PropostaPdfData;
-  // Nome do lead selecionado em "Registrar no lead"; só entra no nome do arquivo.
+  // Nome do lead selecionado no card; só entra no nome do arquivo.
   empresa?: string | null;
 }) {
   const [gerando, setGerando] = useState(false);
@@ -24,14 +24,7 @@ export default function GerarProposta({ dados, empresa }: {
     setGerando(true);
     setErro(null);
     try {
-      const { gerarPropostaPdf } = await import('@/lib/proposta/renderizarPdf');
-      const bytes = await gerarPropostaPdf(dados, carregarAssetPublico);
-      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = nomeArquivoProposta(empresa);
-      link.click();
-      URL.revokeObjectURL(url);
+      await baixarPropostaPdf(dados, empresa);
     } catch (e) {
       console.error('Erro ao gerar proposta:', e);
       setErro('Não foi possível gerar a proposta. Tente novamente.');
@@ -59,11 +52,4 @@ export default function GerarProposta({ dados, empresa }: {
       {erro && <p className="text-xs text-rose-400">{erro}</p>}
     </div>
   );
-}
-
-// Assets de public/ via fetch; 404 vira `null` (thumbnail ausente não falha).
-async function carregarAssetPublico(caminho: string): Promise<Uint8Array | null> {
-  const r = await fetch(caminho);
-  if (!r.ok) return null;
-  return new Uint8Array(await r.arrayBuffer());
 }

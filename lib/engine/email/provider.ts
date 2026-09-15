@@ -3,12 +3,20 @@
 // sem mexer em nenhum fluxo.
 import type { MensagemRecebida } from '../types'
 
+// Arquivo anexado ao e-mail (ex.: PDF da proposta comercial).
+export interface AnexoEmail {
+  nomeArquivo: string
+  conteudo: Uint8Array
+  tipo: string // MIME, ex.: 'application/pdf'
+}
+
 export interface EmailProvider {
-  // `html` e `cc` são OPCIONAIS e ADITIVOS: quando presentes, o e-mail vai
-  // multipart (text=corpo como fallback + versão HTML) e/ou com cópia. Call
-  // sites antigos passam só o que já passavam. `cc` coloca o comercial
-  // responsável em cópia nos envios de campanha e follow-ups automáticos.
-  enviar(para: string, assunto: string, corpo: string, html?: string, cc?: string): Promise<void>
+  // `html`, `cc` e `anexos` são OPCIONAIS e ADITIVOS: quando presentes, o
+  // e-mail vai multipart (text=corpo como fallback + versão HTML), com cópia
+  // e/ou com arquivos. Call sites antigos passam só o que já passavam. `cc`
+  // coloca o comercial responsável em cópia nos envios de campanha e follow-ups
+  // automáticos; `anexos` leva a proposta ao cliente.
+  enviar(para: string, assunto: string, corpo: string, html?: string, cc?: string, anexos?: AnexoEmail[]): Promise<void>
   lerCaixaEntrada(): Promise<MensagemRecebida[]>
   // Provedores reais podem adiar o \Seen até o fluxo concluir. Opcional para
   // preservar provedores simulados e integrações legadas.

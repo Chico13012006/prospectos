@@ -18,6 +18,7 @@ import type { InsightComercialLead, MensagemPreview } from '@/lib/api';
 import type { Lead, Interacao, MensagemWhatsapp } from '@/lib/supabase';
 import { ESTAGIOS_MANUAIS } from '@/lib/pipeline-stages';
 import { ultimoContatoEfetivo } from '@/lib/leads/ultimoContato';
+import PropostasLista from '@/components/comercial/propostas/PropostasLista';
 
 // Data real de hoje (YYYY-MM-DD).
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -251,7 +252,7 @@ export default function LeadPanel({
   const [insightLoading, setInsightLoading] = useState(false);
   const [insightErro, setInsightErro] = useState<string | null>(null);
   // Ficha lateral em abas (item 2 do doc de ajustes).
-  const [abaPainel, setAbaPainel] = useState<'visao' | 'conversa' | 'dados'>('visao');
+  const [abaPainel, setAbaPainel] = useState<'visao' | 'conversa' | 'propostas' | 'dados'>('visao');
   // Preview da próxima mensagem da cadência (botão "Gerar mensagem").
   const [mensagem, setMensagem] = useState<MensagemPreview | null>(null);
   const [mensagemLoading, setMensagemLoading] = useState(false);
@@ -667,11 +668,12 @@ export default function LeadPanel({
         {selectedLead && !noPipeline && <ServicosLaudosCard leadId={selectedLead.id} />}
 
         <div className="flex-1 overflow-y-auto">
-          {/* Abas da ficha (item 2): Visão geral · Conversa · Dados */}
+          {/* Abas da ficha (item 2): Visão geral · Conversa · Propostas · Dados */}
           <div className={`${noPipeline ? 'px-4' : 'px-5'} pt-2 flex gap-1 ${divisor} sticky top-0 bg-[#1a1f2e] z-10`}>
             {([
               { id: 'visao', label: 'Visão geral' },
               { id: 'conversa', label: 'Conversa' },
+              { id: 'propostas', label: 'Propostas' },
               { id: 'dados', label: 'Dados' },
             ] as const).map(t => (
               <button
@@ -1193,6 +1195,18 @@ export default function LeadPanel({
           </div>
 
           </>)}
+
+          {/* Propostas comerciais salvas deste lead: baixar PDF e enviar ao
+              cliente. Montar/salvar continua no Comercial > Simulador. */}
+          {abaPainel === 'propostas' && (
+            <div className={noPipeline ? 'px-4 py-4' : 'px-5 py-4'}>
+              {selectedLead ? (
+                <PropostasLista leadId={selectedLead.id} />
+              ) : (
+                <p className="text-xs text-slate-500">Propostas disponíveis apenas com a base conectada.</p>
+              )}
+            </div>
+          )}
 
           {abaPainel === 'dados' && (
             (() => {

@@ -8,7 +8,7 @@
 import nodemailer, { type Transporter } from 'nodemailer'
 import { ImapFlow } from 'imapflow'
 import { simpleParser, type ParsedMail } from 'mailparser'
-import type { EmailProvider } from './provider'
+import type { AnexoEmail, EmailProvider } from './provider'
 import type { MensagemRecebida } from '../types'
 import { engineConfig } from '../config'
 import { log } from '../logger'
@@ -103,9 +103,11 @@ export class GmailProvider implements EmailProvider {
     return this.transporter
   }
 
-  async enviar(para: string, assunto: string, corpo: string, html?: string, cc?: string): Promise<void> {
+  async enviar(para: string, assunto: string, corpo: string, html?: string, cc?: string, anexos?: AnexoEmail[]): Promise<void> {
+    // Nos logs, anexos só pelo nome — nunca o conteúdo.
+    const nomesAnexos = anexos?.length ? { anexos: anexos.map((a) => a.nomeArquivo) } : {}
     if (engineConfig.modoEnsaio) {
-      log.info('[ENSAIO] Gmail NÃO enviado (modoEnsaio)', { para, assunto, cc })
+      log.info('[ENSAIO] Gmail NÃO enviado (modoEnsaio)', { para, assunto, cc, ...nomesAnexos })
       return
     }
     const info = await this.getTransporter().sendMail({
@@ -115,12 +117,22 @@ export class GmailProvider implements EmailProvider {
       text: corpo, // fallback p/ clientes sem HTML
       ...(html ? { html } : {}),
       ...(cc ? { cc } : {}),
+      ...(anexos?.length
+        ? {
+          attachments: anexos.map((a) => ({
+            filename: a.nomeArquivo,
+            content: Buffer.from(a.conteudo),
+            contentType: a.tipo,
+          })),
+        }
+        : {}),
     })
     log.ok('E-mail enviado via Gmail (SMTP)', {
       remetente: this.cred.user,
       para,
       cc,
       assunto,
+      ...nomesAnexos,
       messageId: info.messageId,
     })
   }

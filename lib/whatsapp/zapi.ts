@@ -2,14 +2,15 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { telefoneParaEnvio } from './outbound'
 
-// Adapter Z-API — camada de TRANSPORTE para envio de texto individual.
+// Adapter Z-API — camada de TRANSPORTE para envio individual: texto e
+// documento PDF.
 //
 // Coexiste com a integração Meta (lib/whatsapp/outbound.ts): nada daqui
 // substitui, chama ou altera o caminho da Meta.
 //
-// Fluxo de envio para lead: status da instância → send-text → registro em
-// `whatsapp_mensagens` (mesma tabela e convenções do outbound Meta). Não grava
-// em `interacoes` nem atualiza o lead.
+// Fluxo de envio para lead: status da instância → send-text / send-document →
+// registro em `whatsapp_mensagens` (mesma tabela e convenções do outbound
+// Meta). Não grava em `interacoes` nem atualiza o lead.
 //
 // Segurança: credenciais vivem só em process.env no servidor. Nunca aparecem
 // em retorno, log ou mensagem de erro; a resposta bruta da Z-API também não é
@@ -60,7 +61,7 @@ export interface DepsZapi {
 // Uma chamada autenticada à Z-API. Header Client-Token nunca é logado.
 async function chamarZapi(
   cfg: ConfigZapi,
-  caminho: 'status' | 'send-text',
+  caminho: 'status' | 'send-text' | 'send-document/pdf',
   init: { method: 'GET' } | { method: 'POST'; body: unknown },
   doFetch: typeof fetch,
 ): Promise<{ resposta: Response } | { falha: string }> {
@@ -137,26 +138,9 @@ function resumoErroProvider(corpo: unknown, status: number): string {
   return texto ? `Z-API recusou o envio (HTTP ${status}): ${texto.slice(0, 200)}` : `Z-API recusou o envio (HTTP ${status}).`
 }
 
-/**
- * Envia UMA mensagem de texto pela Z-API.
- *
- * `phone` deve chegar já em E.164 sem "+" (ex.: 5511999998888) — quem resolve
- * telefone de lead é `enviarTextoZapiParaLead`, abaixo.
- */
-export async function sendText(
-  entrada: { phone: string; message: string },
-  deps: DepsZapi = {},
-): Promise<ResultadoZapi> {
-  const cfg = lerConfigZapi(deps.env ?? process.env)
-  if (!cfg) {
-    return {
-      ok: false,
-      codigo: 'config_ausente',
-      mensagem: 'Z-API não configurada: defina ZAPI_INSTANCE_ID, ZAPI_TOKEN e ZAPI_CLIENT_TOKEN.',
-    }
-  }
-
-  const r = await chamarZapi(cfg, 'send-text', { method: 'POST', body: { phone: entrada.phone, message: entrada.message } }, deps.fetch ?? fetch)
+// Resposta de um envio (texto ou documento): a Z-API responde no mesmo formato
+// aos dois, então a interpretação é uma só.
+async function interpretarEnvio(r: { resposta: Response } | { falha: string }): Promise<ResultadoZapi> {
   if ('falha' in r) return { ok: false, codigo: 'falha_rede', mensagem: `Falha de rede ao chamar a Z-API: ${r.falha}` }
   const { resposta } = r
 
@@ -184,6 +168,61 @@ export async function sendText(
     msg: 'Mensagem enviada pela Z-API.', ...ids,
   }))
   return { ok: true, ...ids }
+}
+
+/**
+ * Envia UMA mensagem de texto pela Z-API.
+ *
+ * `phone` deve chegar já em E.164 sem "+" (ex.: 5511999998888) — quem resolve
+ * telefone de lead é `enviarTextoZapiParaLead`, abaixo.
+ */
+export async function sendText(
+  entrada: { phone: string; message: string },
+  deps: DepsZapi = {},
+): Promise<ResultadoZapi> {
+  const cfg = lerConfigZapi(deps.env ?? process.env)
+  if (!cfg) {
+    return {
+      ok: false,
+      codigo: 'config_ausente',
+      mensagem: 'Z-API não configurada: defina ZAPI_INSTANCE_ID, ZAPI_TOKEN e ZAPI_CLIENT_TOKEN.',
+    }
+  }
+
+  return interpretarEnvio(
+    await chamarZapi(cfg, 'send-text', { method: 'POST', body: { phone: entrada.phone, message: entrada.message } }, deps.fetch ?? fetch),
+  )
+}
+
+/**
+ * Envia UM documento PDF pela Z-API (POST /send-document/pdf).
+ *
+ * O arquivo vai inline, em base64 com prefixo data URI — formato documentado
+ * pela Z-API —, sem depender de URL pública. `fileName` é o nome exibido no
+ * WhatsApp; a Z-API espera sem extensão (ela vem do caminho), então ".pdf" é
+ * removido aqui. `phone` já em E.164 sem "+".
+ */
+export async function sendDocumentPdf(
+  entrada: { phone: string; pdf: Uint8Array; fileName: string; caption?: string },
+  deps: DepsZapi = {},
+): Promise<ResultadoZapi> {
+  const cfg = lerConfigZapi(deps.env ?? process.env)
+  if (!cfg) {
+    return {
+      ok: false,
+      codigo: 'config_ausente',
+      mensagem: 'Z-API não configurada: defina ZAPI_INSTANCE_ID, ZAPI_TOKEN e ZAPI_CLIENT_TOKEN.',
+    }
+  }
+
+  const caption = entrada.caption?.trim()
+  const body = {
+    phone: entrada.phone,
+    document: `data:application/pdf;base64,${Buffer.from(entrada.pdf).toString('base64')}`,
+    fileName: entrada.fileName.replace(/\.pdf$/i, ''),
+    ...(caption ? { caption } : {}),
+  }
+  return interpretarEnvio(await chamarZapi(cfg, 'send-document/pdf', { method: 'POST', body }, deps.fetch ?? fetch))
 }
 
 // --- Envio para GRUPO --------------------------------------------------------
@@ -243,15 +282,28 @@ export type CodigoErroEnvioZapi =
   | 'lead_nao_encontrado'
   | 'sem_telefone'
   | 'zapi_status_falhou'   // não foi possível consultar /status
-  | 'zapi_desconectada'    // instância ou celular fora do ar — send-text NÃO é chamado
+  | 'zapi_desconectada'    // instância ou celular fora do ar — o envio NÃO é chamado
 
 export type ResultadoEnvioZapi =
   | ({ ok: true; provider: 'zapi'; telefone: string; registrada: boolean; mensagemId: string | null } & IdsZapi)
   | { ok: false; codigo: CodigoErroEnvioZapi; mensagem: string; status?: number }
 
+type FalhaPreparacaoZapi = {
+  ok: false
+  codigo: 'lead_nao_encontrado' | 'sem_telefone' | 'zapi_status_falhou' | 'zapi_desconectada'
+  mensagem: string
+  status?: number
+}
+
+interface LeadZapi {
+  id: string
+  contato_nome: string | null
+}
+
 /**
- * Resolve o lead na organização da SESSÃO, normaliza o telefone, confere a
- * saúde da instância, envia e registra.
+ * Parte comum a todo envio para lead: resolve o lead na organização da
+ * SESSÃO, normaliza o telefone e confere a saúde da instância. Não envia nem
+ * grava nada.
  *
  * `organizacaoId` vem sempre do chamador (rota → resolverAcesso), nunca do
  * browser. O lead é lido com filtro explícito de organização (service_role
@@ -259,23 +311,19 @@ export type ResultadoEnvioZapi =
  *
  * Telefone: `leads.contato_telefone`, normalizado por `telefoneParaEnvio`
  * (mesmo helper do outbound Meta).
- *
- * Ordem: status → send-text → registro. Só grava depois de a Z-API aceitar.
  */
-export async function enviarTextoZapiParaLead(
+async function prepararEnvioParaLead(
   admin: SupabaseClient,
-  entrada: { leadId: string; message: string; organizacaoId: string },
-  deps: DepsZapi = {},
-): Promise<ResultadoEnvioZapi> {
-  const message = entrada.message?.trim()
-  if (!message) return { ok: false, codigo: 'texto_vazio', mensagem: 'A mensagem está vazia.' }
-
+  leadId: string,
+  organizacaoId: string,
+  deps: DepsZapi,
+): Promise<{ ok: true; lead: LeadZapi; telefone: string } | FalhaPreparacaoZapi> {
   // ISOLAMENTO: só encontra o lead se ele for da organização da sessão.
   const { data: lead, error } = await admin
     .from('leads')
     .select('id, contato_telefone, contato_nome')
-    .eq('id', entrada.leadId)
-    .eq('organizacao_id', entrada.organizacaoId)
+    .eq('id', leadId)
+    .eq('organizacao_id', organizacaoId)
     .maybeSingle()
   if (error) throw error
   if (!lead) return { ok: false, codigo: 'lead_nao_encontrado', mensagem: 'Lead não encontrado nesta organização.' }
@@ -301,19 +349,35 @@ export async function enviarTextoZapiParaLead(
     }
   }
 
-  const envio = await sendText({ phone: telefone, message }, deps)
-  if (!envio.ok) return envio
-  const { ok: _ok, ...ids } = envio
+  return { ok: true, lead: { id: lead.id as string, contato_nome: (lead.contato_nome as string | null) ?? null }, telefone }
+}
 
-  // --- Registro (mesmas convenções do outbound Meta) ------------------------
-  // `remetente` = telefone do CLIENTE nos dois sentidos (agrupa a conversa e é
-  // o que o vínculo por telefone do inbound usa); `direcao` diz quem falou.
-  // `whatsapp_message_id` recebe o messageId da Z-API (é o id do WhatsApp);
-  // sem ele, cai para zaapId/id — o índice único exige algo aqui.
-  // Colunas específicas da Meta (phone_number_id, display_phone_number) ficam
-  // nulas. `provider` e `zaapId` vão no `payload` jsonb, que já é o slot de
-  // metadata do provedor — sem migration.
-  const whatsappMessageId = ids.messageId ?? ids.zaapId ?? ids.id ?? ''
+/**
+ * Registro de um outbound JÁ ACEITO pela Z-API (mesmas convenções do outbound
+ * Meta). Falha ao gravar não vira erro — quem chamou reenviaria em dobro:
+ * devolve registrada=false e NÃO chama a Z-API de novo.
+ *
+ * `remetente` = telefone do CLIENTE nos dois sentidos (agrupa a conversa e é
+ * o que o vínculo por telefone do inbound usa); `direcao` diz quem falou.
+ * `whatsapp_message_id` recebe o messageId da Z-API (é o id do WhatsApp);
+ * sem ele, cai para zaapId/id — o índice único exige algo aqui.
+ * Colunas específicas da Meta (phone_number_id, display_phone_number) ficam
+ * nulas. `provider`, `zaapId` e metadados do envio vão no `payload` jsonb, que
+ * já é o slot de metadata do provedor — sem migration.
+ */
+async function registrarOutboundZapi(
+  admin: SupabaseClient,
+  e: {
+    lead: LeadZapi
+    telefone: string
+    organizacaoId: string
+    tipo: 'text' | 'document'
+    conteudo: string
+    ids: IdsZapi
+    payloadExtra?: Record<string, unknown>
+  },
+): Promise<{ registrada: boolean; mensagemId: string | null }> {
+  const whatsappMessageId = e.ids.messageId ?? e.ids.zaapId ?? e.ids.id ?? ''
   const { data: gravada, error: erroGravar } = await admin
     .from('whatsapp_mensagens')
     // upsert + ignoreDuplicates (padrão do inbound): um reenvio acidental do
@@ -322,16 +386,16 @@ export async function enviarTextoZapiParaLead(
       {
         whatsapp_message_id: whatsappMessageId,
         direcao: 'outbound',
-        lead_id: lead.id,
-        organizacao_id: entrada.organizacaoId, // da sessão, nunca do cliente
-        remetente: telefone,
-        remetente_nome: (lead.contato_nome as string | null) ?? null,
-        tipo: 'text',
-        conteudo: message,
+        lead_id: e.lead.id,
+        organizacao_id: e.organizacaoId, // da sessão, nunca do cliente
+        remetente: e.telefone,
+        remetente_nome: e.lead.contato_nome,
+        tipo: e.tipo,
+        conteudo: e.conteudo,
         mensagem_em: new Date().toISOString(),
         phone_number_id: null,
         display_phone_number: null,
-        payload: { origem: 'prospectos.outbound', provider: 'zapi', ...ids },
+        payload: { origem: 'prospectos.outbound', provider: 'zapi', ...e.payloadExtra, ...e.ids },
       },
       { onConflict: 'whatsapp_message_id', ignoreDuplicates: true },
     )
@@ -339,23 +403,75 @@ export async function enviarTextoZapiParaLead(
     .maybeSingle()
 
   if (erroGravar) {
-    // A mensagem JÁ FOI ACEITA pela Z-API. Não devolver erro: quem chamou
-    // reenviaria em dobro. Registra, devolve sucesso com registrada=false —
-    // e NÃO chama a Z-API de novo.
     console.error(JSON.stringify({
       ts: new Date().toISOString(), nivel: 'erro', escopo: 'whatsapp.zapi',
       msg: 'Mensagem aceita pela Z-API, mas falhou ao gravar em whatsapp_mensagens.',
-      whatsappMessageId, leadId: lead.id, erro: erroGravar.message,
+      whatsappMessageId, leadId: e.lead.id, erro: erroGravar.message,
     }))
-    return { ok: true, provider: 'zapi', telefone, registrada: false, mensagemId: null, ...ids }
+    return { registrada: false, mensagemId: null }
   }
+  return { registrada: true, mensagemId: (gravada?.id as string | undefined) ?? null }
+}
 
-  return {
-    ok: true,
-    provider: 'zapi',
-    telefone,
-    registrada: true,
-    mensagemId: (gravada?.id as string | undefined) ?? null,
-    ...ids,
-  }
+/**
+ * Envia um texto ao lead. Ordem: lead/telefone/status → send-text → registro.
+ * Só grava depois de a Z-API aceitar.
+ */
+export async function enviarTextoZapiParaLead(
+  admin: SupabaseClient,
+  entrada: { leadId: string; message: string; organizacaoId: string },
+  deps: DepsZapi = {},
+): Promise<ResultadoEnvioZapi> {
+  const message = entrada.message?.trim()
+  if (!message) return { ok: false, codigo: 'texto_vazio', mensagem: 'A mensagem está vazia.' }
+
+  const preparo = await prepararEnvioParaLead(admin, entrada.leadId, entrada.organizacaoId, deps)
+  if (!preparo.ok) return preparo
+
+  const envio = await sendText({ phone: preparo.telefone, message }, deps)
+  if (!envio.ok) return envio
+  const { ok: _ok, ...ids } = envio
+
+  const registro = await registrarOutboundZapi(admin, {
+    lead: preparo.lead, telefone: preparo.telefone, organizacaoId: entrada.organizacaoId,
+    tipo: 'text', conteudo: message, ids,
+  })
+  return { ok: true, provider: 'zapi', telefone: preparo.telefone, ...registro, ...ids }
+}
+
+export type CodigoErroEnvioDocumentoZapi = Exclude<CodigoErroEnvioZapi, 'texto_vazio'> | 'documento_vazio'
+
+export type ResultadoEnvioDocumentoZapi =
+  | ({ ok: true; provider: 'zapi'; telefone: string; registrada: boolean; mensagemId: string | null } & IdsZapi)
+  | { ok: false; codigo: CodigoErroEnvioDocumentoZapi; mensagem: string; status?: number }
+
+/**
+ * Envia um PDF ao lead (ex.: proposta comercial), com legenda opcional.
+ * Mesma ordem do texto: lead/telefone/status → send-document → registro.
+ * No histórico, `conteudo` leva o nome do arquivo e a legenda — é o que a aba
+ * Conversa mostra; o nome do arquivo também vai no `payload`.
+ */
+export async function enviarDocumentoZapiParaLead(
+  admin: SupabaseClient,
+  entrada: { leadId: string; organizacaoId: string; pdf: Uint8Array; fileName: string; caption?: string },
+  deps: DepsZapi = {},
+): Promise<ResultadoEnvioDocumentoZapi> {
+  if (!entrada.pdf?.length) return { ok: false, codigo: 'documento_vazio', mensagem: 'O documento está vazio.' }
+
+  const preparo = await prepararEnvioParaLead(admin, entrada.leadId, entrada.organizacaoId, deps)
+  if (!preparo.ok) return preparo
+
+  const caption = entrada.caption?.trim() ?? ''
+  const envio = await sendDocumentPdf({ phone: preparo.telefone, pdf: entrada.pdf, fileName: entrada.fileName, caption }, deps)
+  if (!envio.ok) return envio
+  const { ok: _ok, ...ids } = envio
+
+  const registro = await registrarOutboundZapi(admin, {
+    lead: preparo.lead, telefone: preparo.telefone, organizacaoId: entrada.organizacaoId,
+    tipo: 'document',
+    conteudo: caption ? `Documento: ${entrada.fileName}\n\n${caption}` : `Documento: ${entrada.fileName}`,
+    ids,
+    payloadExtra: { fileName: entrada.fileName },
+  })
+  return { ok: true, provider: 'zapi', telefone: preparo.telefone, ...registro, ...ids }
 }

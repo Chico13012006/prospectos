@@ -1,17 +1,18 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Minus, Plus, Info, Check, Loader2, Search, X, TrendingDown } from 'lucide-react';
+import { Minus, Plus, Info, TrendingDown } from 'lucide-react';
 import {
   PRODUTOS, PRAZO_COMODATO_MESES, calcularCompra, calcularComodato,
   percentualDesconto, valorComDesconto, totalItens, formatarBRL,
   type ModeloComercial, type ProdutoId, type ItemProposta,
 } from '@/lib/simulador';
-import { getLeads, registrarNota } from '@/lib/api';
-import { montarDadosProposta } from '@/lib/proposta/dados';
+import { PROPOSTA_LIMITE_ITENS } from '@/lib/proposta/config';
+import { excedeLimiteItens, montarDadosProposta } from '@/lib/proposta/dados';
+import type { LeadDaProposta } from '@/lib/propostas/tipos';
 import GerarProposta from '@/components/comercial/GerarProposta';
-import type { Lead } from '@/lib/supabase';
+import AcoesProposta from '@/components/comercial/propostas/AcoesProposta';
 
 // Aba "Simulador" do módulo Comercial. Sem H1/padding próprios — a página
 // /comercial provê o cabeçalho e as abas. Precisa de um <Suspense> acima
@@ -50,9 +51,9 @@ export default function SimuladorPanel() {
   const [valorFinalOv, setValorFinalOv] = useState<number | null>(null);
   const [mensalFinalOv, setMensalFinalOv] = useState<number | null>(null);
   const [entradaFinalOv, setEntradaFinalOv] = useState<number | null>(null);
-  // Lead de "Registrar no lead": vive aqui porque também nomeia o arquivo da
-  // proposta em PDF (proposta-{empresa}-{data}.pdf). Selecionar não registra.
-  const [leadSel, setLeadSel] = useState<Lead | null>(null);
+  // Lead da proposta: vive aqui porque também nomeia o arquivo do PDF
+  // (proposta-{empresa}-{data}.pdf). Selecionar não salva nada.
+  const [leadSel, setLeadSel] = useState<LeadDaProposta | null>(null);
 
   const itens: ItemProposta[] = useMemo(
     () => PRODUTOS.map((p) => ({ produto: p.id, qtd: qtds[p.id] })).filter((i) => i.qtd > 0),
@@ -80,15 +81,18 @@ export default function SimuladorPanel() {
   const entradaFinal = entradaFinalOv ?? comodato.entradaSugerida;
 
   const descontoCompra = percentualDesconto(refCompra, valorFinal);
-  const descontoMensal = percentualDesconto(refMensal, mensalFinal);
-  const descontoEntrada = percentualDesconto(refEntrada, entradaFinal);
 
   const totalContrato = entradaFinal + mensalFinal * PRAZO_COMODATO_MESES;
   const totalTabelaContrato = refEntrada + refMensal * PRAZO_COMODATO_MESES;
   const economiaCompra = Math.max(0, refCompra - valorFinal);
   const economiaContrato = Math.max(0, totalTabelaContrato - totalContrato);
 
-  const desconto = modelo === 'compra' ? descontoCompra : descontoMensal;
+  // O que se salva/envia é exatamente o que o card mostra. Tabela, desconto e
+  // total são recalculados no servidor a partir destas escolhas.
+  const escolhas = useMemo(
+    () => ({ modelo, itens, valorFinal, mensalFinal, entradaFinal }),
+    [modelo, itens, valorFinal, mensalFinal, entradaFinal],
+  );
 
   return (
     <div className="space-y-5">
@@ -221,14 +225,14 @@ export default function SimuladorPanel() {
             empresa={leadSel?.empresa}
           />}
 
-          {temItens && <RegistrarProposta
-            resumo={montarResumo(modelo, itens, {
-              valorFinal, mensalFinal, entradaFinal, totalContrato,
-              refCompra, refMensal, refEntrada,
-              descontoCompra, descontoMensal, descontoEntrada,
-            })}
+          {/* Salvar nas Propostas do lead ou enviar ao cliente com o PDF. */}
+          {temItens && <AcoesProposta
+            proposta={escolhas}
             leadSel={leadSel}
             onLeadSel={setLeadSel}
+            bloqueio={excedeLimiteItens(itens)
+              ? `A proposta comporta até ${PROPOSTA_LIMITE_ITENS} tipos de equipamento. Reduza a seleção para salvar ou enviar.`
+              : null}
           />}
         </div>
       </div>
@@ -318,112 +322,6 @@ function EditorDesconto({ label, sufixo = '', referencia, final, onChange }: {
           </button>
         )}
       </div>
-    </div>
-  );
-}
-
-// Monta o texto da proposta registrado no lead (item 6 + ponte pro item 8).
-function montarResumo(
-  modelo: ModeloComercial,
-  itens: ItemProposta[],
-  v: {
-    valorFinal: number; mensalFinal: number; entradaFinal: number; totalContrato: number;
-    refCompra: number; refMensal: number; refEntrada: number;
-    descontoCompra: number; descontoMensal: number; descontoEntrada: number;
-  },
-): string {
-  const nome = (id: ProdutoId) => PRODUTOS.find((p) => p.id === id)?.nome ?? id;
-  const lista = itens.map((i) => `${i.qtd}x ${nome(i.produto)}`).join(', ');
-  if (modelo === 'compra') {
-    return `Proposta comercial (Compra): ${lista}. Valor ${formatarBRL(v.valorFinal)} ` +
-      `(tabela ${formatarBRL(v.refCompra)}, desconto ${v.descontoCompra.toLocaleString('pt-BR')}%).`;
-  }
-  return `Proposta comercial (Comodato): ${lista}. Mensalidade ${formatarBRL(v.mensalFinal)}/mês ` +
-    `(tabela ${formatarBRL(v.refMensal)}/mês, desconto ${v.descontoMensal.toLocaleString('pt-BR')}%) + ` +
-    `entrada ${formatarBRL(v.entradaFinal)} (desconto ${v.descontoEntrada.toLocaleString('pt-BR')}%), ` +
-    `${PRAZO_COMODATO_MESES} meses. Total ${formatarBRL(v.totalContrato)}.`;
-}
-
-// Registro da proposta: liga a um lead e grava como interação (nota) na timeline
-// do LeadPanel. v1 não tem entidade "proposta" própria — reaproveita interacoes.
-// O lead selecionado é controlado pelo painel (também nomeia o PDF).
-function RegistrarProposta({ resumo, leadSel, onLeadSel }: {
-  resumo: string; leadSel: Lead | null; onLeadSel: (l: Lead | null) => void;
-}) {
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [busca, setBusca] = useState('');
-  const [aberto, setAberto] = useState(false);
-  const [salvando, setSalvando] = useState(false);
-  const [feito, setFeito] = useState(false);
-
-  useEffect(() => { getLeads().then(setLeads).catch(() => setLeads([])); }, []);
-
-  const filtrados = useMemo(() => {
-    const t = busca.trim().toLowerCase();
-    if (!t) return leads.slice(0, 8);
-    return leads.filter((l) =>
-      l.empresa?.toLowerCase().includes(t) || l.contato_nome?.toLowerCase().includes(t),
-    ).slice(0, 8);
-  }, [busca, leads]);
-
-  async function registrar() {
-    if (!leadSel) return;
-    setSalvando(true);
-    try {
-      await registrarNota(leadSel.id, resumo);
-      setFeito(true);
-      setTimeout(() => setFeito(false), 4000);
-    } catch (e) {
-      console.error('Erro ao registrar proposta:', e);
-    } finally {
-      setSalvando(false);
-    }
-  }
-
-  return (
-    <div className="border-t border-[#2a3147] pt-4 space-y-2">
-      <label className="text-sm text-slate-400">Registrar no lead (opcional)</label>
-      {leadSel ? (
-        <div className="flex items-center gap-2 border border-indigo-500/40 bg-indigo-500/5 rounded-lg px-3 py-2">
-          <span className="flex-1 text-sm text-slate-200 truncate">{leadSel.empresa}</span>
-          <button onClick={() => { onLeadSel(null); setFeito(false); }} className="text-slate-500 hover:text-slate-300">
-            <X size={14} />
-          </button>
-        </div>
-      ) : (
-        <div className="relative">
-          <div className="flex items-center gap-1.5 border border-[#2a3147] rounded-lg px-3 py-2 bg-[#0f1117]">
-            <Search size={14} className="text-slate-500" />
-            <input
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              onFocus={() => setAberto(true)}
-              placeholder="Buscar empresa ou contato..."
-              className="flex-1 bg-transparent text-sm text-slate-100 focus:outline-none"
-            />
-          </div>
-          {aberto && filtrados.length > 0 && (
-            <div className="absolute z-10 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-[#2a3147] bg-[#161b28] shadow-xl">
-              {filtrados.map((l) => (
-                <button key={l.id}
-                  onClick={() => { onLeadSel(l); setAberto(false); setBusca(''); }}
-                  className="w-full text-left px-3 py-2 hover:bg-[#0f1117] text-sm text-slate-200 border-b border-[#2a3147] last:border-0">
-                  <div className="truncate">{l.empresa}</div>
-                  <div className="text-xs text-slate-500 truncate">{l.contato_nome}</div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-      <button
-        onClick={registrar}
-        disabled={!leadSel || salvando}
-        className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 py-2 rounded-lg transition-colors"
-      >
-        {salvando ? <Loader2 size={14} className="animate-spin" /> : feito ? <Check size={14} /> : null}
-        {feito ? 'Proposta registrada!' : 'Registrar proposta'}
-      </button>
     </div>
   );
 }

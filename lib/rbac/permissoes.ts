@@ -21,8 +21,9 @@ export const PERMISSOES = [
   // Enviar mensagem a um lead pela Central de Respostas — WhatsApp e e-mail.
   // É o envio OPERACIONAL de uma conversa, não a operação de campanhas: o
   // comercial precisa responder o lead sem ganhar `campaigns.operate`
-  // (admin-only; hoje protege só o envio legado via Meta). Escopo: só as
-  // rotas da Central — /api/whatsapp/send, /api/whatsapp/status, /api/email/enviar.
+  // (admin-only; hoje protege só o envio legado via Meta). Escopo: as rotas
+  // da Central — /api/whatsapp/send, /api/whatsapp/status, /api/email/enviar —
+  // e o envio da proposta comercial ao cliente (/api/propostas/[id]/enviar).
   'conversations.send',
 ] as const
 

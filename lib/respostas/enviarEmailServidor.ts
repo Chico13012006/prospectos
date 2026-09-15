@@ -1,21 +1,21 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { criarMotorReal } from '@/lib/engine/scheduler'
-import { GmailProvider, lerCredenciaisGmail } from '@/lib/engine/email/gmailProvider'
 import { engineConfig } from '@/lib/engine/config'
 import { montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha'
+import { resolverContaEmailOrganizacao } from '@/lib/respostas/contaEmailOrganizacao'
 
 // Envio de e-mail pela Central de Respostas — resposta HUMANA a um lead.
 //
 // Não é um motor novo: é o MESMO caminho de `AmbienteSupabase.enviarEmailTemplate`
 // (lib/workflows/ambiente.ts), só que com assunto/corpo escritos pelo usuário
 // em vez de template + variáveis. Reusa, na mesma ordem:
-//   - criarMotorReal(org)         → Store (org-scoped) + GmailProvider padrão
-//   - lerCredenciaisGmail(key)    → conta Gmail dedicada da org (email_conta_key)
-//   - engineConfig.modoEnsaio     → trava global do motor de e-mail
-//   - montarEmailCampanhaHtml     → HTML com assinatura do responsável
-//   - store.registrarInteracao    → registro em `interacoes` (tipo='nota',
-//                                   canal='email'), a fonte que a Central já lê
+//   - criarMotorReal(org)             → Store (org-scoped) + GmailProvider padrão
+//   - resolverContaEmailOrganizacao   → conta Gmail dedicada da org (email_conta_key)
+//   - engineConfig.modoEnsaio         → trava global do motor de e-mail
+//   - montarEmailCampanhaHtml         → HTML com assinatura do responsável
+//   - store.registrarInteracao        → registro em `interacoes` (tipo='nota',
+//                                       canal='email'), a fonte que a Central já lê
 //
 // `organizacaoId` vem SEMPRE da sessão (rota), nunca do browser. O lead é lido
 // pelo Store, que filtra por organização — id de outra org não é encontrado.
@@ -87,24 +87,9 @@ export async function enviarEmailCentral(
 
   // Conta de e-mail e nome do serviço da organização — idêntico ao fluxo de
   // campanha (nomenclaturas.email_conta_key / nome_servico).
-  const { data: orgRow } = await db
-    .from('organizacoes')
-    .select('nome, configuracoes')
-    .eq('id', entrada.organizacaoId)
-    .maybeSingle()
-  const orgData = orgRow as { nome?: string; configuracoes?: Record<string, unknown> } | null
-  const nomenclaturas = orgData?.configuracoes?.['nomenclaturas'] as Record<string, string> | undefined
-  const nomeServico = nomenclaturas?.['nome_servico'] ?? orgData?.nome ?? ''
-  const emailContaKey = nomenclaturas?.['email_conta_key']
-  const emailCred = emailContaKey ? lerCredenciaisGmail(emailContaKey) : null
-  if (emailContaKey && !emailCred) {
-    return {
-      ok: false,
-      codigo: 'credencial_ausente',
-      mensagem: `Envio bloqueado: credencial Gmail dedicada '${emailContaKey}' não configurada.`,
-    }
-  }
-  const provider = emailCred ? new GmailProvider(emailCred) : motor.email
+  const conta = await resolverContaEmailOrganizacao(db, entrada.organizacaoId, motor.email)
+  if (!conta.ok) return { ok: false, codigo: conta.codigo, mensagem: conta.mensagem }
+  const { provider, nomeServico } = conta
 
   // Assinatura: responsável do lead (mesma regra do fluxo de campanha sem campanha).
   const responsavel = lead.responsavel_id ? await motor.store.buscarUsuario(lead.responsavel_id) : null

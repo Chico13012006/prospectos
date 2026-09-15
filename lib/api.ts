@@ -1,4 +1,12 @@
 import type { Lead, Interacao, Usuario, Template, MensagemWhatsapp } from './supabase'
+import {
+  COLUNAS_LEAD_PROPOSTA,
+  COLUNAS_PROPOSTA,
+  type CanalEnvioProposta,
+  type EntradaProposta,
+  type LeadDaProposta,
+  type PropostaRegistro,
+} from './propostas/tipos'
 import { apenasTemplatesAutorais } from './campanhas/workflowsInternos'
 import { normalizarNicho } from './nichos/normalizar'
 import { createSupabaseBrowserClient } from './supabase-browser'
@@ -525,6 +533,89 @@ export async function registrarNota(leadId: string, descricao: string, tipo: str
       origem_acao: 'humano',
     })
   if (error) throw error
+}
+
+// --- PROPOSTAS -------------------------------------------------------------
+// Propostas comerciais salvas (migration 0045). Leitura direta sob RLS: admin
+// vê a organização, comercial só os leads da própria carteira. Salvar e enviar
+// passam pelas rotas /api/propostas — o servidor recalcula valores, confere a
+// carteira e aplica todas as travas de envio.
+
+// Lista paginada (mais recentes primeiro, desempate por id). `busca` filtra
+// pelo nome da empresa do lead. Pede um item a mais para saber se há próxima página.
+export async function listarPropostas(opts: {
+  leadId?: string
+  busca?: string
+  offset?: number
+  limite?: number
+} = {}): Promise<{ propostas: PropostaRegistro[]; temMais: boolean }> {
+  const limite = opts.limite ?? 20
+  const offset = opts.offset ?? 0
+  let query = supabase
+    .from('propostas_comerciais')
+    .select(`${COLUNAS_PROPOSTA}, leads!inner(${COLUNAS_LEAD_PROPOSTA})`)
+  if (opts.leadId) query = query.eq('lead_id', opts.leadId)
+  const termo = opts.busca?.trim()
+  if (termo) query = query.ilike('leads.empresa', `%${termo.replace(/[\\%_]/g, (c) => `\\${c}`)}%`)
+  const { data, error } = await query
+    .order('criado_em', { ascending: false })
+    .order('id', { ascending: false })
+    .range(offset, offset + limite)
+  if (error) throw error
+  const linhas = (data ?? []) as unknown as PropostaRegistro[]
+  return { propostas: linhas.slice(0, limite), temMais: linhas.length > limite }
+}
+
+export async function criarProposta(entrada: EntradaProposta): Promise<PropostaRegistro> {
+  const res = await fetch('/api/propostas', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(entrada),
+  })
+  const corpo = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(corpo.erro ?? `Não foi possível salvar a proposta (erro ${res.status}).`)
+  return corpo.proposta as PropostaRegistro
+}
+
+export type RespostaEnvioProposta =
+  | { ok: true; simulado: true; motivo: 'modo_ensaio'; canal: 'email'; destino: string }
+  | {
+    ok: true
+    simulado: false
+    canal: CanalEnvioProposta
+    destino: string
+    // false = o cliente recebeu, mas o registro local falhou. NÃO reenviar.
+    registrada: boolean
+    proposta: Omit<PropostaRegistro, 'leads'> | null
+  }
+
+export async function enviarPropostaAoCliente(
+  propostaId: string,
+  envio: { canal: CanalEnvioProposta; mensagem: string; assunto?: string },
+): Promise<RespostaEnvioProposta> {
+  const res = await fetch(`/api/propostas/${encodeURIComponent(propostaId)}/enviar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(envio),
+  })
+  const corpo = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(corpo.erro ?? `Não foi possível enviar a proposta (erro ${res.status}).`)
+  return corpo as RespostaEnvioProposta
+}
+
+// Busca de lead para vincular a proposta: até 8 resultados, no servidor (não
+// carrega a base inteira). Sem termo, os mais recentes. Caracteres que quebram
+// a sintaxe do filtro `or` do PostgREST são removidos do termo.
+export async function buscarLeadsParaProposta(termo: string): Promise<LeadDaProposta[]> {
+  const t = termo.replace(/[,()"'\\%*_]/g, ' ').trim()
+  let query = supabase.from('leads').select(COLUNAS_LEAD_PROPOSTA)
+  if (t) query = query.or(`empresa.ilike."%${t}%",contato_nome.ilike."%${t}%"`)
+  const { data, error } = await query
+    .order(t ? 'empresa' : 'created_at', { ascending: !!t })
+    .order('id', { ascending: true })
+    .limit(8)
+  if (error) throw error
+  return (data ?? []) as unknown as LeadDaProposta[]
 }
 
 // --- CENTRAL DE RESPOSTAS -------------------------------------------------
