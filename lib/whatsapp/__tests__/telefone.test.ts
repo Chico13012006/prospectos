@@ -76,3 +76,22 @@ describe('telefonesEquivalentes', () => {
     expect(telefonesEquivalentes('', '')).toBe(false)
   })
 })
+
+describe('telefonesEquivalentes — quirk do 9º dígito do celular BR', () => {
+  it('CASO REAL Z-API: base com 9 (47997170121) casa com remetente sem 9 (4797170121)', () => {
+    expect(telefonesEquivalentes('47997170121', '4797170121')).toBe(true)
+  })
+  it('é simétrico', () => {
+    expect(telefonesEquivalentes('4797170121', '47997170121')).toBe(true)
+  })
+  it('funciona com DDI dos dois lados, ou só de um', () => {
+    expect(telefonesEquivalentes('5547997170121', '554797170121')).toBe(true)
+    expect(telefonesEquivalentes('554797170121', '5547997170121')).toBe(true)
+    expect(telefonesEquivalentes('5547997170121', '4797170121')).toBe(true)
+    expect(telefonesEquivalentes('47997170121', '554797170121')).toBe(true)
+  })
+  it('não relaxa a comparação a ponto de casar números diferentes', () => {
+    expect(telefonesEquivalentes('47997170121', '4797170122')).toBe(false)
+    expect(telefonesEquivalentes('47997170121', '4897170121')).toBe(false)
+  })
+})

@@ -44,13 +44,43 @@ export function variantesTelefoneBr(digitos: string): string[] {
   return []
 }
 
+// Quirk do "9º dígito" do celular BR: a mesma linha pode aparecer com 11
+// dígitos locais (DDD + 9 + assinante de 8) ou com 10 (DDD + assinante de 8,
+// formato antigo) dependendo da origem do dado — foi o que aconteceu com um
+// ReceivedCallback real da Z-API, que entregou o remetente SEM o 9 enquanto
+// `leads.contato_telefone` guardava COM o 9, deixando a mensagem sem vínculo.
+// Gera a forma alternativa (insere/remove o 9 logo após o DDD); null quando o
+// comprimento não permite a transformação.
+function comNoveAlternativo(local: string): string | null {
+  if (local.length === 11 && local[2] === '9') return local.slice(0, 2) + local.slice(3)
+  if (local.length === 10) return local.slice(0, 2) + '9' + local.slice(2)
+  return null
+}
+
+// Expande uma lista de variantes (já com/sem DDI) somando a forma alternativa
+// do 9º dígito de cada uma, com e sem DDI.
+function comVariantesDoNove(variantes: string[]): Set<string> {
+  const out = new Set(variantes)
+  for (const v of variantes) {
+    const local = v.startsWith(DDI_BR) && ehLocalBr(v.slice(2)) ? v.slice(2) : ehLocalBr(v) ? v : null
+    if (!local) continue
+    const alt = comNoveAlternativo(local)
+    if (alt) {
+      out.add(alt)
+      out.add(DDI_BR + alt)
+    }
+  }
+  return out
+}
+
 /**
  * `true` se os dois números representam o MESMO telefone brasileiro, ignorando
- * a presença/ausência do DDI 55 e qualquer máscara. Simétrica.
+ * a presença/ausência do DDI 55, do 9º dígito do celular e qualquer máscara.
+ * Simétrica.
  *
- * A comparação é por interseção exata dos conjuntos de variantes — não há
- * comparação por sufixo nem "contém", justamente para não casar números
- * diferentes que compartilham um final.
+ * A comparação é por interseção dos conjuntos de variantes (DDI + 9º dígito)
+ * — não há comparação por sufixo nem "contém", justamente para não casar
+ * números diferentes que compartilham um final.
  */
 export function telefonesEquivalentes(
   a: string | null | undefined,
@@ -58,6 +88,10 @@ export function telefonesEquivalentes(
 ): boolean {
   const va = variantesTelefoneBr(normalizarTelefone(a))
   if (va.length === 0) return false
-  const vb = new Set(variantesTelefoneBr(normalizarTelefone(b)))
-  return va.some((v) => vb.has(v))
+  const vb = variantesTelefoneBr(normalizarTelefone(b))
+  if (vb.length === 0) return false
+  const setA = comVariantesDoNove(va)
+  const setB = comVariantesDoNove(vb)
+  for (const v of setA) if (setB.has(v)) return true
+  return false
 }
