@@ -161,6 +161,7 @@ export default function CampanhasPanel() {
               <tr className="border-b border-[#2a3147] text-[11px] uppercase tracking-wide text-slate-500">
                 <th className="text-left font-medium px-5 py-2.5">Campanha</th>
                 <th className="text-left font-medium px-2 py-2.5">Público</th>
+                <th className="text-right font-medium px-2 py-2.5" title="Mensagens que saíram de fato (cada passo da cadência conta; ensaio não conta)">Enviadas</th>
                 <th className="text-right font-medium px-2 py-2.5">Respostas</th>
                 <th className="text-right font-medium px-2 py-2.5">Oport.</th>
                 <th className="text-right font-medium px-2 py-2.5">Receita</th>
@@ -171,9 +172,9 @@ export default function CampanhasPanel() {
             </thead>
             <tbody>
               {carregando ? (
-                <tr><td colSpan={8} className="px-5 py-10 text-center text-slate-500 text-sm">Carregando…</td></tr>
+                <tr><td colSpan={9} className="px-5 py-10 text-center text-slate-500 text-sm">Carregando…</td></tr>
               ) : filtrados.length === 0 ? (
-                <tr><td colSpan={8} className="px-5 py-10 text-center text-slate-500 text-sm">
+                <tr><td colSpan={9} className="px-5 py-10 text-center text-slate-500 text-sm">
                   Nenhuma campanha {filtro && `(${STATUS_LABEL[filtro] ?? filtro})`}. Crie a primeira em <b className="text-slate-300">Nova campanha</b>.
                 </td></tr>
               ) : filtrados.map((c) => {
@@ -196,11 +197,21 @@ export default function CampanhasPanel() {
                     </div>
                     <div className={`text-xs ${falha ? 'text-red-300/80' : 'text-slate-500'}`}>
                       {resumo?.total
-                        ? `${resumo.emailsEnviados}/${resumo.total} enviados · ${resumo.canceladas} cancelados · ${resumo.erros} erros`
+                        ? `${resumo.total.toLocaleString('pt-BR')} contatos${pendentes ? ` · ${pendentes} pendentes` : ''} · ${resumo.canceladas} cancelados · ${resumo.erros} erros`
                         : c.tipo ?? 'campanha'}
                     </div>
                   </td>
                   <td className="px-2 py-3 text-xs text-slate-400 max-w-[160px] truncate">{resumoPublico(c.publico)}</td>
+                  <td className="px-2 py-3 text-right">
+                    {resumo ? (
+                      <>
+                        <div className="text-base font-bold text-slate-100 tabular-nums">{resumo.emailsEnviados.toLocaleString('pt-BR')}</div>
+                        {resumo.emailsEnviados === 0 && resumo.total > 0 && c.dry_run !== false && (
+                          <div className="text-[10px] text-amber-400/80" title="Campanha em ensaio: nenhuma mensagem real sai até ativar o envio real">em ensaio</div>
+                        )}
+                      </>
+                    ) : NC}
+                  </td>
                   <td className="px-2 py-3 text-right text-sm font-semibold text-slate-200">{resumo ? resumo.respostas : NC}</td>
                   <td className="px-2 py-3 text-right">{NC}</td>
                   <td className="px-2 py-3 text-right">{NC}</td>

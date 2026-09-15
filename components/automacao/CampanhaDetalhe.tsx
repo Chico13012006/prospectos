@@ -286,7 +286,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
           <div>
             <div className="font-semibold">Campanha com falha operacional — não está concluída</div>
             <div className="mt-1 text-xs text-red-300/90">
-              {resumoExecucoes.canceladas} execução(ões) cancelada(s) e {resumoExecucoes.erros} com erro. Foram enviados {resumoExecucoes.emailsEnviados} de {resumoExecucoes.total} e-mail(s). Revise as execuções antes de concluir manualmente.
+              {resumoExecucoes.canceladas} execução(ões) cancelada(s) e {resumoExecucoes.erros} com erro. Foram enviadas {resumoExecucoes.emailsEnviados} mensagem(ns) para {resumoExecucoes.total} contato(s) inscrito(s). Revise as execuções antes de concluir manualmente.
             </div>
           </div>
         </div>
@@ -495,7 +495,8 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
               <h3 className="font-semibold text-slate-200 text-sm mb-3">Ciclo</h3>
               <div className="space-y-2 text-sm">
                 <Linha k="Status" v={STATUS_LABEL[c.status] ?? c.status} />
-                {resumoExecucoes && <Linha k="E-mails enviados" v={`${resumoExecucoes.emailsEnviados} de ${resumoExecucoes.total}`} />}
+                {resumoExecucoes && <Linha k="Mensagens enviadas" v={resumoExecucoes.emailsEnviados.toLocaleString('pt-BR')} />}
+                {resumoExecucoes && <Linha k="Contatos inscritos" v={resumoExecucoes.total.toLocaleString('pt-BR')} />}
                 {resumoExecucoes && <Linha k="Respostas" v={String(resumoExecucoes.respostas)} />}
                 {resumoExecucoes && <Linha k="Canceladas / erros" v={`${resumoExecucoes.canceladas} / ${resumoExecucoes.erros}`} />}
                 <Linha k="Público" v={resumoPublico(c.publico)} />

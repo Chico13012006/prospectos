@@ -8,6 +8,9 @@ export interface ResumoExecucoesCampanha {
   concluidas: number
   canceladas: number
   erros: number
+  // Mensagens que SAÍRAM (evento `email_enviado` com `enviado: true`). Conta
+  // cada passo de envio — numa cadência com follow-up passa de `total`. Ensaio
+  // grava `enviado: false` e não entra aqui.
   emailsEnviados: number
   respostas: number
 }
@@ -17,6 +20,31 @@ const vazio = (): ResumoExecucoesCampanha => ({
   canceladas: 0, erros: 0, emailsEnviados: 0, respostas: 0,
 })
 
+// O PostgREST devolve no máximo 1000 linhas por consulta: sem paginar, campanha
+// grande teria envios e respostas cortados em silêncio. IDs vão em lotes para o
+// `in(...)` não estourar o tamanho da URL.
+const PAGINA = 1000
+const LOTE_IDS = 150
+
+type Pagina<T> = PromiseLike<{ data: T[] | null; error: unknown }>
+
+async function lerTodas<T>(consulta: (de: number, ate: number) => Pagina<T>): Promise<T[]> {
+  const linhas: T[] = []
+  for (let de = 0; ; de += PAGINA) {
+    const { data, error } = await consulta(de, de + PAGINA - 1)
+    if (error) throw error
+    linhas.push(...(data ?? []))
+    if (!data || data.length < PAGINA) return linhas
+  }
+}
+
+async function lerEmLotes<T>(ids: string[], consulta: (lote: string[], de: number, ate: number) => Pagina<T>): Promise<T[]> {
+  const lotes: string[][] = []
+  for (let i = 0; i < ids.length; i += LOTE_IDS) lotes.push(ids.slice(i, i + LOTE_IDS))
+  const resultados = await Promise.all(lotes.map((lote) => lerTodas<T>((de, ate) => consulta(lote, de, ate))))
+  return resultados.flat()
+}
+
 export async function buscarResumosExecucoesCampanhas(
   admin: SupabaseClient,
   organizacaoId: string,
@@ -25,16 +53,16 @@ export async function buscarResumosExecucoesCampanhas(
   const idsCampanha = [...new Set(campanhaIds.filter(Boolean))]
   if (!idsCampanha.length) return {}
 
-  const { data, error } = await admin
+  const execucoes = await lerTodas<{
+    id: string; campanha_id: string; lead_id: string | null; status: string; iniciado_em: string
+  }>((de, ate) => admin
     .from('workflow_execucoes')
     .select('id, campanha_id, lead_id, status, iniciado_em')
     .eq('organizacao_id', organizacaoId)
     .in('campanha_id', idsCampanha)
-  if (error) throw error
+    .order('id')
+    .range(de, ate))
 
-  const execucoes = (data ?? []) as Array<{
-    id: string; campanha_id: string; lead_id: string | null; status: string; iniciado_em: string
-  }>
   const resumos = Object.fromEntries(idsCampanha.map((id) => [id, vazio()]))
   const execucaoParaCampanha = new Map<string, string>()
   const inicios = new Map<string, string>()
@@ -60,42 +88,46 @@ export async function buscarResumosExecucoesCampanhas(
 
   const idsExecucao = execucoes.map((execucao) => execucao.id)
   if (idsExecucao.length) {
-    const { data: eventos, error: eventosErro } = await admin
-      .from('workflow_execucao_eventos')
-      .select('execucao_id, detalhe')
-      .eq('organizacao_id', organizacaoId)
-      .in('execucao_id', idsExecucao)
-      .eq('tipo', 'email_enviado')
-    if (eventosErro) throw eventosErro
-    for (const evento of eventos ?? []) {
-      const row = evento as { execucao_id: string; detalhe?: Record<string, unknown> | null }
-      const campanhaId = execucaoParaCampanha.get(row.execucao_id)
-      if (campanhaId && row.detalhe?.enviado === true) resumos[campanhaId].emailsEnviados += 1
+    const eventos = await lerEmLotes<{ execucao_id: string; detalhe?: Record<string, unknown> | null }>(
+      idsExecucao,
+      (lote, de, ate) => admin
+        .from('workflow_execucao_eventos')
+        .select('execucao_id, detalhe')
+        .eq('organizacao_id', organizacaoId)
+        .in('execucao_id', lote)
+        .eq('tipo', 'email_enviado')
+        .order('id')
+        .range(de, ate),
+    )
+    for (const evento of eventos) {
+      const campanhaId = execucaoParaCampanha.get(evento.execucao_id)
+      if (campanhaId && evento.detalhe?.enviado === true) resumos[campanhaId].emailsEnviados += 1
     }
   }
 
   const todosLeadIds = [...new Set([...leadsPorCampanha.values()].flatMap((leads) => [...leads]))]
   const inicioGlobal = [...inicios.values()].sort()[0]
   if (todosLeadIds.length && inicioGlobal) {
-    const { data: interacoes, error: respostasErro } = await admin
-      .from('interacoes')
-      .select('lead_id, created_at')
-      .eq('organizacao_id', organizacaoId)
-      .in('lead_id', todosLeadIds)
-      .eq('tipo', 'resposta')
-      .gte('created_at', inicioGlobal)
-    if (respostasErro) throw respostasErro
+    const interacoes = await lerEmLotes<{ lead_id: string; created_at: string }>(
+      todosLeadIds,
+      (lote, de, ate) => admin
+        .from('interacoes')
+        .select('lead_id, created_at')
+        .eq('organizacao_id', organizacaoId)
+        .in('lead_id', lote)
+        .eq('tipo', 'resposta')
+        .gte('created_at', inicioGlobal)
+        .order('id')
+        .range(de, ate),
+    )
     for (const campanhaId of idsCampanha) {
       const leads = leadsPorCampanha.get(campanhaId)
       const inicio = inicios.get(campanhaId)
       if (!leads || !inicio) continue
       resumos[campanhaId].respostas = new Set(
-        (interacoes ?? [])
-          .filter((item) => {
-            const row = item as { lead_id: string; created_at: string }
-            return leads.has(row.lead_id) && row.created_at >= inicio
-          })
-          .map((item) => (item as { lead_id: string }).lead_id),
+        interacoes
+          .filter((row) => leads.has(row.lead_id) && row.created_at >= inicio)
+          .map((row) => row.lead_id),
       ).size
     }
   }
