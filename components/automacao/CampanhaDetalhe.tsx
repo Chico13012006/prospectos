@@ -429,6 +429,12 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
               <CalendarDays size={14} /> Editar agenda
             </button>
           )}
+          {(c.status === 'ativa' || c.status === 'pausada') && (
+            <Link href={`/automacao/campanhas/${c.id}/mensagens`}
+              className="inline-flex items-center gap-1 rounded-lg border border-indigo-500/40 px-3 py-2 text-sm font-semibold text-indigo-200 hover:bg-indigo-500/10">
+              <PencilLine size={14} /> Editar mensagens
+            </Link>
+          )}
           {(ACOES[c.status] ?? []).map(({ para, label, Icon }) => (
             <button key={para} onClick={() => transicionar(para)} disabled={agindo || (para === 'concluida' && temFalhaOperacional)}
               title={para === 'concluida' && temFalhaOperacional ? 'Resolva as execuções canceladas ou com erro antes de concluir.' : undefined}
@@ -582,7 +588,10 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
           )}
           <div className="flex items-center justify-between gap-3 mt-3">
             <p className="text-xs text-slate-600">
-              A cadência é congelada quando a campanha é ativada: quem já entrou segue esta sequência mesmo que você a edite depois.
+              A sequência — quantidade de mensagens e dias — fica congelada quando a campanha é ativada.
+              {(c.status === 'ativa' || c.status === 'pausada') && (
+                <> O conteúdo pode ser ajustado em <Link href={`/automacao/campanhas/${c.id}/mensagens`} className="text-indigo-300 hover:text-indigo-200">Editar mensagens</Link> e vale para os próximos envios.</>
+              )}
             </p>
             {c.workflow_id && (
               <Link href={`/workflows/${c.workflow_id}`} className="shrink-0 text-[11px] text-slate-600 hover:text-slate-400">
