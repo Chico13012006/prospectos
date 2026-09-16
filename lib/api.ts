@@ -1,4 +1,4 @@
-import type { Lead, Interacao, Usuario, Template, MensagemWhatsapp } from './supabase'
+import type { Lead, Interacao, Usuario, MensagemWhatsapp } from './supabase'
 import {
   COLUNAS_LEAD_PROPOSTA,
   COLUNAS_PROPOSTA,
@@ -7,7 +7,8 @@ import {
   type LeadDaProposta,
   type PropostaRegistro,
 } from './propostas/tipos'
-import { apenasTemplatesAutorais } from './campanhas/workflowsInternos'
+import { ErroTemplateApi, queryFiltros } from './templates/biblioteca'
+import type { FiltrosTemplates, TemplateBiblioteca } from './templates/tipos'
 import { normalizarNicho } from './nichos/normalizar'
 import { createSupabaseBrowserClient } from './supabase-browser'
 import { ESTAGIOS_RESERVATORIO, estagiosDoStatus } from './pipeline-stages'
@@ -942,22 +943,54 @@ export async function getUsuarios(): Promise<Usuario[]> {
 
 // --- TEMPLATES ---
 
-// Cria um template / variante (A/B, item 6). A organizacao_id é resolvida no
-// servidor (auth), nunca enviada pelo cliente.
-export async function criarTemplate(dados: {
-  nome: string; tipo: string; canal: string; nicho: string | null; assunto: string | null; corpo: string
-}): Promise<Template> {
-  const res = await fetch('/api/templates', {
+// --- BIBLIOTECA DE TEMPLATES (via API; a organização vem da sessão) ---
+// A biblioteca NÃO lê `templates` direto do browser: a API filtra a organização,
+// aplica templates.view/templates.manage e esconde as cópias de campanha.
+
+async function respostaTemplate(res: Response): Promise<TemplateBiblioteca> {
+  const corpo = await res.json().catch(() => ({}))
+  if (!res.ok) throw new ErroTemplateApi(corpo.erro ?? `Erro ${res.status}`, res.status, corpo.usos ?? [])
+  return corpo.template as TemplateBiblioteca
+}
+
+export async function listarTemplatesBiblioteca(filtros: FiltrosTemplates = {}): Promise<TemplateBiblioteca[]> {
+  const res = await fetch(`/api/templates${queryFiltros(filtros)}`)
+  const corpo = await res.json().catch(() => ({}))
+  if (!res.ok) throw new ErroTemplateApi(corpo.erro ?? `Erro ${res.status}`, res.status)
+  return (corpo.templates ?? []) as TemplateBiblioteca[]
+}
+
+export async function buscarTemplateBiblioteca(id: string): Promise<TemplateBiblioteca> {
+  return respostaTemplate(await fetch(`/api/templates/${id}`))
+}
+
+export async function criarTemplateBiblioteca(dados: Record<string, unknown>): Promise<TemplateBiblioteca> {
+  return respostaTemplate(await fetch('/api/templates', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(dados),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.erro ?? `Erro ${res.status}`)
-  }
-  const { template } = await res.json()
-  return template as Template
+  }))
+}
+
+export async function atualizarTemplateBiblioteca(id: string, dados: Record<string, unknown>): Promise<TemplateBiblioteca> {
+  return respostaTemplate(await fetch(`/api/templates/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dados),
+  }))
+}
+
+// Desativar usa o DELETE (que nunca apaga); reativar é um PATCH.
+export async function definirAtivoTemplateBiblioteca(id: string, ativo: boolean): Promise<TemplateBiblioteca> {
+  if (!ativo) return respostaTemplate(await fetch(`/api/templates/${id}`, { method: 'DELETE' }))
+  return atualizarTemplateBiblioteca(id, { ativo: true })
+}
+
+export async function minhasPermissoes(): Promise<string[]> {
+  const res = await fetch('/api/rbac/permissoes')
+  if (!res.ok) return []
+  const corpo = await res.json().catch(() => ({}))
+  return Array.isArray(corpo.minhas) ? corpo.minhas as string[] : []
 }
 
 export interface SegmentoConhecido {
@@ -997,18 +1030,6 @@ export async function getSegmentosConhecidos(): Promise<SegmentoConhecido[]> {
   return [...new Set([...comTemplate, ...usados])]
     .sort((x, y) => x.localeCompare(y, 'pt-BR'))
     .map((nicho) => ({ nicho, temTemplate: comTemplate.has(nicho) }))
-}
-
-export async function getTemplates(): Promise<Template[]> {
-  const { data, error } = await supabase
-    .from('templates')
-    .select('*')
-    .eq('ativo', true)
-    .order('nome')
-  if (error) throw error
-  // A biblioteca mostra só o que o usuário escreveu; os templates gerados ao
-  // ativar uma campanha ("campanha_<id>_m1") vivem dentro da campanha.
-  return apenasTemplatesAutorais(data || [])
 }
 
 // --- ANALYTICS / DASHBOARD ---

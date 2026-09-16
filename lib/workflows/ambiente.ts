@@ -109,12 +109,13 @@ export class AmbienteSupabase implements AmbienteWorkflow {
   private db: SupabaseClient
   constructor(
     public readonly organizacaoId: string,
-    opts: { simular?: boolean; client?: SupabaseClient } = {},
+    opts: { simular?: boolean; client?: SupabaseClient; motor?: Motor } = {},
   ) {
     this.simular = opts.simular ?? false
     this.db = opts.client ?? createSupabaseAdminClient()
     // Motor real da org: Store (interações/leads/templates) + EmailProvider.
-    this.motor = criarMotorReal(organizacaoId)
+    // `motor` injetável serve ao teste do caminho de envio (sem rede).
+    this.motor = opts.motor ?? criarMotorReal(organizacaoId)
   }
   readonly simular: boolean
 
@@ -235,6 +236,11 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     const variantes = varsNicho.length ? varsNicho : await this.motor.store.buscarTemplateEmail(null, templateTipo)
     if (variantes.length === 0) throw new Error(`Template ausente (tipo=${templateTipo}, nicho=${nicho ?? 'generico'}).`)
     const tpl = variantes[indiceVariante(lead.id, variantes.length)]
+    // O store já filtra pela organização; conferir aqui é a rede de segurança
+    // do caminho service_role — template de outro tenant nunca é enviado.
+    if (tpl.organizacao_id && tpl.organizacao_id !== this.organizacaoId) {
+      throw new Error(`Envio bloqueado: template ${tpl.id} não pertence a esta organização.`)
+    }
     // Variáveis e credenciais de nível-org: lidas de uma única consulta.
     //   {nome_servico}  → nomenclaturas.nome_servico || organizacoes.nome
     //   email_conta_key → seleciona GMAIL_USER_<KEY> / GMAIL_APP_PASSWORD_<KEY>
@@ -276,6 +282,12 @@ export class AmbienteSupabase implements AmbienteWorkflow {
         .eq('organizacao_id', this.organizacaoId)
         .maybeSingle()
       if (campanhaError) throw campanhaError
+      // Fail-closed: a campanha informada pela execução precisa existir NESTA
+      // organização. Sem isto, um vínculo cross-tenant pulava o gate de dry_run
+      // e o e-mail saía como se a campanha não existisse.
+      if (!camp) {
+        throw new Error(`Envio bloqueado: campanha ${campanhaId} não pertence a esta organização.`)
+      }
       campanhaPublico = (camp as { publico?: Record<string, unknown> | null } | null)?.publico ?? null
       if ((camp as { dry_run?: boolean } | null)?.dry_run === true)
         return { enviado: false, assunto }
@@ -304,9 +316,12 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       : []
     const mensagemConfigurada = [inicial, ...followups]
       .find((mensagem) => mensagem?.templateTipo === templateTipo)
-    const htmlPersonalizado = typeof mensagemConfigurada?.html === 'string'
-      ? preencher(mensagemConfigurada.html, lead, extras)
-      : undefined
+    // HTML: o da mensagem da campanha quando existe; senão o do próprio template
+    // da biblioteca (workflow sem campanha). Mesmo renderer do texto — variáveis
+    // e sanitização idênticas —, sem segunda engine de HTML.
+    const htmlDaCampanha = typeof mensagemConfigurada?.html === 'string' ? mensagemConfigurada.html : undefined
+    const htmlBase = htmlDaCampanha ?? (typeof tpl.html === 'string' && tpl.html.trim() ? tpl.html : undefined)
+    const htmlPersonalizado = htmlBase ? preencher(htmlBase, lead, extras) : undefined
     const html = montarEmailCampanhaHtml(corpo, { responsavelNome, nomeServico }, htmlPersonalizado)
 
     // TRAVA DE REENVIO. O executor é at-least-once: se cair entre o efeito e a

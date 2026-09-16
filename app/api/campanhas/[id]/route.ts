@@ -15,6 +15,7 @@ import { buscarPreviaPublicoCampanha, previaParaCliente } from '@/lib/campanhas/
 import { engineConfig } from '@/lib/engine/config'
 import { buscarResumoExecucoesCampanha } from '@/lib/campanhas/resumoExecucoesServidor'
 import { apagarCampanha, ErroExclusaoCampanha } from '@/lib/campanhas/exclusaoServidor'
+import { ErroTemplateCampanha } from '@/lib/campanhas/templatesCampanha'
 
 export const runtime = 'nodejs'
 
@@ -129,6 +130,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     await atualizarCampanha(admin, org, id, b)
     return NextResponse.json({ ok: true, workflow_id: atual.workflow_id })
   } catch (e) {
+    // Template de outra organização responde como inexistente, sem gravar nada.
+    if (e instanceof ErroTemplateCampanha) return NextResponse.json({ erro: e.message }, { status: e.status })
     return NextResponse.json({ erro: e instanceof Error ? e.message : 'Erro' }, { status: 400 })
   }
 }

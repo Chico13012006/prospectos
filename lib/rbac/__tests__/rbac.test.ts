@@ -44,6 +44,21 @@ describe('permissoes — efetivas e padrão por role', () => {
     expect(temPermissao('usuario', [...grantsAntigos, 'conversations.send'], 'conversations.send')).toBe(true)
   })
 
+  it('templates: view para os dois roles; manage só para quem administra', () => {
+    expect(isPermissao('templates.view')).toBe(true)
+    expect(isPermissao('templates.manage')).toBe(true)
+    expect(temPermissao('usuario', [], 'templates.view')).toBe(true)
+    expect(temPermissao('usuario', [], 'templates.manage')).toBe(false)
+    expect(temPermissao('admin', [], 'templates.view')).toBe(true)
+    expect(temPermissao('admin', [], 'templates.manage')).toBe(true)
+  })
+
+  it('perfil já backfillado SEM as linhas da 0046 não recebe templates.* só pelo código', () => {
+    const grantsAntigos = ['campaigns.view', 'campaigns.manage', 'workflows.view', 'analytics.view', 'conversations.send']
+    expect(temPermissao('usuario', grantsAntigos, 'templates.view')).toBe(false)
+    expect(temPermissao('admin', [...grantsAntigos, 'templates.view'], 'templates.manage')).toBe(false)
+  })
+
   it('usuario não configura o workspace nem gerencia workflows', () => {
     expect(temPermissao('usuario', [], 'workspace.configure')).toBe(false)
     expect(temPermissao('usuario', [], 'workflows.manage')).toBe(false)

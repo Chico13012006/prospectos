@@ -377,7 +377,7 @@ export class SupabaseStore implements Store {
     // por índice (mensagem.ts escolhe uma por lead) ser estável.
     let q = this.db
       .from('templates')
-      .select('id, assunto, corpo')
+      .select('id, assunto, corpo, html, organizacao_id')
       .eq('organizacao_id', this.organizacaoId)
       .eq('canal', 'email')
       .eq('tipo', tipo)

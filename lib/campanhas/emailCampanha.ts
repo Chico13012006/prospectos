@@ -31,6 +31,25 @@ function urlSeguraHtmlEmail(atributo: string, valor: string): boolean {
     || /^data:image\/(?:png|gif|jpe?g|webp);base64,/i.test(normalizada)
 }
 
+const ENTIDADES_NOMEADAS: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }
+
+// O valor de um atributo vem do HTML e pode já estar escapado (`&amp;`).
+// Decodificar antes de conferir e reescapar é o que torna a sanitização
+// IDEMPOTENTE: sem isso, sanitizar um HTML já sanitizado transformava
+// `?a=1&amp;b=2` em `?a=1&amp;amp;b=2` e quebrava o link. Conferir a URL já
+// decodificada também fecha disfarces como `&#106;avascript:`.
+function decodificarEntidadesAtributo(valor: string): string {
+  return valor.replace(/&(#\d{1,7}|#x[0-9a-f]{1,6}|[a-z][a-z0-9]{1,9});/gi, (original, corpo: string) => {
+    const chave = corpo.toLowerCase()
+    if (chave.startsWith('#')) {
+      const hexadecimal = chave[1] === 'x'
+      const codigo = Number.parseInt(chave.slice(hexadecimal ? 2 : 1), hexadecimal ? 16 : 10)
+      return Number.isInteger(codigo) && codigo > 0 && codigo <= 0x10ffff ? String.fromCodePoint(codigo) : original
+    }
+    return ENTIDADES_NOMEADAS[chave] ?? original
+  })
+}
+
 function estiloSeguroHtmlEmail(valor: string): boolean {
   return !/(?:expression\s*\(|javascript\s*:|vbscript\s*:|@import|behavior\s*:|-moz-binding|url\s*\(\s*['"]?\s*(?:javascript|data:text\/html))/i.test(valor)
 }
@@ -56,7 +75,7 @@ export function sanitizarHtmlEmail(valor: string): string {
     while ((encontrado = attrRe.exec(atributosBrutos)) !== null) {
       const atributo = encontrado[1].toLowerCase()
       if (!ATRIBUTOS_HTML_EMAIL.has(atributo) || atributo.startsWith('on')) continue
-      const bruto = encontrado[2] ?? encontrado[3] ?? encontrado[4] ?? ''
+      const bruto = decodificarEntidadesAtributo(encontrado[2] ?? encontrado[3] ?? encontrado[4] ?? '')
       if ((atributo === 'href' || atributo === 'src') && !urlSeguraHtmlEmail(atributo, bruto)) continue
       if (atributo === 'style' && !estiloSeguroHtmlEmail(bruto)) continue
       atributos.push(`${atributo}="${escaparHtmlEmail(bruto)}"`)

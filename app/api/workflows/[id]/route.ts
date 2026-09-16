@@ -7,6 +7,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { resolverContexto } from '@/lib/workflows/api'
 import { salvarRascunho } from '@/lib/workflows'
 import type { BlocoConfig, DefinicaoWorkflow } from '@/lib/workflows'
+import { validarTemplatesDaDefinicao, type ProblemaTemplate } from '@/lib/workflows/validarTemplates'
 
 export const runtime = 'nodejs'
 
@@ -75,13 +76,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     let atualizado = workflow
+    // Rascunho pode ficar incompleto: template ausente/desativado vira AVISO,
+    // não bloqueio. O bloqueio obrigatório é na publicação.
+    let avisosTemplates: ProblemaTemplate[] = []
     if (body?.definicao !== undefined) {
-      atualizado = await salvarRascunho(ctx.store, id, coagirDefinicao(body.definicao))
+      const definicao = coagirDefinicao(body.definicao)
+      atualizado = await salvarRascunho(ctx.store, id, definicao)
+      avisosTemplates = await validarTemplatesDaDefinicao(createSupabaseAdminClient(), ctx.organizacaoId, definicao)
     }
 
     // Devolve o estado consolidado (renome + rascunho).
     const fresco = (await ctx.store.buscarWorkflow(id)) ?? atualizado
-    return NextResponse.json({ workflow: fresco })
+    return NextResponse.json({ workflow: fresco, avisosTemplates })
   } catch (err) {
     console.error('[workflows/:id] PATCH erro:', err)
     const msg = err instanceof Error ? err.message : 'Erro ao salvar'

@@ -10,6 +10,7 @@ import {
 } from './configuracaoGuiada'
 import { criarWorkflow, salvarRascunho, SupabaseWorkflowStore } from '@/lib/workflows'
 import { buscarRemetenteCampanha } from './opcoesServidor'
+import { exigirTemplatesDaOrganizacao } from './templatesCampanha'
 
 interface Materializacao {
   publico: Publico
@@ -95,6 +96,8 @@ export async function materializarCampanhaGuiada(
   bruto: unknown,
 ): Promise<Materializacao> {
   const normalizado = normalizarPublicoCampanha(bruto)
+  // Antes de qualquer escrita: todo template referenciado é desta organização.
+  await exigirTemplatesDaOrganizacao(admin, org, normalizado)
   const remetente = await buscarRemetenteCampanha(admin, org)
   const publico: Publico = {
     ...normalizado,

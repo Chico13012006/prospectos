@@ -167,6 +167,6 @@ export class MemoryStore implements Store {
   async buscarTemplateEmail(nicho: string | null, tipo: string): Promise<TemplateEmail[]> {
     return SEED_TEMPLATES
       .filter((x) => x.canal === 'email' && x.tipo === tipo && (x.nicho ?? null) === nicho)
-      .map((t) => ({ id: `${nicho ?? 'generico'}-${tipo}-email`, assunto: t.assunto, corpo: t.corpo }))
+      .map((t) => ({ id: `${nicho ?? 'generico'}-${tipo}-email`, assunto: t.assunto, corpo: t.corpo, html: null }))
   }
 }

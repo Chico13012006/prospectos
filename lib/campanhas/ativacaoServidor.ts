@@ -16,6 +16,7 @@ import {
   retomar,
   SupabaseWorkflowStore,
 } from '@/lib/workflows'
+import { mensagemProblemasTemplate, validarTemplatesDaDefinicao } from '@/lib/workflows/validarTemplates'
 
 interface ResultadoAtivacao {
   campanha_id: string
@@ -77,6 +78,14 @@ export async function ativarCampanhaGuiada(
   const store = new SupabaseWorkflowStore(org, admin)
   const workflow = await store.buscarWorkflow(materializada.workflowId)
   if (!workflow) throw new Error('Workflow da campanha não encontrado.')
+
+  // Fecha o outro lado da corrida com a desativação: o que está prestes a ser
+  // publicado (ou retomado) precisa ter todos os templates enviáveis agora.
+  const definicaoAtivada = workflow.rascunho_definicao
+    ?? (workflow.versao_atual_id ? (await store.buscarVersao(workflow.versao_atual_id))?.definicao ?? null : null)
+  const problemas = await validarTemplatesDaDefinicao(admin, org, definicaoAtivada)
+  if (problemas.length) throw new Error(mensagemProblemasTemplate(problemas, 'ativar'))
+
   if (workflow.rascunho_definicao) {
     await publicar(store, workflow.id, autorId)
   } else if (workflow.status === 'pausado') {

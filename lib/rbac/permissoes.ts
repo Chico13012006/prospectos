@@ -25,6 +25,10 @@ export const PERMISSOES = [
   // da Central — /api/whatsapp/send, /api/whatsapp/status, /api/email/enviar —
   // e o envio da proposta comercial ao cliente (/api/propostas/[id]/enviar).
   'conversations.send',
+  // Biblioteca de templates da organização. `view` lista e usa templates
+  // (campanhas, workflows, Central); `manage` cria, edita, desativa e reativa.
+  'templates.view',
+  'templates.manage',
 ] as const
 
 export type Permissao = (typeof PERMISSOES)[number]
@@ -48,10 +52,13 @@ export type RolePadrao = 'admin' | 'usuario'
 // `conversations.send` entra nos dois roles: responder um lead é trabalho do
 // comercial. Não confundir com `campaigns.operate`, que segue só do admin.
 //
-// ESPELHO do backfill das migrations 0015, 0033, 0034 e 0040 — manter em sincronia.
+// `templates.view` entra nos dois roles (quem cria campanha ou responde lead usa
+// templates); `templates.manage` fica com quem administra.
+//
+// ESPELHO do backfill das migrations 0015, 0033, 0034, 0040 e 0046 — manter em sincronia.
 export const PERMISSOES_POR_ROLE: Record<RolePadrao, Permissao[]> = {
   admin: [...PERMISSOES],
-  usuario: ['campaigns.view', 'campaigns.manage', 'workflows.view', 'analytics.view', 'conversations.send'],
+  usuario: ['campaigns.view', 'campaigns.manage', 'workflows.view', 'analytics.view', 'conversations.send', 'templates.view'],
 }
 
 // Permissões EFETIVAS de um usuário. `perfil_permissoes` é autoritativa: se há

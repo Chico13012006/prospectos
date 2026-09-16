@@ -57,6 +57,10 @@ interface TemplateOpcao {
   tipo: string
   assunto: string | null
   corpo: string
+  // Template HTML da biblioteca: entra como HTML da mensagem, com `corpo` de
+  // texto alternativo. Vazio = template de texto simples.
+  html: string | null
+  formato: 'html' | 'texto'
   nicho: string | null
 }
 
@@ -417,6 +421,10 @@ export default function CampanhaWizardPage({
       templateOrigemId: template.id,
       assunto: template.assunto ?? '',
       corpo: template.corpo,
+      // Texto limpa o HTML anterior; HTML substitui o modelo pronto escolhido.
+      html: template.html ?? undefined,
+      modeloId: undefined,
+      modeloCampos: undefined,
     })
   }
 

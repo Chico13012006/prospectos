@@ -6,6 +6,7 @@ import { listarCampanhas, criarCampanha } from '@/lib/campanhas/repository'
 import { aplicarRegraPublicoPorTipo, normalizarPublicoCampanha, podeUsarTipoCampanha } from '@/lib/campanhas/configuracaoGuiada'
 import { materializarCampanhaGuiada } from '@/lib/campanhas/materializarServidor'
 import { buscarResumosExecucoesCampanhas } from '@/lib/campanhas/resumoExecucoesServidor'
+import { ErroTemplateCampanha, exigirTemplatesDaOrganizacao } from '@/lib/campanhas/templatesCampanha'
 
 export const runtime = 'nodejs'
 
@@ -47,6 +48,8 @@ export async function POST(req: Request) {
       )
     }
     const publico = aplicarRegraPublicoPorTipo(normalizarPublicoCampanha(b.publico), tipo)
+    // Antes de criar a linha: nenhum template de outra organização é gravado.
+    await exigirTemplatesDaOrganizacao(admin, org, publico)
     const nova = await criarCampanha(admin, org, {
       nome: b.nome.trim(),
       descricao: typeof b.descricao === 'string' ? b.descricao : null,
@@ -60,6 +63,7 @@ export async function POST(req: Request) {
     const materializada = await materializarCampanhaGuiada(admin, org, nova.id, b.nome.trim(), publico)
     return NextResponse.json({ ok: true, id: nova.id, workflow_id: materializada.workflowId })
   } catch (e) {
+    if (e instanceof ErroTemplateCampanha) return NextResponse.json({ erro: e.message }, { status: e.status })
     return NextResponse.json({ erro: e instanceof Error ? e.message : 'Erro' }, { status: 400 })
   }
 }

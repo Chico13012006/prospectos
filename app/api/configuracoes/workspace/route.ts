@@ -11,8 +11,15 @@ export async function GET() {
   const acc = await resolverAcesso()
   if ('erro' in acc) return acc.erro
   const { admin, org } = acc.acesso
-  const { data } = await admin.from('organizacoes').select('configuracoes').eq('id', org).maybeSingle()
-  return NextResponse.json({ config: parseWorkspaceConfig(data?.configuracoes), podeEditar: acc.acesso.permissoes.has('workspace.configure') })
+  const { data } = await admin.from('organizacoes').select('nome, configuracoes').eq('id', org).maybeSingle()
+  return NextResponse.json({
+    config: parseWorkspaceConfig(data?.configuracoes),
+    // Nome da organização: é o fallback de {nome_servico} no envio real
+    // (lib/workflows/ambiente.ts). A Central precisa dele para materializar a
+    // variável exatamente como o motor materializaria.
+    organizacao: { nome: typeof data?.nome === 'string' ? data.nome : '' },
+    podeEditar: acc.acesso.permissoes.has('workspace.configure'),
+  })
 }
 
 export async function PUT(req: Request) {

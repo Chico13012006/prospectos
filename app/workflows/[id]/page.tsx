@@ -11,16 +11,21 @@ import {
 import type { BlocoConfig, DefinicaoWorkflow, Workflow, WorkflowVersao, StatusWorkflow } from '@/lib/workflows/types';
 import {
   ACOES, CONDICOES, GATILHOS, acharBlocoDef, blocoPadrao, configPadrao, definicaoVazia,
-  garantirIdsAcoes, type BlocoDef, type CampoDef,
+  garantirIdsAcoes, opcoesDeTemplate, type BlocoDef, type CampoDef, type TemplateDisponivel,
 } from '@/lib/workflows/catalogo';
+import { descreverProblemaTemplate, type ProblemaTemplate } from '@/lib/templates/problemas';
 import ResumoFluxo from '@/components/workflows/ResumoFluxo';
 import WorkflowCanvas from '@/components/workflows/WorkflowCanvas';
-import { getUsuarios, getLeads } from '@/lib/api';
+import { getUsuarios, getLeads, listarTemplatesBiblioteca } from '@/lib/api';
 import type { Usuario, Lead } from '@/lib/supabase';
 
 // Usuários da org (para o dropdown de responsável em campos tipo 'usuario'),
 // via contexto para não threadar props por LinhaBloco/SaltarSeEditor.
 const UsuariosCtx = createContext<Usuario[]>([]);
+
+// Templates de e-mail ATIVOS da organização (GET /api/templates), para o campo
+// `template` do bloco "Enviar e-mail". A lista é da org — nunca uma lista fixa.
+const TemplatesCtx = createContext<TemplateDisponivel[]>([]);
 
 const STATUS_INFO: Record<StatusWorkflow, { label: string; chip: string }> = {
   rascunho: { label: 'Rascunho', chip: 'chip chip-muted' },
@@ -58,6 +63,7 @@ function CamposEditor({ def, config, onChange, blocoTipo, condicoes }: {
   condicoes?: BlocoConfig[];
 }) {
   const usuarios = useContext(UsuariosCtx);
+  const templates = useContext(TemplatesCtx);
   if (def.campos.length === 0) return null;
 
   const campoRespId = def.campos.find(c => c.tipo === 'usuario' && c.nome === 'responsavel_id');
@@ -92,7 +98,7 @@ function CamposEditor({ def, config, onChange, blocoTipo, condicoes }: {
                 onChange={e => onChange(campo.nome, campo.tipo === 'booleano' ? e.target.value === 'true' : e.target.value)}
                 className="bg-[#0f1117] border border-[#2a3147] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500/50 min-w-[10rem]"
               >
-                {campo.opcoes?.map(o => <option key={o.valor} value={o.valor}>{o.label}</option>)}
+                {opcoesDeTemplate(campo, templates, String(valor ?? campo.padrao)).map(o => <option key={o.valor} value={o.valor}>{o.label}</option>)}
               </select>
             ) : campo.tipo === 'numero' ? (
               <input
@@ -279,6 +285,10 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
   // Usuários (dropdown de responsável) e leads (inscrição manual).
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [templates, setTemplates] = useState<TemplateDisponivel[]>([]);
+  // Avisos do rascunho: template ausente/desativado não impede salvar, mas a
+  // publicação vai recusar — melhor dizer agora.
+  const [avisosTemplates, setAvisosTemplates] = useState<ProblemaTemplate[]>([]);
 
   // Fase 5 — trava de segurança (confirmação antes de publicar gatilho amplo) e
   // simulação ("Testar" sem efeito real).
@@ -290,6 +300,9 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
   useEffect(() => {
     getUsuarios().then(setUsuarios).catch(() => {});
     getLeads().then(setLeads).catch(() => {});
+    listarTemplatesBiblioteca({ canal: 'email', ativo: 'ativos' })
+      .then((lista) => setTemplates(lista.map((t) => ({ nome: t.nome, tipo: t.tipo }))))
+      .catch(() => {});
   }, []);
 
   async function carregar() {
@@ -342,6 +355,7 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
       const data = await r.json();
       if (!r.ok) throw new Error(data?.erro || 'Falha ao salvar');
       setSalvoSnapshot(JSON.stringify({ nome: nome.trim(), def }));
+      setAvisosTemplates(Array.isArray(data?.avisosTemplates) ? data.avisosTemplates as ProblemaTemplate[] : []);
       setMsg('Rascunho salvo.');
       return true;
     } catch (e) {
@@ -475,6 +489,7 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
 
   return (
     <UsuariosCtx.Provider value={usuarios}>
+    <TemplatesCtx.Provider value={templates}>
     {/* Largura ampla (não centralizada): em telas largas usa o espaço de verdade,
         em vez de deixar um vão à direita. A coluna do editor cresce; o resumo fica
         fixo em 360px. */}
@@ -496,6 +511,16 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
           {sujo && <span className="chip chip-warning"><AlertTriangle size={11} /> não salvo</span>}
         </div>
       </div>
+
+      {avisosTemplates.length > 0 && (
+        <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+          <span>
+            Rascunho salvo, mas publicar vai ser recusado enquanto houver pendência:{' '}
+            {avisosTemplates.map(descreverProblemaTemplate).join('; ')}.
+          </span>
+        </div>
+      )}
 
       {/* Barra de ações */}
       <div className="flex flex-wrap items-center gap-2 card p-3 mt-4">
@@ -755,6 +780,7 @@ export default function WorkflowEditorPage({ params }: { params: Promise<{ id: s
         </div>
       )}
     </div>
+    </TemplatesCtx.Provider>
     </UsuariosCtx.Provider>
   );
 }

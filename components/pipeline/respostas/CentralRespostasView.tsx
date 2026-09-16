@@ -23,7 +23,7 @@ import {
 import {
   getConversasResposta,
   getConversaDoLead,
-  getTemplates,
+  listarTemplatesBiblioteca,
   getTodosLeads,
   getUsuarios,
   type ConversaResposta,
@@ -35,7 +35,19 @@ import { documentoPreviewHtml, montarEmailCampanhaHtml } from '@/lib/campanhas/e
 import { dash } from '@/lib/utils'
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { REALTIME_SUBSCRIBE_STATES, type RealtimePostgresInsertPayload } from '@supabase/supabase-js'
-import type { Lead, MensagemWhatsapp, Template, Usuario } from '@/lib/supabase'
+import type { Lead, MensagemWhatsapp, Usuario } from '@/lib/supabase'
+import type { TemplateBiblioteca } from '@/lib/templates/tipos'
+import { ErroTemplateApi } from '@/lib/templates/biblioteca'
+import {
+  MENSAGEM_BIBLIOTECA_SEM_PERMISSAO,
+  MENSAGEM_SEM_CONVERSA,
+  MENSAGEM_TEMPLATE_INDISPONIVEL,
+  materializarTemplateParaLead,
+  mensagemVariaveisPendentes,
+  templatesDoCanal as filtrarTemplatesDoCanal,
+  variaveisPendentes,
+} from '@/lib/templates/central'
+import type { Lead as LeadDoMotor } from '@/lib/engine/types'
 import type { GlobalFilterState } from '@/components/pipeline/GlobalFilters'
 import styles from './CentralRespostasView.module.css'
 
@@ -295,7 +307,14 @@ export default function CentralRespostasView({
   const [fioCarregando, setFioCarregando] = useState(false)
   const [canalAtivo, setCanalAtivo] = useState<'email' | 'whatsapp'>('email')
 
-  const [templates, setTemplates] = useState<Template[]>([])
+  const [templates, setTemplates] = useState<TemplateBiblioteca[]>([])
+  // Sem `templates.view` a biblioteca some da tela, mas o atendimento continua:
+  // dá para escrever e enviar normalmente.
+  const [bibliotecaIndisponivel, setBibliotecaIndisponivel] = useState(false)
+  const [avisoTemplate, setAvisoTemplate] = useState<string | null>(null)
+  // {nome_servico} no envio real é nomenclaturas.nome_servico || nome da
+  // organização. A Central lê o mesmo para materializar igual ao motor.
+  const [nomeServico, setNomeServico] = useState('')
   // Usuários da organização (tabela pequena, uma leitura): dá o e-mail real do
   // responsável para as linhas De/Para dos e-mails. Falha = só o nome.
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
@@ -358,7 +377,26 @@ export default function CentralRespostasView({
   const carregarConversasRef = useRef(carregarConversas)
   useEffect(() => { carregarConversasRef.current = carregarConversas }, [carregarConversas])
 
-  useEffect(() => { getTemplates().then(setTemplates).catch(() => setTemplates([])) }, [])
+  // Biblioteca pela API multi-tenant (organização da sessão, ativos, sem as
+  // cópias de campanha) — nunca leitura direta da tabela pelo navegador.
+  useEffect(() => {
+    listarTemplatesBiblioteca({ ativo: 'ativos' })
+      .then((lista) => { setTemplates(lista); setBibliotecaIndisponivel(false) })
+      .catch((erro) => {
+        setTemplates([])
+        setBibliotecaIndisponivel(erro instanceof ErroTemplateApi && erro.status === 403)
+      })
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/configuracoes/workspace')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((dados) => {
+        const config = dados?.config as { nomenclaturas?: Record<string, string> } | undefined
+        setNomeServico(config?.nomenclaturas?.nome_servico?.trim() || (dados?.organizacao?.nome ?? ''))
+      })
+      .catch(() => setNomeServico(''))
+  }, [])
   useEffect(() => { getUsuarios().then(setUsuarios).catch(() => setUsuarios([])) }, [])
 
   const visiveis = useMemo(() => {
@@ -403,8 +441,12 @@ export default function CentralRespostasView({
   useEffect(() => {
     ativaRef.current = ativa
     // Trocar de conversa limpa o rascunho — nunca enviar texto no lead errado.
+    // Inclui o template escolhido: o conteúdo foi materializado com os dados do
+    // lead anterior e não pode ser reaproveitado.
     setAssunto('')
     setTexto('')
+    setTemplateId('')
+    setAvisoTemplate(null)
     setCopiado(false)
     setRetornoEnvio(null)
     if (!ativa) { fioReqRef.current++; setFio([]); return }
@@ -526,7 +568,7 @@ export default function CentralRespostasView({
   // --- Composer ------------------------------------------------------------
   // Templates do canal escolhido (a tabela `templates` já tem a coluna `canal`).
   const templatesDoCanal = useMemo(
-    () => templates.filter((t) => (t.canal ?? 'email') === canalComposer),
+    () => filtrarTemplatesDoCanal(templates, canalComposer),
     [templates, canalComposer],
   )
   const templateEscolhido = useMemo(
@@ -536,13 +578,42 @@ export default function CentralRespostasView({
 
   // Trocar de canal zera o template: um template de e-mail não serve no WhatsApp.
   // E limpa o retorno do envio — um erro de WhatsApp não pertence ao e-mail.
-  useEffect(() => { setTemplateId(''); setPrevia(false); setRetornoEnvio(null) }, [canalComposer])
+  useEffect(() => { setTemplateId(''); setPrevia(false); setRetornoEnvio(null); setAvisoTemplate(null) }, [canalComposer])
 
   const aplicarTemplate = () => {
-    if (!templateEscolhido) return
-    if (canalComposer === 'email' && templateEscolhido.assunto) setAssunto(templateEscolhido.assunto)
-    setTexto(templateEscolhido.corpo)
+    if (!templateId) return
+    if (!conversaAtiva) {
+      setAvisoTemplate(MENSAGEM_SEM_CONVERSA)
+      return
+    }
+    // Materializa com os dados REAIS do lead aberto, pelo mesmo `preencher` do
+    // envio. Nada é gravado: o texto vai para o composer e a pessoa revisa.
+    const materializado = materializarTemplateParaLead(templateEscolhido, canalComposer, {
+      lead: conversaAtiva.lead as unknown as LeadDoMotor,
+      nomeServico,
+    })
+    if (!materializado) {
+      // Desativado, apagado ou de outra organização entre carregar e aplicar:
+      // nada é preenchido e o que já estava escrito continua.
+      setAvisoTemplate(MENSAGEM_TEMPLATE_INDISPONIVEL)
+      setTemplateId('')
+      return
+    }
+    if (materializado.assunto) setAssunto(materializado.assunto)
+    setTexto(materializado.texto)
+    setAvisoTemplate(null)
   }
+
+  // Recalculado a cada edição: some assim que a pessoa corrige o texto e pega
+  // também variável digitada à mão. Em HTML, só chave dupla conta (CSS/JS usa
+  // chaves simples e não pode bloquear envio legítimo).
+  const variaveisNaoResolvidas = useMemo(
+    () => variaveisPendentes(canalComposer === 'email' ? assunto : null, texto, { htmlNoTexto: pareceHtml(texto) }),
+    [assunto, texto, canalComposer],
+  )
+  const avisoComposer = avisoTemplate
+    ?? mensagemVariaveisPendentes(variaveisNaoResolvidas)
+    ?? (bibliotecaIndisponivel ? MENSAGEM_BIBLIOTECA_SEM_PERMISSAO : null)
 
   const copiar = async () => {
     const conteudo = canalComposer === 'email' && assunto ? `${assunto}\n\n${texto}` : texto
@@ -581,8 +652,10 @@ export default function CentralRespostasView({
   // Dispara SÓ no clique. Sem retry: erro fica na tela com o texto preservado.
   // Em sucesso não há mensagem otimista — o fio é recarregado e a outbound
   // aparece vinda de `whatsapp_mensagens`.
+  // Variável não resolvida bloqueia o envio: ninguém recebe "Olá, {{nome}}".
   const podeEnviarWhatsapp = canalComposer === 'whatsapp'
     && !!conversaAtiva && !!texto.trim() && !enviando && zapiStatus === 'conectado'
+    && variaveisNaoResolvidas.length === 0
   const enviarWhatsapp = async () => {
     if (!podeEnviarWhatsapp || !conversaAtiva) return
     const leadId = conversaAtiva.lead.id
@@ -633,6 +706,7 @@ export default function CentralRespostasView({
   const podeEnviarEmail = canalComposer === 'email'
     && !!conversaAtiva && leadTemEmail
     && !!assunto.trim() && !!texto.trim() && !enviando
+    && variaveisNaoResolvidas.length === 0
   const enviarEmail = async () => {
     if (!podeEnviarEmail || !conversaAtiva) return
     const leadId = conversaAtiva.lead.id
@@ -1021,11 +1095,15 @@ export default function CentralRespostasView({
                   disabled={templatesDoCanal.length === 0}
                 >
                   <option value="">
-                    {templatesDoCanal.length === 0
-                      ? `Nenhum template de ${canalComposer === 'email' ? 'e-mail' : 'WhatsApp'}`
-                      : 'Selecione um template...'}
+                    {bibliotecaIndisponivel
+                      ? 'Biblioteca indisponível'
+                      : templatesDoCanal.length === 0
+                        ? `Nenhum template de ${canalComposer === 'email' ? 'e-mail' : 'WhatsApp'}`
+                        : 'Selecione um template...'}
                   </option>
-                  {templatesDoCanal.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                  {templatesDoCanal.map((t) => (
+                    <option key={t.id} value={t.id}>{t.nome}{t.formato === 'html' ? ' · HTML' : ''}</option>
+                  ))}
                 </select>
                 <button
                   type="button"
@@ -1047,6 +1125,9 @@ export default function CentralRespostasView({
                   </button>
                 ) : null}
                 </div>
+                {avisoComposer ? (
+                  <p className={styles.aviso} role="status" aria-live="polite">{avisoComposer}</p>
+                ) : null}
               </div>
 
               {/* E-mail tem assunto; WhatsApp é conversacional e não tem. */}

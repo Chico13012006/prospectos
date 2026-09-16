@@ -23,6 +23,10 @@ export interface CampoDef {
   padrao: string | number | boolean
   // Para 'select'/'booleano': valores possíveis (booleano usa 'true'/'false').
   opcoes?: { valor: string; label: string }[]
+  // 'templates': a UI substitui as opções pelos templates de e-mail ATIVOS da
+  // organização (GET /api/templates). `opcoes` fica como lista de referência
+  // quando a busca falha. O valor gravado continua sendo o `tipo` do template.
+  opcoesDinamicas?: 'templates'
   dica?: string
 }
 
@@ -46,6 +50,32 @@ const TEMPLATES_OPCOES = [
   { valor: 'follow_up_3', label: 'Follow-up 3' },
   { valor: 'follow_up_4', label: 'Follow-up 4' },
 ]
+
+export interface TemplateDisponivel {
+  nome: string
+  tipo: string
+}
+
+// Opções do campo `template`: os templates de e-mail ATIVOS da organização
+// (carregados em runtime pela UI), deduplicados por chave. O valor já gravado
+// entra na lista mesmo quando não está mais disponível — marcado —, para abrir
+// o editor não trocar silenciosamente a escolha de quem autorou o fluxo.
+export function opcoesDeTemplate(
+  campo: CampoDef,
+  templates: readonly TemplateDisponivel[],
+  valorAtual: string,
+): { valor: string; label: string }[] {
+  if (campo.opcoesDinamicas !== 'templates') return campo.opcoes ?? []
+  const porTipo = new Map<string, { valor: string; label: string }>()
+  for (const template of templates) {
+    if (!porTipo.has(template.tipo)) porTipo.set(template.tipo, { valor: template.tipo, label: `${template.nome} · ${template.tipo}` })
+  }
+  const opcoes = [...porTipo.values()]
+  if (valorAtual && !porTipo.has(valorAtual)) {
+    return [{ valor: valorAtual, label: `${valorAtual} — não encontrado nesta organização` }, ...opcoes]
+  }
+  return opcoes
+}
 
 // Campos de `leads` expostos ao filtro genérico (espelham a whitelist do
 // ambiente CAMPOS_LEAD_PERMITIDOS). Rótulos amigáveis; `valor` é a coluna real.
@@ -248,7 +278,7 @@ export const ACOES: BlocoDef[] = [
     label: 'Enviar e-mail',
     descricao: 'Envia um template de e-mail ao lead (respeita o MODO_ENSAIO do motor).',
     campos: [
-      { nome: 'template', label: 'Template', tipo: 'select', padrao: 'follow_up_1', opcoes: TEMPLATES_OPCOES },
+      { nome: 'template', label: 'Template', tipo: 'select', padrao: 'follow_up_1', opcoes: TEMPLATES_OPCOES, opcoesDinamicas: 'templates' },
     ],
   },
   {

@@ -9,6 +9,11 @@ export interface TemplateEmail {
   id: string
   assunto: string | null
   corpo: string
+  // HTML opcional do template (coluna `html`, migration 0046). Quando existe, é
+  // o corpo HTML do e-mail e `corpo` vira o texto alternativo.
+  html?: string | null
+  // Organização dona da linha — o envio confere antes de usar o template.
+  organizacao_id?: string
 }
 
 export interface Store {
