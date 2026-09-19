@@ -67,17 +67,42 @@ async function publicarDef() {
   return { store, wfId: wf.id }
 }
 
-const envOriginal = process.env.PROSPECCAO_TESTE_INTERVALO_MINUTOS
+// A org da AmbienteFake acima. A compressão é recortada por ID de organização,
+// então os testes precisam casar exatamente este valor para comprimir.
+const ORG_TESTE = 'org-teste'
+const CHAVES_ENV = ['PROSPECCAO_TESTE_INTERVALO_MINUTOS', 'PROSPECCAO_TESTE_ORGANIZACAO_ID'] as const
+const envOriginal = Object.fromEntries(CHAVES_ENV.map((c) => [c, process.env[c]]))
 const UM_DIA_MS = 24 * 60 * 60 * 1000
+
+// Liga o modo de teste para a organização indicada. Sem argumento, liga as duas
+// envs para a org da AmbienteFake (o caminho que comprime).
+function ligarModoTeste(orgId: string | null = ORG_TESTE, minutos: string | null = '2') {
+  if (orgId === null) delete process.env.PROSPECCAO_TESTE_ORGANIZACAO_ID
+  else process.env.PROSPECCAO_TESTE_ORGANIZACAO_ID = orgId
+  if (minutos === null) delete process.env.PROSPECCAO_TESTE_INTERVALO_MINUTOS
+  else process.env.PROSPECCAO_TESTE_INTERVALO_MINUTOS = minutos
+}
+
+// Espera ~1 dia real (não comprimida) + ausência do evento de compressão.
+async function esperaEmDiasReais(store: MemoryWorkflowStore, execucaoId: string) {
+  const ex = await store.buscarExecucao(execucaoId)
+  const faltamMs = new Date(ex!.proxima_verificacao_em!).getTime() - Date.now()
+  expect(faltamMs).toBeGreaterThan(UM_DIA_MS - 60_000)
+  const eventos = await store.listarEventos(execucaoId)
+  expect(eventos.some((e) => e.tipo === 'esperar_comprimido_modo_teste')).toBe(false)
+}
 
 describe('Modo de teste — cadência de prospecção comprimida', () => {
   afterEach(() => {
-    if (envOriginal === undefined) delete process.env.PROSPECCAO_TESTE_INTERVALO_MINUTOS
-    else process.env.PROSPECCAO_TESTE_INTERVALO_MINUTOS = envOriginal
+    for (const chave of CHAVES_ENV) {
+      const valor = envOriginal[chave]
+      if (valor === undefined) delete process.env[chave]
+      else process.env[chave] = valor
+    }
   })
 
   it('sem a env var, a espera usa dias corridos reais mesmo em campanha de prospecção', async () => {
-    delete process.env.PROSPECCAO_TESTE_INTERVALO_MINUTOS
+    ligarModoTeste(null, null)
     const { store, wfId } = await publicarDef()
     const amb = new AmbienteFake()
     const inscricao = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1')
@@ -92,8 +117,8 @@ describe('Modo de teste — cadência de prospecção comprimida', () => {
     expect(eventos.some((e) => e.tipo === 'esperar_comprimido_modo_teste')).toBe(false)
   })
 
-  it('Lead A: com a env var, a cadência inteira (1º contato + 2 follow-ups) avança em minutos', async () => {
-    process.env.PROSPECCAO_TESTE_INTERVALO_MINUTOS = '2'
+  it('Lead A: com as DUAS envs e a org de teste, a cadência inteira (1º contato + 2 follow-ups) avança em minutos', async () => {
+    ligarModoTeste()
     const { store, wfId } = await publicarDef()
     const amb = new AmbienteFake()
     const inscricao = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1')
@@ -119,7 +144,7 @@ describe('Modo de teste — cadência de prospecção comprimida', () => {
   })
 
   it('Lead B: cancelar a execução antes do prazo comprimido vencer impede o follow-up', async () => {
-    process.env.PROSPECCAO_TESTE_INTERVALO_MINUTOS = '2'
+    ligarModoTeste()
     const { store, wfId } = await publicarDef()
     const amb = new AmbienteFake()
     const inscricao = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1')
@@ -136,32 +161,105 @@ describe('Modo de teste — cadência de prospecção comprimida', () => {
     expect(pendentes).toHaveLength(0)
   })
 
-  it('renovação não comprime mesmo com a env var ligada (escopo estrito a prospecção)', async () => {
-    process.env.PROSPECCAO_TESTE_INTERVALO_MINUTOS = '2'
+  // (E) renovação na org de teste, com as duas envs ligadas.
+  it('renovação não comprime mesmo com as envs ligadas na org de teste (escopo estrito a prospecção)', async () => {
+    ligarModoTeste()
     const { store, wfId } = await publicarDef()
     const amb = new AmbienteFake()
     amb.tipoCampanha = 'renovacao'
     const inscricao = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1')
     await processarTudo(store, registro, amb)
 
-    const ex = await store.buscarExecucao(inscricao.execucaoId!)
-    const faltamMs = new Date(ex!.proxima_verificacao_em!).getTime() - Date.now()
-    expect(faltamMs).toBeGreaterThan(UM_DIA_MS - 60_000) // continua ~1 dia, não minutos
-
-    const eventos = await store.listarEventos(inscricao.execucaoId!)
-    expect(eventos.some((e) => e.tipo === 'esperar_comprimido_modo_teste')).toBe(false)
+    await esperaEmDiasReais(store, inscricao.execucaoId!)
   })
 
-  it('execução orgânica (sem campanha) não comprime mesmo com a env var ligada', async () => {
-    process.env.PROSPECCAO_TESTE_INTERVALO_MINUTOS = '2'
+  // (F) execução sem campanha (campanhaTipo null), na org de teste.
+  it('execução orgânica (sem campanha) não comprime mesmo com as envs ligadas', async () => {
+    ligarModoTeste()
     const { store, wfId } = await publicarDef()
     const amb = new AmbienteFake()
     const inscricao = await inscreverLeadManual(store, wfId, 'lead-1') // sem campanhaId
 
     await processarTudo(store, registro, amb)
 
+    await esperaEmDiasReais(store, inscricao.execucaoId!)
+  })
+})
+
+// Recorte POR ORGANIZAÇÃO: é o que torna o modo de teste seguro em produção —
+// ligar as envs não pode acelerar a cadência de nenhum outro tenant.
+describe('Modo de teste — recorte por organização', () => {
+  afterEach(() => {
+    for (const chave of CHAVES_ENV) {
+      const valor = envOriginal[chave]
+      if (valor === undefined) delete process.env[chave]
+      else process.env[chave] = valor
+    }
+  })
+
+  // (A) prospecção + org de teste + as duas envs → comprime.
+  it('(A) prospecção na org configurada, com as duas envs, comprime a espera', async () => {
+    ligarModoTeste(ORG_TESTE, '2')
+    const { store, wfId } = await publicarDef()
+    const amb = new AmbienteFake()
+    const inscricao = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1')
+    await processarTudo(store, registro, amb)
+
     const ex = await store.buscarExecucao(inscricao.execucaoId!)
     const faltamMs = new Date(ex!.proxima_verificacao_em!).getTime() - Date.now()
-    expect(faltamMs).toBeGreaterThan(UM_DIA_MS - 60_000)
+    expect(faltamMs).toBeLessThan(3 * 60 * 1000)
+
+    const eventos = await store.listarEventos(inscricao.execucaoId!)
+    const comprimido = eventos.find((e) => e.tipo === 'esperar_comprimido_modo_teste')
+    expect(comprimido).toBeTruthy()
+    // A evidência registra a organização — o log [MODO TESTE] não pode ser
+    // confundido com produção depois.
+    expect((comprimido!.detalhe as Record<string, unknown>).organizacaoId).toBe(ORG_TESTE)
+  })
+
+  // (B) prospecção + OUTRA organização + as duas envs → NÃO comprime.
+  it('(B) prospecção em OUTRA organização, com as duas envs, NÃO comprime', async () => {
+    ligarModoTeste(ORG_TESTE, '2')
+    const { store, wfId } = await publicarDef()
+    const amb = new AmbienteFake()
+    amb.organizacaoId = 'outra-organizacao' // env aponta para ORG_TESTE
+    const inscricao = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1')
+    await processarTudo(store, registro, amb)
+
+    await esperaEmDiasReais(store, inscricao.execucaoId!)
+  })
+
+  // (C) prospecção + org de teste + SEM a env de organização → NÃO comprime.
+  it('(C) sem PROSPECCAO_TESTE_ORGANIZACAO_ID, não comprime nem na org de teste', async () => {
+    ligarModoTeste(null, '2')
+    const { store, wfId } = await publicarDef()
+    const amb = new AmbienteFake()
+    const inscricao = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1')
+    await processarTudo(store, registro, amb)
+
+    await esperaEmDiasReais(store, inscricao.execucaoId!)
+  })
+
+  // (D) prospecção + org de teste + SEM a env de intervalo → NÃO comprime.
+  it('(D) sem PROSPECCAO_TESTE_INTERVALO_MINUTOS, não comprime nem na org de teste', async () => {
+    ligarModoTeste(ORG_TESTE, null)
+    const { store, wfId } = await publicarDef()
+    const amb = new AmbienteFake()
+    const inscricao = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1')
+    await processarTudo(store, registro, amb)
+
+    await esperaEmDiasReais(store, inscricao.execucaoId!)
+  })
+
+  it('intervalo inválido (zero, negativo ou não numérico) não comprime', async () => {
+    for (const invalido of ['0', '-5', 'abc', '']) {
+      ligarModoTeste(ORG_TESTE, invalido)
+      const { store, wfId } = await publicarDef()
+      const amb = new AmbienteFake()
+      const inscricao = await inscreverLeadManual(store, wfId, 'lead-1', 'campanha-1')
+      await processarTudo(store, registro, amb)
+
+      await esperaEmDiasReais(store, inscricao.execucaoId!)
+    }
   })
 })

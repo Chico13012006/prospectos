@@ -103,13 +103,20 @@ export const condicaoResponsavelLeadIgual: Condicao = {
 
 // MODO DE TESTE da cadência de PROSPECÇÃO (opt-in, off por padrão): comprime
 // "1 dia configurado" em N minutos reais, para validar a esteira ponta a ponta
-// sem esperar dias. Ativado SOMENTE por PROSPECCAO_TESTE_INTERVALO_MINUTOS
-// (minutos reais por dia configurado); ausente/inválido = desligado e o
-// comportamento é EXATAMENTE o de produção (dias corridos). Lido a cada
-// chamada (mesmo padrão de engineConfig) — nunca cacheado no módulo, para
-// testes poderem ligar/desligar por execução e para refletir mudança de env
-// sem reiniciar o processo.
-function minutosPorDiaTesteProspeccao(): number | null {
+// sem esperar dias. Exige as DUAS envs simultaneamente:
+//
+//   PROSPECCAO_TESTE_ORGANIZACAO_ID  UUID da ÚNICA organização que comprime
+//   PROSPECCAO_TESTE_INTERVALO_MINUTOS  minutos reais por dia configurado
+//
+// Qualquer uma ausente/inválida, ou organização diferente da configurada =
+// desligado, e o comportamento é EXATAMENTE o de produção (dias corridos).
+// O recorte é por ID, nunca por nome: nome é editável pelo próprio cliente e
+// colidiria entre tenants. Lido a cada chamada (mesmo padrão de engineConfig)
+// — nunca cacheado no módulo, para testes poderem ligar/desligar por execução
+// e para refletir mudança de env sem reiniciar o processo.
+function minutosPorDiaTesteProspeccao(organizacaoId: string): number | null {
+  const orgTeste = process.env.PROSPECCAO_TESTE_ORGANIZACAO_ID?.trim()
+  if (!orgTeste || orgTeste.toLowerCase() !== organizacaoId.trim().toLowerCase()) return null
   const bruto = Number(process.env.PROSPECCAO_TESTE_INTERVALO_MINUTOS)
   return Number.isFinite(bruto) && bruto > 0 ? bruto : null
 }
@@ -120,10 +127,14 @@ export const acaoEsperar: Acao = {
   async executar(ctx): Promise<ResultadoAcao> {
     const dias = num(ctx.config.dias, 0)
     const horas = num(ctx.config.horas, 0)
-    // Escopo estrito: só campanhas tipo 'prospeccao' podem comprimir — renovação,
-    // Laudos e workflows orgânicos/manuais (campanhaTipo null) sempre usam dias
-    // corridos reais, mesmo com a env de teste ligada.
-    const minutosPorDia = ctx.campanhaTipo === 'prospeccao' ? minutosPorDiaTesteProspeccao() : null
+    // Escopo estrito: só campanhas tipo 'prospeccao' da organização de teste
+    // podem comprimir — renovação, Laudos, workflows orgânicos/manuais
+    // (campanhaTipo null) e QUALQUER outra organização sempre usam dias
+    // corridos reais, mesmo com as envs de teste ligadas. A organização vem do
+    // ambiente da execução (já escopado por tenant), sem consulta extra.
+    const minutosPorDia = ctx.campanhaTipo === 'prospeccao'
+      ? minutosPorDiaTesteProspeccao(ctx.ambiente.organizacaoId)
+      : null
     const ms = minutosPorDia != null
       ? (dias + horas / 24) * minutosPorDia * 60_000
       : dias * 86_400_000 + horas * 3_600_000
@@ -133,6 +144,7 @@ export const acaoEsperar: Acao = {
       // (console/observabilidade do cron) e evento da execução (visível na UI
       // do lead/workflow), para nunca ser confundido com produção depois.
       log.aviso('[MODO TESTE] espera de prospecção comprimida — dias configurados viram minutos.', {
+        organizacaoId: ctx.ambiente.organizacaoId,
         execucaoId: ctx.execucao.id,
         leadId: ctx.leadId,
         campanhaId: ctx.execucao.campanha_id ?? null,
@@ -141,7 +153,13 @@ export const acaoEsperar: Acao = {
         minutosPorDia,
         ate,
       })
-      await ctx.log('esperar_comprimido_modo_teste', { diasConfigurados: dias, horasConfiguradas: horas, minutosPorDia, ate })
+      await ctx.log('esperar_comprimido_modo_teste', {
+        organizacaoId: ctx.ambiente.organizacaoId,
+        diasConfigurados: dias,
+        horasConfiguradas: horas,
+        minutosPorDia,
+        ate,
+      })
     }
     return { tipo: 'esperar', ate }
   },
