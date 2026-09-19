@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server'
 import { resolverAcesso, exigirPermissao } from '@/lib/rbac/servidor'
 import { parseWorkspaceConfig, mesclarWorkspaceConfig, type WorkspaceConfigEditavel } from '@/lib/config/workspaceConfig'
+import { statusRemetenteProspeccaoDeConfig } from '@/lib/campanhas/opcoesServidor'
 
 export const runtime = 'nodejs'
 
@@ -12,13 +13,16 @@ export async function GET() {
   if ('erro' in acc) return acc.erro
   const { admin, org } = acc.acesso
   const { data } = await admin.from('organizacoes').select('nome, configuracoes').eq('id', org).maybeSingle()
+  const config = parseWorkspaceConfig(data?.configuracoes)
   return NextResponse.json({
-    config: parseWorkspaceConfig(data?.configuracoes),
+    config,
     // Nome da organização: é o fallback de {nome_servico} no envio real
     // (lib/workflows/ambiente.ts). A Central precisa dele para materializar a
     // variável exatamente como o motor materializaria.
     organizacao: { nome: typeof data?.nome === 'string' ? data.nome : '' },
     podeEditar: acc.acesso.permissoes.has('workspace.configure'),
+    // Status do remetente dedicado (Configurações > E-mail de prospecção).
+    remetenteProspeccao: statusRemetenteProspeccaoDeConfig(config),
   })
 }
 
@@ -65,5 +69,5 @@ export async function PUT(req: Request) {
     const conflito = error.message.includes('uniq_organizacoes_grupo_comercial')
     return NextResponse.json({ erro: conflito ? 'Este grupo já está configurado em outra organização.' : error.message }, { status: conflito ? 409 : 400 })
   }
-  return NextResponse.json({ ok: true, config: novo })
+  return NextResponse.json({ ok: true, config: novo, remetenteProspeccao: statusRemetenteProspeccaoDeConfig(novo) })
 }

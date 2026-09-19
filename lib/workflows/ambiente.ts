@@ -17,12 +17,19 @@ import type { Motor } from '@/lib/engine'
 import type { Lead } from '@/lib/engine/types'
 import { montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha'
 import { enviarEmailCampanhaComCopia } from '@/lib/campanhas/emailComCopiaServidor'
+import { parseWorkspaceConfig } from '@/lib/config/workspaceConfig'
+import {
+  fraseValidadeRenovacao,
+  resolverCcResponsavelRenovacao,
+  saudacaoRenovacao,
+} from '@/lib/renovacao/emailArtLaudos'
 import { agendarMonitorRespostas } from '@/lib/engine/respostasAutomaticas'
 import {
   buscarControleExecucaoCampanha,
   type ControleExecucaoCampanha,
 } from '@/lib/campanhas/controleExecucaoServidor'
 import { concluirDisparoUnicoSeFinalizado } from '@/lib/campanhas/conclusaoDisparoServidor'
+import { efeitoEnvioProspeccao, leadBloqueadoParaEnvioProspeccao } from '@/lib/campanhas/prospeccaoEnvio'
 import { avaliarOperador, type Operador } from './operadores'
 
 export interface AmbienteWorkflow {
@@ -250,9 +257,14 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       .eq('id', this.organizacaoId)
       .maybeSingle()
     const orgData = orgRow as { nome?: string; configuracoes?: Record<string, unknown> } | null
-    const orgNomenclaturas = orgData?.configuracoes?.['nomenclaturas'] as Record<string, string> | undefined
+    const workspaceConfig = parseWorkspaceConfig(orgData?.configuracoes)
+    const orgNomenclaturas = workspaceConfig.nomenclaturas
     const nomeServico = orgNomenclaturas?.['nome_servico'] ?? orgData?.nome ?? ''
-    const extras: Record<string, string> = nomeServico ? { nome_servico: nomeServico } : {}
+    const extras: Record<string, string> = {
+      ...(nomeServico ? { nome_servico: nomeServico } : {}),
+      frase_validade: fraseValidadeRenovacao(lead.data_validade),
+      saudacao_renovacao: saudacaoRenovacao(lead.contato_nome),
+    }
     const assunto = preencher(tpl.assunto ?? '{empresa}', lead, extras)
     const corpo = preencher(tpl.corpo, lead, extras)
     // Provider de e-mail: conta específica da org (email_conta_key) ou a padrão.
@@ -274,10 +286,11 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     // Gate por campanha: independente do MODO_ENSAIO global.
     // dry_run=true (padrão) bloqueia o envio mesmo com MODO_ENSAIO=false em prod.
     let campanhaPublico: Record<string, unknown> | null = null
+    let campanhaTipo: string | null = null
     if (campanhaId) {
       const { data: camp, error: campanhaError } = await this.db
         .from('campanhas')
-        .select('dry_run, publico')
+        .select('dry_run, publico, tipo')
         .eq('id', campanhaId)
         .eq('organizacao_id', this.organizacaoId)
         .maybeSingle()
@@ -289,19 +302,61 @@ export class AmbienteSupabase implements AmbienteWorkflow {
         throw new Error(`Envio bloqueado: campanha ${campanhaId} não pertence a esta organização.`)
       }
       campanhaPublico = (camp as { publico?: Record<string, unknown> | null } | null)?.publico ?? null
+      campanhaTipo = (camp as { tipo?: string | null } | null)?.tipo ?? null
       if ((camp as { dry_run?: boolean } | null)?.dry_run === true)
         return { enviado: false, assunto }
     }
 
-    // Todo e-mail de campanha leva o responsável comercial em cópia. O perfil
-    // escolhido na campanha prevalece; o responsável real do lead é o fallback
-    // legado. O mesmo responsável alimenta a assinatura do HTML.
-    const contextoCampanha = campanhaId
+    // TRAVA DE SEGURANÇA (Prospecção + Follow-up). Escopo estrito:
+    // campanhaTipo==='prospeccao' — não altera renovação nem os demais tipos
+    // (regra explícita desta entrega; ver lib/campanhas/prospeccaoEnvio.ts).
+    // Re-checa o lead no momento do efeito (mesmo princípio de
+    // lib/engine/flows/followUp.ts): opt-out/bounce/perdido/descartado podem
+    // ter acontecido DEPOIS que esta execução foi agendada, e mesmo assim não
+    // podem receber envio.
+    let leadProspeccaoAntes: Lead | null = null
+    if (campanhaId && campanhaTipo === 'prospeccao') {
+      leadProspeccaoAntes = await this.motor.store.buscarLead(leadId)
+      if (leadBloqueadoParaEnvioProspeccao(leadProspeccaoAntes)) {
+        log.aviso('Envio de prospecção bloqueado (opt-out/bounce/perdido/descartado).', { leadId, campanhaId })
+        return { enviado: false, assunto }
+      }
+    }
+
+    // TRAVA DE REMETENTE (E-mail de prospecção). Escopo estrito a
+    // campanhaTipo==='prospeccao': exige `email_conta_key` explicitamente
+    // configurado nesta organização (Configurações > E-mail de prospecção) —
+    // nunca cai no fallback silencioso 'followup'/conta global de outra
+    // organização (ver lib/campanhas/opcoesServidor.ts). Renovação e os demais
+    // tipos preservam o fallback existente (`emailProvider` acima). Depois do
+    // gate de opt-out/bounce: um lead já bloqueado não precisa de remetente
+    // configurado para ser corretamente ignorado.
+    if (campanhaId && campanhaTipo === 'prospeccao' && !emailContaKey) {
+      throw new Error('Configure um remetente em Configurações antes de iniciar a campanha.')
+    }
+
+    const ccRenovacaoAtivo = campanhaTipo === 'renovacao'
+      && workspaceConfig.features?.ccResponsavelNaRenovacao === true
+    // Campanhas legadas preservam a regra existente. Na renovação com a feature
+    // habilitada, a única fonte de CC é lead.responsavel_id — nunca o perfil da
+    // campanha — e falha de cadastro/busca não impede o contato principal.
+    const contextoCampanha = campanhaId && !ccRenovacaoAtivo
       ? await this.motor.store.buscarContextoCampanhaAtiva?.(leadId)
       : null
-    const responsavelLead = lead.responsavel_id
-      ? await this.motor.store.buscarUsuario(lead.responsavel_id)
-      : null
+    let responsavelLead = null
+    if (lead.responsavel_id) {
+      try {
+        responsavelLead = await this.motor.store.buscarUsuario(lead.responsavel_id)
+      } catch (erro) {
+        if (!ccRenovacaoAtivo) throw erro
+        log.aviso('Não foi possível resolver o responsável para CC da renovação; envio seguirá sem cópia.', {
+          organizacaoId: this.organizacaoId,
+          leadId,
+          campanhaId,
+          erro: erro instanceof Error ? erro.message : String(erro),
+        })
+      }
+    }
     const responsavelNome = contextoCampanha?.responsavel?.nome?.trim()
       || responsavelLead?.nome?.trim()
       || null
@@ -322,7 +377,11 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     const htmlDaCampanha = typeof mensagemConfigurada?.html === 'string' ? mensagemConfigurada.html : undefined
     const htmlBase = htmlDaCampanha ?? (typeof tpl.html === 'string' && tpl.html.trim() ? tpl.html : undefined)
     const htmlPersonalizado = htmlBase ? preencher(htmlBase, lead, extras) : undefined
-    const html = montarEmailCampanhaHtml(corpo, { responsavelNome, nomeServico }, htmlPersonalizado)
+    const html = montarEmailCampanhaHtml(
+      corpo,
+      { responsavelNome: ccRenovacaoAtivo ? null : responsavelNome, nomeServico },
+      htmlPersonalizado,
+    )
 
     // TRAVA DE REENVIO. O executor é at-least-once: se cair entre o efeito e a
     // gravação do passo, a ação repete no resume. Aqui isso significaria o mesmo
@@ -340,7 +399,14 @@ export class AmbienteSupabase implements AmbienteWorkflow {
 
     // Envio real: usa a conta da org (emailProvider) se configurada; senão a padrão.
     try {
-    if (campanhaId) {
+    if (campanhaId && ccRenovacaoAtivo) {
+      const cc = resolverCcResponsavelRenovacao({
+        para: lead.contato_email,
+        remetenteEmail: emailCred?.user,
+        responsavelLead,
+      })
+      await emailProvider.enviar(lead.contato_email, assunto, corpo, html, cc)
+    } else if (campanhaId) {
       await enviarEmailCampanhaComCopia(emailProvider, {
         para: lead.contato_email,
         assunto,
@@ -359,15 +425,31 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       if (chaveEnvio) await this.motor.store.liberarMensagem(`envio:${chaveEnvio}`)
       throw erro
     }
+    // Efeito de PROSPECÇÃO sobre o lead (item 2/3 da entrega): tipo de
+    // interação correto (abordagem/follow_up, não 'nota') + transição de
+    // estágio + cache de followups_enviados — pela MESMA máquina de estados
+    // do motor legado (lib/campanhas/prospeccaoEnvio.ts), para os dois
+    // motores nunca divergirem sobre o que já foi enviado a este lead.
+    // Escopo estrito a campanhaTipo==='prospeccao': renovação e os demais
+    // tipos continuam gravando 'nota' e não tocam em estagio/followups_enviados.
+    const efeitoProspeccao = leadProspeccaoAntes
+      ? efeitoEnvioProspeccao(leadProspeccaoAntes.estagio, leadProspeccaoAntes.followups_enviados ?? 0)
+      : null
     await this.motor.store.registrarInteracao({
       lead_id: leadId,
-      tipo: 'nota',
+      tipo: efeitoProspeccao?.tipoInteracao ?? 'nota',
       canal: 'email',
       descricao: `**${assunto}**\n\n${corpo}`,
       origem_acao: 'ia',
       responsavel_id: lead.responsavel_id ?? null,
       template_id: tpl.id, // A/B testing (item 6)
     })
+    if (efeitoProspeccao) {
+      await this.motor.store.atualizarLead(leadId, {
+        estagio: efeitoProspeccao.estagioDestino,
+        followups_enviados: efeitoProspeccao.followupsEnviados,
+      })
+    }
     // Cada envio real mantém um único monitor rápido por organização. A chave
     // temporal da fila deduplica campanhas/envios concorrentes. Falha ao
     // agendar não reenvia o e-mail que já saiu; o cron diário segue de fallback.

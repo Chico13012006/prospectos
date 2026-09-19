@@ -17,7 +17,8 @@
     "engine:cadencia-dry": "tsx scripts/engine-cadencia-dry.ts",
     "prospeccao:hotelaria": "tsx scripts/prospeccao-freetier-hotelaria.ts",
     "import:hubspot": "tsx scripts/importar-hubspot.ts",
-    "popular:responsavel": "tsx scripts/popular-responsavel.ts"
+    "popular:responsavel": "tsx scripts/popular-responsavel.ts",
+    "workflows:tick-teste": "tsx scripts/tick-workflows-teste.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

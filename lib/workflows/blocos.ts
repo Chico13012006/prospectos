@@ -6,6 +6,7 @@ import type { Acao, Condicao, CtxExec, Gatilho, ResultadoAcao } from './registro
 import { RegistroWorkflows } from './registro'
 import type { BlocoConfig } from './types'
 import { avaliarOperador, type Operador } from './operadores'
+import { log } from '@/lib/engine/logger'
 
 // Helper: mesmo contexto, outro `config` (para blocos aninhados em 'ramificar').
 const comConfig = (ctx: CtxExec, config: Record<string, unknown>): CtxExec => ({ ...ctx, config })
@@ -100,14 +101,48 @@ export const condicaoResponsavelLeadIgual: Condicao = {
   },
 }
 
+// MODO DE TESTE da cadência de PROSPECÇÃO (opt-in, off por padrão): comprime
+// "1 dia configurado" em N minutos reais, para validar a esteira ponta a ponta
+// sem esperar dias. Ativado SOMENTE por PROSPECCAO_TESTE_INTERVALO_MINUTOS
+// (minutos reais por dia configurado); ausente/inválido = desligado e o
+// comportamento é EXATAMENTE o de produção (dias corridos). Lido a cada
+// chamada (mesmo padrão de engineConfig) — nunca cacheado no módulo, para
+// testes poderem ligar/desligar por execução e para refletir mudança de env
+// sem reiniciar o processo.
+function minutosPorDiaTesteProspeccao(): number | null {
+  const bruto = Number(process.env.PROSPECCAO_TESTE_INTERVALO_MINUTOS)
+  return Number.isFinite(bruto) && bruto > 0 ? bruto : null
+}
+
 // --- AÇÃO: esperar N dias/horas (espera PERSISTIDA — suspende a execução) ----
 export const acaoEsperar: Acao = {
   tipo: 'esperar',
   async executar(ctx): Promise<ResultadoAcao> {
     const dias = num(ctx.config.dias, 0)
     const horas = num(ctx.config.horas, 0)
-    const ms = dias * 86_400_000 + horas * 3_600_000
+    // Escopo estrito: só campanhas tipo 'prospeccao' podem comprimir — renovação,
+    // Laudos e workflows orgânicos/manuais (campanhaTipo null) sempre usam dias
+    // corridos reais, mesmo com a env de teste ligada.
+    const minutosPorDia = ctx.campanhaTipo === 'prospeccao' ? minutosPorDiaTesteProspeccao() : null
+    const ms = minutosPorDia != null
+      ? (dias + horas / 24) * minutosPorDia * 60_000
+      : dias * 86_400_000 + horas * 3_600_000
     const ate = new Date(Date.now() + ms).toISOString()
+    if (minutosPorDia != null) {
+      // Evidência da compressão em dois lugares: log estruturado do servidor
+      // (console/observabilidade do cron) e evento da execução (visível na UI
+      // do lead/workflow), para nunca ser confundido com produção depois.
+      log.aviso('[MODO TESTE] espera de prospecção comprimida — dias configurados viram minutos.', {
+        execucaoId: ctx.execucao.id,
+        leadId: ctx.leadId,
+        campanhaId: ctx.execucao.campanha_id ?? null,
+        diasConfigurados: dias,
+        horasConfiguradas: horas,
+        minutosPorDia,
+        ate,
+      })
+      await ctx.log('esperar_comprimido_modo_teste', { diasConfigurados: dias, horasConfiguradas: horas, minutosPorDia, ate })
+    }
     return { tipo: 'esperar', ate }
   },
 }

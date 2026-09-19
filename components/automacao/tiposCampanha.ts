@@ -54,6 +54,16 @@ export interface MensagemCampanha {
   // formulário, em vez de cair no HTML cru.
   modeloId?: string;
   modeloCampos?: CamposModeloEmail;
+  // Identidade ESTÁVEL desta mensagem — vira `acoes[].id` no workflow
+  // materializado e é a chave que a idempotência de envio usa para nunca
+  // reenviar o mesmo passo ao mesmo destinatário, mesmo que o lead ou a
+  // execução sejam recriados. Gerado UMA vez (`resolverAcaoIds`, em
+  // `lib/campanhas/acaoId.ts`) e preservado em todo re-save/reordenação —
+  // NUNCA recalculado por posição no array. Ausente só em publico legado
+  // (campanhas anteriores a esta migração) ou ao clonar uma campanha: quem
+  // clonar DEVE remover este campo (é o que faz a cópia ganhar UUIDs novos —
+  // ela representa uma ação comercial diferente, não deve herdar identidade).
+  acaoId?: string;
 }
 
 // Patch completo para a opção "Escrever do zero". Os `undefined` são

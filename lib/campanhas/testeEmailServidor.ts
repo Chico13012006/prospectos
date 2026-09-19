@@ -4,7 +4,7 @@ import { engineConfig } from '@/lib/engine/config'
 import { GmailProvider, lerCredenciaisGmail } from '@/lib/engine/email/gmailProvider'
 import { LIMITE_HTML_CAMPANHA } from './configuracaoGuiada'
 import { montarEmailCampanhaHtml } from './emailCampanha'
-import { buscarRemetenteCampanha } from './opcoesServidor'
+import { buscarRemetenteCampanha, statusRemetenteProspeccao, type RemetenteCampanha } from './opcoesServidor'
 
 const LIMITE_ASSUNTO_TESTE = 200
 const LIMITE_CORPO_TESTE = 50_000
@@ -14,6 +14,33 @@ export interface DadosTesteEmailCampanha {
   corpo?: unknown
   html?: unknown
   responsavelNome?: unknown
+  // Tipo da campanha sendo composta no wizard (ainda não necessariamente
+  // salva, por isso não há campanhaId aqui). Só 'prospeccao' muda o resolvedor
+  // de remetente (ver `resolverRemetenteTeste` abaixo); demais tipos/ausência
+  // preservam o comportamento anterior.
+  tipo?: unknown
+}
+
+// MESMO resolvedor/gate da ativação e do envio real de prospecção (ver
+// lib/campanhas/opcoesServidor.ts, lib/workflows/ambiente.ts) — sem
+// campanhaId aqui (o teste roda sobre um rascunho ainda não salvo), então
+// não dá para reusar `exigirEnvioRealCampanhaDisponivel` (que busca o tipo
+// pela campanha persistida); a checagem em si é a mesma `statusRemetenteProspeccao`.
+async function resolverRemetenteTeste(
+  admin: SupabaseClient,
+  org: string,
+  tipoCampanha: string | null,
+): Promise<RemetenteCampanha> {
+  if (tipoCampanha === 'prospeccao') {
+    const status = await statusRemetenteProspeccao(admin, org)
+    if (!status.conectado) {
+      throw new Error('Configure um remetente em Configurações antes de iniciar a campanha.')
+    }
+    return { conta: status.contaKey as string, email: status.email as string }
+  }
+  const remetente = await buscarRemetenteCampanha(admin, org)
+  if (!remetente) throw new Error('Configure uma conta remetente no workspace antes de enviar o teste.')
+  return remetente
 }
 
 function textoObrigatorio(valor: unknown, campo: string, limite: number): string {
@@ -47,8 +74,8 @@ export async function enviarTesteEmailCampanha(
     throw new Error('O motor está em modo ensaio; nenhum e-mail de teste foi enviado.')
   }
 
-  const remetente = await buscarRemetenteCampanha(admin, org)
-  if (!remetente) throw new Error('Configure uma conta remetente no workspace antes de enviar o teste.')
+  const tipoCampanha = typeof dados.tipo === 'string' ? dados.tipo : null
+  const remetente = await resolverRemetenteTeste(admin, org, tipoCampanha)
 
   const credenciais = lerCredenciaisGmail(remetente.conta)
   if (!credenciais || credenciais.user.toLowerCase() !== remetente.email.toLowerCase()) {

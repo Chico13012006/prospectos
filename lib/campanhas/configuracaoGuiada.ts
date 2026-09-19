@@ -208,6 +208,13 @@ function normalizarMensagem(raw: unknown): MensagemCampanha | undefined {
     templateTipo: texto(obj.templateTipo),
     modeloId: texto(obj.modeloId),
     modeloCampos: normalizarCamposModelo(obj.modeloCampos),
+    // Preservar, NUNCA aceitar do cliente como fonte de verdade nova: o
+    // wizard (browser) não envia isto, mas `ativarCampanhaGuiada` relê
+    // `campanha.publico` (já com `acaoId` gravado) e passa por esta MESMA
+    // normalização antes de resolver os ids de novo — sem este campo aqui, o
+    // valor já persistido seria descartado a cada re-materialização e
+    // `resolverAcaoIds` nunca veria "já tenho id" (ver lib/campanhas/acaoId.ts).
+    acaoId: texto(obj.acaoId),
   }
   return Object.values(mensagem).some(Boolean) ? mensagem : undefined
 }
@@ -393,7 +400,12 @@ export function montarDefinicaoCampanha(publico: Publico): DefinicaoWorkflow {
     if (espera > 0) {
       acoes.push({ id: `espera-${indice}`, tipo: 'esperar', config: { dias: espera, horas: 0 } })
     }
-    acoes.push({ id: `email-${indice}`, tipo: 'enviar_email', config: { template: mensagem.templateTipo } })
+    // `acaoId` (lib/campanhas/acaoId.ts) é a identidade estável de verdade,
+    // resolvida ANTES desta função por `materializarCampanhaGuiada` — pura, só
+    // monta a definição a partir do que já chegou pronto. O fallback posicional
+    // só existe para não quebrar um `Publico` legado passado direto (ex.:
+    // fixture de teste) sem ter passado por `resolverAcaoIds`.
+    acoes.push({ id: mensagem.acaoId ?? `email-${indice}`, tipo: 'enviar_email', config: { template: mensagem.templateTipo } })
     diaAnterior = diaAtual
   })
 

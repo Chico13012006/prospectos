@@ -60,7 +60,7 @@ export async function POST(req: Request) {
         ? null
         : Number.isFinite(Number(b.meta_leads)) ? Number(b.meta_leads) : null,
     })
-    const materializada = await materializarCampanhaGuiada(admin, org, nova.id, b.nome.trim(), publico)
+    const materializada = await materializarCampanhaGuiada(admin, org, nova.id, b.nome.trim(), publico, tipo)
     return NextResponse.json({ ok: true, id: nova.id, workflow_id: materializada.workflowId })
   } catch (e) {
     if (e instanceof ErroTemplateCampanha) return NextResponse.json({ erro: e.message }, { status: e.status })

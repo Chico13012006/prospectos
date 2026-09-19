@@ -2,11 +2,30 @@
 // ou de template impede o envio ANTES do provider, e nenhuma interação de envio
 // é gravada. Também cobre o HTML do template (workflow sem campanha) e a trava
 // de dry_run. Sem rede: client Supabase falso + motor falso.
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BancoFalso, type Linha } from '@/lib/templates/__tests__/bancoFalso'
 import { AmbienteSupabase } from '../ambiente'
 import type { Motor } from '@/lib/engine'
 import type { TemplateEmail } from '@/lib/engine/store/store'
+
+// Remetente DEDICADO (nomenclaturas.email_conta_key): exigido pela trava de
+// prospecção (lib/workflows/ambiente.ts) sempre que campanhaId + tipo=
+// 'prospeccao'. Usado só pelo teste "HTML da campanha tem precedência" mais
+// abaixo; GmailProvider é mockado para não abrir conexão SMTP real.
+const { CONTA_TESTE, enviosGmailMock } = vi.hoisted(() => ({
+  CONTA_TESTE: 'ENVIOFAILCLOSED_TESTE',
+  enviosGmailMock: [] as { para: string; assunto: string; corpo: string; html?: string; cc?: string[] }[],
+}))
+vi.mock('@/lib/engine/email/gmailProvider', () => ({
+  lerCredenciaisGmail: (papel?: string) =>
+    (papel === CONTA_TESTE ? { user: 'prospeccao@org-a.test', appPassword: 'segredo-teste' } : null),
+  GmailProvider: class {
+    async enviar(para: string, assunto: string, corpo: string, html?: string, cc?: string[]) {
+      enviosGmailMock.push({ para, assunto, corpo, html, cc })
+    }
+  },
+}))
+beforeEach(() => { enviosGmailMock.length = 0 })
 
 const ORG = 'aaaaaaaa-0000-4000-8000-000000000001'
 const OUTRA = 'bbbbbbbb-0000-4000-8000-000000000002'
@@ -29,6 +48,7 @@ const lead = {
 function motorFalso(templates: TemplateEmail[]) {
   const enviados: { para: string; assunto: string; corpo: string; html?: string }[] = []
   const interacoes: Record<string, unknown>[] = []
+  const atualizacoesLead: { id: string; patch: Record<string, unknown> }[] = []
   const email = {
     async enviar(para: string, assunto: string, corpo: string, html?: string) {
       enviados.push({ para, assunto, corpo, html })
@@ -50,9 +70,14 @@ function motorFalso(templates: TemplateEmail[]) {
       async registrarInteracao(interacao: Record<string, unknown>) { interacoes.push(interacao) },
       async reivindicarMensagem() { return true },
       async liberarMensagem() { /* nada */ },
+      // Adicionado para a entrega de Prospecção + Follow-up: enviarEmailTemplate
+      // passa a chamar atualizarLead quando campanhaTipo==='prospeccao'. O lead
+      // fixo desta suíte não tem optout/bounced/perdido nem estagio (undefined),
+      // então nunca é bloqueado — só precisa não quebrar por falta de mock.
+      async atualizarLead(id: string, patch: Record<string, unknown>) { atualizacoesLead.push({ id, patch }) },
     },
   } as unknown as Motor
-  return { motor, enviados, interacoes }
+  return { motor, enviados, interacoes, atualizacoesLead }
 }
 
 const template = (dados: Partial<TemplateEmail> = {}): TemplateEmail => ({
@@ -64,12 +89,19 @@ const template = (dados: Partial<TemplateEmail> = {}): TemplateEmail => ({
   ...dados,
 })
 
-function banco(campanhas: Linha[] = []) {
+function banco(campanhas: Linha[] = [], orgConfiguracoes: Record<string, unknown> = {}) {
   return new BancoFalso({
-    organizacoes: [{ id: ORG, nome: 'Org A', configuracoes: {} }, { id: OUTRA, nome: 'Org B', configuracoes: {} }],
+    organizacoes: [
+      { id: ORG, nome: 'Org A', configuracoes: orgConfiguracoes },
+      { id: OUTRA, nome: 'Org B', configuracoes: {} },
+    ],
     campanhas,
   })
 }
+
+// Org COM remetente dedicado — só para o teste de envio real de prospecção
+// abaixo (ver comentário do mock de GmailProvider no topo do arquivo).
+const configComRemetente = { nomenclaturas: { email_conta_key: CONTA_TESTE } }
 
 // O gate de MODO_ENSAIO vem antes; aqui testamos o que acontece DEPOIS dele.
 async function comEnvioReal<T>(fn: () => Promise<T>): Promise<T> {
@@ -164,18 +196,18 @@ describe('envio com HTML do template (workflow sem campanha)', () => {
   })
 
   it('HTML da campanha tem precedência sobre o do template', async () => {
-    const { motor, enviados } = motorFalso([template({ html: '<p>Do template</p>' })])
+    const { motor } = motorFalso([template({ html: '<p>Do template</p>' })])
     const db = banco([{
       id: CAMPANHA,
       organizacao_id: ORG,
       dry_run: false,
       tipo: 'prospeccao',
       publico: { operacao: { mensagemInicial: { templateTipo: 'follow_up_1', html: '<p>Da campanha para {{empresa}}</p>' } } },
-    }])
+    }], configComRemetente)
     const ambiente = new AmbienteSupabase(ORG, { client: db.cliente(), motor })
     await comEnvioReal(() => ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA))
-    expect(enviados[0].html).toContain('Da campanha para Empresa Exemplo')
-    expect(enviados[0].html).not.toContain('Do template')
+    expect(enviosGmailMock[0].html).toContain('Da campanha para Empresa Exemplo')
+    expect(enviosGmailMock[0].html).not.toContain('Do template')
   })
 })
 

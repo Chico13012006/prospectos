@@ -119,6 +119,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         id,
         typeof b.nome === 'string' && b.nome.trim() ? b.nome.trim() : atual.nome,
         publico,
+        tipo,
       )
       const restante = { ...b }
       delete restante.publico

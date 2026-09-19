@@ -56,6 +56,7 @@ export async function ativarCampanhaGuiada(
     campanhaId,
     campanha.nome,
     aplicarRegraPublicoPorTipo(campanha.publico, campanha.tipo),
+    campanha.tipo,
   )
   const erros = validarCampanhaGuiada(materializada.publico)
   if (erros.length) throw new Error(erros.join(' '))
@@ -114,7 +115,7 @@ export async function inscreverCampanhaReal(
   campanhaId: string,
   confirmarQuantidade?: number,
 ): Promise<ResultadoEnrollmentReal> {
-  await exigirEnvioRealCampanhaDisponivel(admin, org)
+  await exigirEnvioRealCampanhaDisponivel(admin, org, campanhaId)
   const campanha = await buscarCampanha(admin, org, campanhaId)
   if (!campanha) throw new Error('Campanha não encontrada.')
   if (campanha.status !== 'ativa') throw new Error('Ative a campanha em modo ensaio antes do envio real.')
@@ -220,7 +221,7 @@ export async function iniciarCampanhaReal(
     throw new Error('Confirme explicitamente a quantidade atual de contatos elegíveis.')
   }
 
-  await exigirEnvioRealCampanhaDisponivel(admin, org)
+  await exigirEnvioRealCampanhaDisponivel(admin, org, campanhaId)
   await ativarCampanhaGuiada(admin, org, campanhaId, autorId, confirmarQuantidade)
   return inscreverCampanhaReal(admin, org, campanhaId, confirmarQuantidade)
 }

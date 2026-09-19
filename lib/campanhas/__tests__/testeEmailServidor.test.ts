@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 const mocks = vi.hoisted(() => ({
   modoEnsaio: false,
   buscarRemetenteCampanha: vi.fn(),
+  statusRemetenteProspeccao: vi.fn(),
   lerCredenciaisGmail: vi.fn(),
   enviar: vi.fn(),
 }))
@@ -23,6 +24,7 @@ vi.mock('@/lib/engine/email/gmailProvider', () => ({
 
 vi.mock('../opcoesServidor', () => ({
   buscarRemetenteCampanha: mocks.buscarRemetenteCampanha,
+  statusRemetenteProspeccao: mocks.statusRemetenteProspeccao,
 }))
 
 import { enviarTesteEmailCampanha } from '../testeEmailServidor'
@@ -39,6 +41,11 @@ beforeEach(() => {
   mocks.lerCredenciaisGmail.mockReturnValue({
     user: 'remetente@empresa.com.br',
     appPassword: 'segredo-nao-real',
+  })
+  mocks.statusRemetenteProspeccao.mockResolvedValue({
+    contaKey: 'PROSPECCAO_ORG_A',
+    email: 'prospeccao@empresa.com.br',
+    conectado: true,
   })
   mocks.enviar.mockResolvedValue(undefined)
 })
@@ -100,5 +107,56 @@ describe('envio de teste da campanha', () => {
 
     expect(mocks.buscarRemetenteCampanha).not.toHaveBeenCalled()
     expect(mocks.enviar).not.toHaveBeenCalled()
+  })
+})
+
+// Campanha tipo='prospeccao': MESMO resolvedor/gate de opcoesServidor.ts usado
+// pela ativação e pelo envio real (lib/workflows/ambiente.ts) — nunca o
+// fallback global ('followup'/GMAIL_USER) que `buscarRemetenteCampanha` usa
+// para os demais tipos.
+describe('envio de teste — campanha tipo=prospeccao', () => {
+  it('usa o remetente DEDICADO da organização (statusRemetenteProspeccao), não o fallback', async () => {
+    mocks.lerCredenciaisGmail.mockReturnValue({
+      user: 'prospeccao@empresa.com.br',
+      appPassword: 'segredo-nao-real',
+    })
+
+    const resultado = await enviarTesteEmailCampanha(admin, 'org-a', {
+      assunto: 'Apresentação',
+      corpo: 'Olá, {nome}.',
+      tipo: 'prospeccao',
+    })
+
+    expect(resultado).toEqual({
+      destinatario: 'prospeccao@empresa.com.br',
+      assunto: '[TESTE] Apresentação',
+    })
+    expect(mocks.statusRemetenteProspeccao).toHaveBeenCalledWith(admin, 'org-a')
+    expect(mocks.buscarRemetenteCampanha).not.toHaveBeenCalled()
+    expect(mocks.lerCredenciaisGmail).toHaveBeenCalledWith('PROSPECCAO_ORG_A')
+  })
+
+  it('bloqueia sem fallback quando a organização não tem remetente configurado', async () => {
+    mocks.statusRemetenteProspeccao.mockResolvedValue({ contaKey: null, email: null, conectado: false })
+
+    await expect(enviarTesteEmailCampanha(admin, 'org-a', {
+      assunto: 'Apresentação',
+      corpo: 'Olá, {nome}.',
+      tipo: 'prospeccao',
+    })).rejects.toThrow('Configure um remetente em Configurações antes de iniciar a campanha.')
+
+    expect(mocks.buscarRemetenteCampanha).not.toHaveBeenCalled()
+    expect(mocks.enviar).not.toHaveBeenCalled()
+  })
+
+  it('outros tipos (ou ausência de tipo) continuam no resolvedor antigo, com fallback', async () => {
+    await enviarTesteEmailCampanha(admin, 'org-a', {
+      assunto: 'Apresentação',
+      corpo: 'Olá, {nome}.',
+      tipo: 'renovacao',
+    })
+
+    expect(mocks.buscarRemetenteCampanha).toHaveBeenCalledWith(admin, 'org-a')
+    expect(mocks.statusRemetenteProspeccao).not.toHaveBeenCalled()
   })
 })

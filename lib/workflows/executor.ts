@@ -26,6 +26,7 @@ function ctxDe(
   execucao: import('./types').WorkflowExecucao,
   config: Record<string, unknown>,
   blocoId?: string,
+  campanhaTipo?: string | null,
 ): CtxExec {
   return {
     ambiente,
@@ -38,6 +39,7 @@ function ctxDe(
     // execução, forma a chave que impede reenviar o mesmo passo se a fila
     // repetir a ação (o executor é at-least-once por desenho).
     blocoId,
+    campanhaTipo: campanhaTipo ?? null,
     log: (tipo, detalhe) => store.registrarEvento({ execucao_id: execucao.id, tipo, detalhe: detalhe ?? null }),
   }
 }
@@ -80,6 +82,7 @@ export async function processarExecucao(
     // Concluída = não inscreve novos leads (gate no enrollment), mas deixa
     // execuções já existentes terminarem — "concluir" encerra novas entradas,
     // não corta cadências em andamento.
+    let campanhaTipo: string | null = null
     if (ex.campanha_id) {
       const controle = await ambiente.buscarControleExecucaoCampanha(ex.campanha_id)
       if (!controle || controle.status === 'pausada') return
@@ -89,6 +92,7 @@ export async function processarExecucao(
         && !opcoes.ignorarAgendaCampanha
         && !agendaPermiteProcessar(controle.diasSemana, agoraISO)
       ) return
+      campanhaTipo = controle.tipo ?? null
     }
 
     const def = await definicaoDaExecucao(store, ex.versao_id)
@@ -97,7 +101,7 @@ export async function processarExecucao(
     // qualquer ação. Em resume (passo > 0) as condições não são reavaliadas.
     if (ex.passo_atual === 0) {
       for (const cond of def.condicoes ?? []) {
-        const passou = await registro.obterCondicao(cond.tipo).avaliar(ctxDe(store, registro, ambiente, ex, cond.config ?? {}))
+        const passou = await registro.obterCondicao(cond.tipo).avaliar(ctxDe(store, registro, ambiente, ex, cond.config ?? {}, undefined, campanhaTipo))
         if (!passou) {
           await log('condicoes_nao_satisfeitas', { condicao: cond.tipo })
           await store.atualizarExecucao(ex.id, { status: 'concluido', atualizado_em: agoraISO })
@@ -118,7 +122,7 @@ export async function processarExecucao(
         throw new Error(`limite de passos excedido (${MAX_PASSOS}) — possível laço de ramificação`)
 
       const bloco = def.acoes[passo]
-      const res = await registro.obterAcao(bloco.tipo).executar(ctxDe(store, registro, ambiente, ex, bloco.config ?? {}, bloco.id))
+      const res = await registro.obterAcao(bloco.tipo).executar(ctxDe(store, registro, ambiente, ex, bloco.config ?? {}, bloco.id, campanhaTipo))
       await log('acao_executada', { passo, acao: bloco.tipo })
 
       if (res.tipo === 'esperar') {

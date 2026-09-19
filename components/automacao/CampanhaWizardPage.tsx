@@ -230,7 +230,9 @@ export default function CampanhaWizardPage({
   useEffect(() => {
     let ativo = true
     Promise.all([
-      fetch('/api/campanhas/opcoes').then(async (res) => {
+      // `tipo` na query: prospecção não deve herdar o fallback 'followup'/conta
+      // global exibido para os demais tipos (ver app/api/campanhas/opcoes/route.ts).
+      fetch(`/api/campanhas/opcoes?tipo=${encodeURIComponent(tipo)}`).then(async (res) => {
         const dados = await res.json()
         if (!res.ok) throw new Error(dados.erro || 'Não foi possível carregar as opções da campanha.')
         return dados
@@ -262,7 +264,7 @@ export default function CampanhaWizardPage({
       if (ativo) setCarregandoOpcoes(false)
     })
     return () => { ativo = false }
-  }, [])
+  }, [tipo])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -572,6 +574,7 @@ export default function CampanhaWizardPage({
           corpo: mensagemInicial.corpo,
           html: mensagemInicial.html,
           responsavelNome: responsavel ? nomeMembro(responsavel) : undefined,
+          tipo,
         }),
       })
       const dados = await res.json()

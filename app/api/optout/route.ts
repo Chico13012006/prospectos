@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
 import { validarTokenOptout } from '@/lib/engine/optout';
+import { cancelarExecucoesProspeccaoDoLead } from '@/lib/campanhas/cancelamentoServidor';
 
 // Opt-out público de follow-up (sprint item 2.4). SEM login — a identidade vem
 // do token HMAC específico do lead (?lead=<id>&t=<token>). Só afeta AQUELE lead.
@@ -76,6 +77,16 @@ export async function POST(req: NextRequest) {
     if (error) {
       console.error('[optout] falha ao atualizar lead:', error);
       return pagina('Erro', '<h1 style="font-size:18px">Não foi possível concluir</h1><p style="color:#94a3b8;font-size:14px">Tente novamente em instantes.</p>', 500);
+    }
+    // Cancela qualquer follow-up de PROSPECÇÃO ainda pendente para este lead
+    // (item 5 da entrega de Prospecção+Follow-up). Escopo: só execuções de
+    // campanhas tipo='prospeccao' — não mexe em renovação nem em outros tipos.
+    // Best-effort: o lead já está marcado como optout (trava de verdade no
+    // motor), então uma falha aqui não pode impedir a confirmação ao usuário.
+    try {
+      await cancelarExecucoesProspeccaoDoLead(admin, lead.organizacao_id, leadId);
+    } catch (cancelError) {
+      console.error('[optout] falha ao cancelar execuções de prospecção:', cancelError);
     }
   }
   return pagina(

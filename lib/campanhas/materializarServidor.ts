@@ -1,4 +1,5 @@
 import 'server-only'
+import { randomUUID } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MensagemCampanha, Publico } from '@/components/automacao/tiposCampanha'
 import { atualizarCampanha } from './repository'
@@ -8,8 +9,9 @@ import {
   normalizarPublicoCampanha,
   tipoTemplateCampanha,
 } from './configuracaoGuiada'
+import { extrairAcaoIdsPublicados, mensagensNaOrdem, resolverAcaoIds } from './acaoId'
 import { criarWorkflow, salvarRascunho, SupabaseWorkflowStore } from '@/lib/workflows'
-import { buscarRemetenteCampanha } from './opcoesServidor'
+import { buscarRemetenteCampanha, statusRemetenteProspeccao } from './opcoesServidor'
 import { exigirTemplatesDaOrganizacao } from './templatesCampanha'
 
 interface Materializacao {
@@ -94,11 +96,18 @@ export async function materializarCampanhaGuiada(
   campanhaId: string,
   campanhaNome: string,
   bruto: unknown,
+  tipoCampanha?: string | null,
 ): Promise<Materializacao> {
   const normalizado = normalizarPublicoCampanha(bruto)
   // Antes de qualquer escrita: todo template referenciado é desta organização.
   await exigirTemplatesDaOrganizacao(admin, org, normalizado)
-  const remetente = await buscarRemetenteCampanha(admin, org)
+  // Prospecção reflete o remetente DEDICADO da organização (ou nenhum, se não
+  // configurado) — nunca o fallback 'followup'/conta global que
+  // `buscarRemetenteCampanha` usa para os demais tipos (preservado como
+  // estava). Ver lib/campanhas/opcoesServidor.ts.
+  const remetente = tipoCampanha === 'prospeccao'
+    ? await statusRemetenteProspeccao(admin, org).then((s) => (s.conectado ? { conta: s.contaKey as string, email: s.email as string } : null))
+    : await buscarRemetenteCampanha(admin, org)
   const publico: Publico = {
     ...normalizado,
     operacao: {
@@ -113,22 +122,36 @@ export async function materializarCampanhaGuiada(
     return { publico, workflowId: null }
   }
 
-  const mensagens = [inicial, ...(publico.operacao?.followups ?? [])]
-  const materializadas: MensagemCampanha[] = []
-  for (const [indice, mensagem] of mensagens.entries()) {
-    materializadas.push(await materializarTemplate(admin, org, campanhaId, campanhaNome, mensagem, indice))
-  }
-
+  // Resolve o workflow ANTES de tocar nas mensagens: se já existe uma versão
+  // publicada, é dela que uma campanha legada herda o `acaoId` de cada
+  // mensagem (ver lib/campanhas/acaoId.ts) — sem isso, uma campanha publicada
+  // antes desta migração ganharia UUIDs novos, divergentes do `acoes[].id` já
+  // gravado em workflow_execucoes/interacoes históricos.
   const store = new SupabaseWorkflowStore(org, admin)
   const workflowGerenciadoId = publico.operacao?.workflowGerenciadoId
   let workflowId: string
+  let idsPublicados: string[] = []
   if (workflowGerenciadoId) {
     const existente = await store.buscarWorkflow(workflowGerenciadoId)
     if (!existente) throw new Error('O workflow gerenciado desta campanha não foi encontrado.')
     workflowId = existente.id
+    if (existente.versao_atual_id) {
+      const versaoPublicada = await store.buscarVersao(existente.versao_atual_id)
+      idsPublicados = extrairAcaoIdsPublicados(versaoPublicada?.definicao)
+    }
   } else {
     const novo = await criarWorkflow(store, { nome: `Campanha — ${campanhaNome}` })
     workflowId = novo.id
+  }
+
+  const mensagens = resolverAcaoIds(
+    mensagensNaOrdem(inicial, publico.operacao?.followups),
+    idsPublicados,
+    randomUUID,
+  )
+  const materializadas: MensagemCampanha[] = []
+  for (const [indice, mensagem] of mensagens.entries()) {
+    materializadas.push(await materializarTemplate(admin, org, campanhaId, campanhaNome, mensagem, indice))
   }
 
   const materializado: Publico = {

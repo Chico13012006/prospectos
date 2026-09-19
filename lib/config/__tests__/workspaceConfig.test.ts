@@ -53,9 +53,14 @@ describe('workspaceConfig', () => {
 
   it('features: aceita boolean conhecido, descarta tipo errado e chave desconhecida', () => {
     const r = parseWorkspaceConfig({
-      features: { empresaContatoReads: true, empresaContatoReads2: true, lixo: 'x' },
+      features: {
+        empresaContatoReads: true,
+        ccResponsavelNaRenovacao: true,
+        empresaContatoReads2: true,
+        lixo: 'x',
+      },
     })
-    expect(r.features).toEqual({ empresaContatoReads: true })
+    expect(r.features).toEqual({ empresaContatoReads: true, ccResponsavelNaRenovacao: true })
     // ausência total de feature válida => sem a chave features
     expect(parseWorkspaceConfig({ features: { desconhecida: true } }).features).toBeUndefined()
     // round-trip pelo ponto único de escrita

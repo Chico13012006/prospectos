@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { resolverAcesso } from '@/lib/rbac/servidor'
-import { buscarRemetenteCampanha } from '@/lib/campanhas/opcoesServidor'
+import { buscarRemetenteCampanha, statusRemetenteProspeccao } from '@/lib/campanhas/opcoesServidor'
 import { listarTemplates } from '@/lib/templates/repository'
 import { engineConfig } from '@/lib/engine/config'
 
 export const runtime = 'nodejs'
 
-export async function GET() {
+export async function GET(req: Request) {
   const acc = await resolverAcesso()
   if ('erro' in acc) return acc.erro
   if (!acc.acesso.permissoes.has('campaigns.view')) {
@@ -14,7 +14,14 @@ export async function GET() {
   }
 
   const { admin, org } = acc.acesso
+  // Prospecção nunca herda o fallback 'followup'/conta global: só o remetente
+  // DEDICADO desta organização conta como configurado. Demais tipos (e
+  // chamadas sem `tipo`) preservam o comportamento anterior.
+  const tipo = new URL(req.url).searchParams.get('tipo')
   try {
+    const remetentePromise = tipo === 'prospeccao'
+      ? statusRemetenteProspeccao(admin, org).then((s) => (s.conectado ? { conta: s.contaKey as string, email: s.email as string } : null))
+      : buscarRemetenteCampanha(admin, org)
     const [templates, { data: leads, error: leadsError }, remetente] = await Promise.all([
       // Mesma biblioteca da tela de Templates: só e-mail ativo da organização e
       // sem as cópias `campanha_*` geradas por outras campanhas.
@@ -27,7 +34,7 @@ export async function GET() {
         .neq('segmento', '')
         .order('segmento', { ascending: true })
         .limit(2000),
-      buscarRemetenteCampanha(admin, org),
+      remetentePromise,
     ])
     if (leadsError) throw leadsError
     const nichosPorChave = new Map<string, string>()

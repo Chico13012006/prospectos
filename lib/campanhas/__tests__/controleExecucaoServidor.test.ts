@@ -24,7 +24,7 @@ describe('controle de execução da campanha', () => {
       ['organizacao_id', 'org-1'],
       ['id', 'campanha-1'],
     ])
-    expect(controle).toEqual({ status: 'ativa', diasSemana: ['dom'], disparoUnico: false })
+    expect(controle).toEqual({ status: 'ativa', diasSemana: ['dom'], disparoUnico: false, tipo: null })
   })
 
   it('reconhece comunicação legada como disparo único pelo tipo', async () => {

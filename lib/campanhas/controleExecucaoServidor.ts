@@ -6,6 +6,11 @@ export interface ControleExecucaoCampanha {
   status: string
   diasSemana: unknown
   disparoUnico: boolean
+  // Opcional só por retrocompat dos ambientes falsos de teste (não implementam
+  // o campo). O executor real sempre preenche a partir de campanhas.tipo — é o
+  // que permite ao motor restringir efeitos (ex.: modo de teste da espera) a um
+  // tipo específico de campanha sem reconsultar o banco por bloco.
+  tipo?: string | null
 }
 
 // Leitura mínima usada pelo processador antes de qualquer ação externa. Como o
@@ -37,5 +42,6 @@ export async function buscarControleExecucaoCampanha(
     diasSemana: agenda?.diasSemana,
     disparoUnico: operacao?.modoEnvio === 'disparo_unico'
       || campanhaEhDisparoUnico(typeof data.tipo === 'string' ? data.tipo : null),
+    tipo: typeof data.tipo === 'string' ? data.tipo : null,
   }
 }

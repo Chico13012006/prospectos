@@ -112,6 +112,24 @@ describe('configuração guiada de campanha', () => {
     ])
   })
 
+  it('usa o acaoId já resolvido da mensagem (não o índice) quando presente', () => {
+    // acaoId é resolvido ANTES desta função (materializarCampanhaGuiada →
+    // resolverAcaoIds); aqui só confere que, uma vez presente, ele vence o
+    // fallback posicional 'email-${indice}'.
+    const publico = normalizarPublicoCampanha({
+      operacao: {
+        mensagemInicial: { assunto: 'Inicial', corpo: 'Corpo', templateTipo: 'campanha_x_m1', acaoId: 'email-0' },
+        followups: [
+          { diasApos: 3, assunto: 'F1', corpo: 'Corpo 1', templateTipo: 'campanha_x_m2', acaoId: '3f2a-uuid-do-followup' },
+        ],
+      },
+    })
+    const idsGerados = montarDefinicaoCampanha(publico).acoes
+      .filter((a) => a.tipo === 'enviar_email')
+      .map((a) => a.id)
+    expect(idsGerados).toEqual(['email-0', '3f2a-uuid-do-followup'])
+  })
+
   it('preserva follow-up parcial no rascunho para permitir retomada da edição', () => {
     const publico = normalizarPublicoCampanha({
       operacao: { followups: [{ diasApos: 3, assunto: '', corpo: '' }] },

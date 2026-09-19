@@ -28,6 +28,12 @@ export interface CtxExec {
   // at-least-once por desenho, então quem tem efeito irreversível precisa disso.
   blocoId?: string
   config: Record<string, unknown>
+  // Tipo da campanha que originou a execução (campanhas.tipo), resolvido UMA vez
+  // pelo executor a partir de buscarControleExecucaoCampanha — evita consultar o
+  // banco de novo em cada bloco. null quando a execução não veio de campanha.
+  // Usado para restringir efeitos condicionais por tipo (ex.: modo de teste da
+  // ação 'esperar' só para campanhas 'prospeccao' — ver blocos.ts).
+  campanhaTipo?: string | null
   // Registra um evento no log da execução (workflow_execucao_eventos).
   log(tipo: string, detalhe?: Record<string, unknown>): Promise<void>
 }

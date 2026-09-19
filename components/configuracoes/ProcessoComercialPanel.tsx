@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { SlidersHorizontal, Save, Kanban, ShieldCheck, Users, Check, Loader2, Plus, Pencil, X } from 'lucide-react';
+import { SlidersHorizontal, Save, Kanban, ShieldCheck, Users, Check, Loader2, Plus, Pencil, X, Mail } from 'lucide-react';
 import DistribuicaoComercialPanel from './DistribuicaoComercialPanel';
+import EmailProspeccaoPanel from './EmailProspeccaoPanel';
 
 // Painel de Processo comercial — Nomenclaturas, parâmetros de renovação/ROI,
-// pipelines editáveis, distribuição comercial (round-robin do handoff) e
-// permissões. Dado real de /api/configuracoes/workspace, /api/pipelines,
-// /api/configuracoes/distribuicao-comercial e /api/rbac/permissoes.
+// pipelines editáveis, distribuição comercial (round-robin do handoff),
+// e-mail de prospecção e permissões. Dado real de /api/configuracoes/workspace,
+// /api/pipelines, /api/configuracoes/distribuicao-comercial e /api/rbac/permissoes.
 
-type Aba = 'geral' | 'pipelines' | 'distribuicao' | 'permissoes';
+type Aba = 'geral' | 'pipelines' | 'distribuicao' | 'email' | 'permissoes';
 
 interface Config {
   nomenclaturas?: Record<string, string>;
@@ -155,6 +156,7 @@ export default function ProcessoComercialPanel() {
     { id: 'geral', label: 'Geral', icon: SlidersHorizontal },
     { id: 'pipelines', label: 'Pipelines', icon: Kanban },
     { id: 'distribuicao', label: 'Distribuição', icon: Users },
+    { id: 'email', label: 'E-mail de prospecção', icon: Mail },
     { id: 'permissoes', label: 'Permissões', icon: ShieldCheck },
   ];
 
@@ -304,6 +306,8 @@ export default function ProcessoComercialPanel() {
       )}
 
       {aba === 'distribuicao' && <DistribuicaoComercialPanel />}
+
+      {aba === 'email' && <EmailProspeccaoPanel />}
 
       {aba === 'permissoes' && rbac && (
         <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-5">
