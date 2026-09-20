@@ -50,7 +50,7 @@
     },
     {
       "path": "/api/engine/respostas-email-watchdog",
-      "schedule": "*/10 * * * *"
+      "schedule": "15 12 * * *"
     },
     {
       "path": "/api/engine/relatorio-semanal",
