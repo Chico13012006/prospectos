@@ -18,6 +18,10 @@ type EnfileirarMonitor = (
   opcoes: { delaySeconds: number; retentionSeconds: number; idempotencyKey: string },
 ) => Promise<unknown>
 
+type ProcessarRespostas = (organizacaoId: string) => Promise<unknown>
+type VerificarEnvioRecente = (organizacaoId: string) => Promise<boolean>
+type AgendarMonitor = (organizacaoId: string) => Promise<unknown>
+
 export class MensagemMonitorRespostasInvalida extends Error {}
 
 export function validarMensagemMonitorRespostas(valor: unknown): MensagemMonitorRespostas {
@@ -67,6 +71,56 @@ export async function agendarMonitorRespostas(
     },
   )
   return agenda
+}
+
+/**
+ * Executa uma passada do monitor sem deixar uma falha isolada romper a cadeia.
+ *
+ * O erro do Gmail/processamento continua sendo propagado para a fila aplicar
+ * retry, mas o próximo ciclo já fica agendado. Se o próprio agendamento falhar,
+ * o callback também falha e a mensagem atual será tentada novamente pela fila.
+ */
+export async function executarCicloMonitorRespostas(
+  organizacaoId: string,
+  dependencias: { processar: ProcessarRespostas; agendar: AgendarMonitor },
+) {
+  try {
+    return await dependencias.processar(organizacaoId)
+  } finally {
+    await dependencias.agendar(organizacaoId)
+  }
+}
+
+/**
+ * Watchdog independente da cadeia: recria o próximo ciclo das organizações que
+ * ainda possuem envios recentes. A chave temporal de agendarMonitorRespostas
+ * torna chamadas concorrentes seguras e deduplicáveis.
+ */
+export async function reativarMonitoresRespostas(
+  organizacoes: string[],
+  dependencias: { temEnvioRecente: VerificarEnvioRecente; agendar: AgendarMonitor },
+) {
+  let reagendadas = 0
+  let inativas = 0
+  const erros: Array<{ organizacaoId: string; erro: string }> = []
+
+  for (const organizacaoId of organizacoes) {
+    try {
+      if (!await dependencias.temEnvioRecente(organizacaoId)) {
+        inativas++
+        continue
+      }
+      await dependencias.agendar(organizacaoId)
+      reagendadas++
+    } catch (erro) {
+      erros.push({
+        organizacaoId,
+        erro: erro instanceof Error ? erro.message : String(erro),
+      })
+    }
+  }
+
+  return { avaliadas: organizacoes.length, reagendadas, inativas, erros }
 }
 
 export async function haEnvioRecenteParaMonitorar(

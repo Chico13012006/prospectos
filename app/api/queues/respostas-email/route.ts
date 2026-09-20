@@ -4,6 +4,7 @@ import { engineConfig } from '@/lib/engine/config'
 import { processarRespostasOrganizacao } from '@/lib/engine'
 import {
   agendarMonitorRespostas,
+  executarCicloMonitorRespostas,
   haEnvioRecenteParaMonitorar,
   MensagemMonitorRespostasInvalida,
   validarMensagemMonitorRespostas,
@@ -21,8 +22,10 @@ export const POST = handleCallback(
     const admin = createSupabaseAdminClient()
     if (!await haEnvioRecenteParaMonitorar(admin, dados.organizacaoId)) return
 
-    await processarRespostasOrganizacao(dados.organizacaoId)
-    await agendarMonitorRespostas(dados.organizacaoId)
+    await executarCicloMonitorRespostas(dados.organizacaoId, {
+      processar: processarRespostasOrganizacao,
+      agendar: agendarMonitorRespostas,
+    })
   },
   {
     visibilityTimeoutSeconds: 300,

@@ -45,7 +45,37 @@ function normalizar(texto: string): string {
   return texto.toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
+// Marcadores de início do HISTÓRICO CITADO numa resposta de e-mail. Cobrem o
+// Gmail (pt-BR e inglês), o Outlook e os clientes que prefixam a citação com
+// '>'. O primeiro que casar delimita onde o texto NOVO termina.
+const MARCADORES_CITACAO: RegExp[] = [
+  /^>/m, // linha citada (Gmail, Apple Mail, Thunderbird)
+  /\bEm\s[\s\S]{0,300}?\bescreveu:/, // atribuição do Gmail pt-BR (quebra linha no meio)
+  /\bOn\s[\s\S]{0,300}?\bwrote:/, // atribuição do Gmail em inglês
+  /^\s*-{2,}\s*(Mensagem original|Original Message|Forwarded message)/im,
+  /^_{10,}$/m, // separador do Outlook
+]
+
+/**
+ * Texto que o lead REALMENTE escreveu agora, sem o histórico citado.
+ *
+ * Uma resposta carrega a mensagem original inteira embaixo, e essa mensagem é a
+ * NOSSA — incluindo o rodapé de descadastro. Classificar o corpo inteiro faz o
+ * nosso próprio "clique aqui para se descadastrar" casar com PADROES_NEGATIVOS:
+ * em 19/09/2026 um "Top, tenho interesse" virou 'negativo' e o lead foi para
+ * 'perdido', sem handoff. Sem marcador de citação, devolve o corpo inteiro.
+ */
+export function textoNovoDaResposta(corpo: string): string {
+  let corte = corpo.length
+  for (const marcador of MARCADORES_CITACAO) {
+    const encontrado = corpo.match(marcador)
+    if (encontrado?.index !== undefined && encontrado.index < corte) corte = encontrado.index
+  }
+  return corpo.slice(0, corte)
+}
+
 // Regra determinística: negativo inequívoco → 'negativo'; senão null (decide a IA).
+// Recebe o texto já sem citação (ver classificarResposta).
 export function classificarPorRegra(resposta: RespostaParaClassificar): 'negativo' | null {
   const alvo = normalizar(`${resposta.assunto}\n${resposta.corpo}`)
   if (!alvo) return null
@@ -55,17 +85,24 @@ export function classificarPorRegra(resposta: RespostaParaClassificar): 'negativ
 /**
  * Classifica a resposta. Ordem: regra determinística → IA → indeterminado.
  * Nunca lança: qualquer falha da IA vira 'indeterminado' (não dispara handoff).
+ *
+ * Regra e IA enxergam SÓ o texto novo: o histórico citado é a mensagem que nós
+ * enviamos e não diz nada sobre a intenção de quem respondeu.
  */
 export async function classificarResposta(
   resposta: RespostaParaClassificar,
   ia: ClassificadorIa | null,
 ): Promise<ResultadoClassificacao> {
-  const porRegra = classificarPorRegra(resposta)
+  const semCitacao: RespostaParaClassificar = {
+    assunto: resposta.assunto,
+    corpo: textoNovoDaResposta(resposta.corpo),
+  }
+  const porRegra = classificarPorRegra(semCitacao)
   if (porRegra) return { classificacao: porRegra, via: 'regra', motivo: 'recusa/opt-out explícito' }
-  if (!normalizar(resposta.corpo)) return { classificacao: 'indeterminado', via: 'regra', motivo: 'corpo vazio' }
+  if (!normalizar(semCitacao.corpo)) return { classificacao: 'indeterminado', via: 'regra', motivo: 'corpo vazio' }
   if (!ia) return { classificacao: 'indeterminado', via: 'indisponivel', motivo: 'IA não configurada' }
   try {
-    const r = await ia(resposta)
+    const r = await ia(semCitacao)
     if (r === 'positivo' || r === 'negativo' || r === 'neutro') return { classificacao: r, via: 'ia' }
     return { classificacao: 'indeterminado', via: 'indisponivel', motivo: 'IA sem resposta válida' }
   } catch (e) {
