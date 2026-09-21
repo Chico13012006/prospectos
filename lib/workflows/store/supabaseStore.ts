@@ -183,6 +183,68 @@ export class SupabaseWorkflowStore implements WorkflowStore {
     if (error) throw error
   }
 
+  private async rpcRetomada<T>(nome: string, args: Record<string, unknown>): Promise<T> {
+    const { data, error } = await this.db.rpc(nome, { p_org: this.organizacaoId, ...args })
+    if (error) throw error
+    return data as T
+  }
+
+  // As funções de linha da 0047 são `setof`: nada casou = lista vazia. Nunca
+  // tratar objeto sem `id` como sucesso — seria avançar a espera às cegas.
+  private async rpcExecucao(nome: string, args: Record<string, unknown>): Promise<WorkflowExecucao | null> {
+    const linhas = await this.rpcRetomada<WorkflowExecucao[] | WorkflowExecucao | null>(nome, args)
+    const linha = Array.isArray(linhas) ? linhas[0] : linhas
+    return linha && linha.id ? linha : null
+  }
+
+  agendarEsperaProspeccao(id: string, passoEsperado: number, proximoPasso: number, ate: string, claimToken?: string) {
+    return this.rpcExecucao('workflow_prospeccao_agendar_espera', {
+      p_id: id, p_passo_esperado: passoEsperado, p_proximo_passo: proximoPasso,
+      p_ate: ate, p_claim_token: claimToken ?? null,
+    })
+  }
+
+  reivindicarRetomadaProspeccao(id: string, geracao: number, passo: number, token: string) {
+    return this.rpcExecucao('workflow_prospeccao_claim', {
+      p_id: id, p_geracao: geracao, p_passo: passo, p_token: token,
+    })
+  }
+
+  async liberarRetomadaProspeccao(id: string, token: string) {
+    await this.rpcRetomada('workflow_prospeccao_liberar_claim', { p_id: id, p_token: token })
+  }
+
+  reivindicarPublicacaoProspeccao(id: string, geracao: number, token: string, checkpoint: string) {
+    return this.rpcRetomada<boolean>('workflow_prospeccao_claim_publicacao', {
+      p_id: id, p_geracao: geracao, p_token: token, p_checkpoint: checkpoint,
+    })
+  }
+
+  async confirmarPublicacaoProspeccao(id: string, geracao: number, token: string) {
+    await this.rpcRetomada('workflow_prospeccao_confirmar_publicacao', {
+      p_id: id, p_geracao: geracao, p_token: token,
+    })
+  }
+
+  async liberarPublicacaoProspeccao(id: string, geracao: number, token: string) {
+    await this.rpcRetomada('workflow_prospeccao_liberar_publicacao', {
+      p_id: id, p_geracao: geracao, p_token: token,
+    })
+  }
+
+  rearmarRetomadaProspeccao(id: string, geracao: number) {
+    return this.rpcExecucao('workflow_prospeccao_rearmar', {
+      p_id: id, p_geracao: geracao,
+    })
+  }
+
+  async listarRetomadasProspeccao(depois: string | null, limite: number) {
+    const linhas = await this.rpcRetomada<WorkflowExecucao[] | null>('workflow_prospeccao_reconciliar_lote', {
+      p_depois: depois, p_limite: limite,
+    })
+    return (linhas ?? []).filter((linha) => !!linha?.id)
+  }
+
   async buscarExecucaoParaLead(workflowId: string, leadId: string): Promise<WorkflowExecucao | null> {
     const { data, error } = await this.db
       .from('workflow_execucoes')
@@ -242,6 +304,7 @@ export class SupabaseWorkflowStore implements WorkflowStore {
       .select('*')
       .eq('organizacao_id', this.organizacaoId)
       .eq('status', 'aguardando')
+      .eq('agendamento_geracao', 0)
       .lte('proxima_verificacao_em', agoraISO)
     if (aguardando.error) throw aguardando.error
     return [...(emAndamento.data ?? []), ...(aguardando.data ?? [])]

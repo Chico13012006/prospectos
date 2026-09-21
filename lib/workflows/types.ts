@@ -73,6 +73,13 @@ export interface WorkflowExecucao {
   passo_atual: number
   status: StatusExecucao
   proxima_verificacao_em: string | null
+  agendamento_geracao?: number
+  agendamento_publicado_em?: string | null
+  agendamento_checkpoint_em?: string | null
+  publicacao_token?: string | null
+  publicacao_expira_em?: string | null
+  claim_token?: string | null
+  claim_expira_em?: string | null
   iniciado_em: string
   atualizado_em: string
 }

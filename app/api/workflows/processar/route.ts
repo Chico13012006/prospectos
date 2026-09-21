@@ -10,6 +10,7 @@ import { AmbienteSupabase, criarWorkflowStore, processarTudo, registrarBlocosPad
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
 import { processarProspeccaoAutomatica } from '@/lib/campanhas/prospeccaoAutomatica'
 import { log } from '@/lib/engine/logger'
+import { reconciliarRetomadasProspeccao } from '@/lib/workflows/retomadaProspeccao'
 
 export const runtime = 'nodejs'
 
@@ -25,6 +26,20 @@ async function executar(req: Request) {
       const store = criarWorkflowStore(org)
       const ambiente = new AmbienteSupabase(org)
       const resultado: Record<string, unknown> = await processarTudo(store, registro, ambiente)
+      // Reconciliação diária em lotes. Apenas republica despertadores perdidos;
+      // não avança o executor nem envia e-mail por este caminho. Isolada como a
+      // auto-captura abaixo: watchdog de prospecção quebrado (ex.: 0047 ainda
+      // não aplicada nesta base) não pode derrubar o tick das outras orgs nem
+      // o caminho de Renovação, que já rodou em processarTudo.
+      try {
+        resultado.retomadas = await reconciliarRetomadasProspeccao(store)
+      } catch (erroRetomada) {
+        log.erro('Reconciliação de retomadas de prospecção falhou nesta organização.', {
+          organizacaoId: org,
+          erro: erroRetomada instanceof Error ? erroRetomada.message : String(erroRetomada),
+        })
+        resultado.retomadas = { erro: erroRetomada instanceof Error ? erroRetomada.message : String(erroRetomada) }
+      }
       // Auto-captura de PROSPECÇÃO (bloco "Prospecção + Follow-up"): isolada em
       // try/catch própria para que uma falha aqui NUNCA impeça o processamento
       // de workflows já em andamento nesta org (inclusive renovação, que usa o

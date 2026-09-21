@@ -1,5 +1,15 @@
 {
   "functions": {
+    "app/api/queues/workflows-retomada/route.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "workflows-retomada-v1",
+          "retryAfterSeconds": 60,
+          "initialDelaySeconds": 0
+        }
+      ]
+    },
     "app/api/queues/campanhas-email/route.ts": {
       "experimentalTriggers": [
         {

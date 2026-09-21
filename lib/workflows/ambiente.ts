@@ -32,6 +32,25 @@ import { concluirDisparoUnicoSeFinalizado } from '@/lib/campanhas/conclusaoDispa
 import { efeitoEnvioProspeccao, leadBloqueadoParaEnvioProspeccao } from '@/lib/campanhas/prospeccaoEnvio'
 import { avaliarOperador, type Operador } from './operadores'
 
+export class ErroEnvioIncerto extends Error {}
+
+// CICLO DE VIDA DA RESERVA DE ENVIO (só prospecção), em mensagens_processadas:
+//
+//   envio_reservado   → chave tomada, SMTP AINDA NÃO iniciado. Tem lease: uma
+//                       reserva abandonada por processo morto volta a ser
+//                       retomável depois de LEASE_RESERVA_ENVIO_MS.
+//   envio_em_curso    → SMTP iniciado, resultado desconhecido. NUNCA é retomada
+//                       automaticamente: pode ter sido entregue.
+//   envio_confirmado  → SMTP aceitou e a reserva foi confirmada.
+//   envio_incerto     → tentativa terminou ambígua (erro depois de iniciar, ou
+//                       processo morto com o SMTP em voo). Exige conferência
+//                       humana; jamais vira reenvio automático.
+//   envio_confirmado_persistencia_pendente → e-mail saiu, histórico do lead não.
+//
+// O lease casa com o TTL do claim do workflow (10 min): quem ainda detém o
+// passo não pode ter a reserva roubada, e quem morreu não trava o lead.
+const LEASE_RESERVA_ENVIO_MS = 10 * 60_000
+
 export interface AmbienteWorkflow {
   readonly organizacaoId: string
   // Em simulação (Fase 5), ações de saída não têm efeito real — só logam.
@@ -234,6 +253,53 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     return data ? (data as unknown as Record<string, unknown>)[campo] ?? null : null
   }
 
+  // Toma a reserva do passo ANTES de qualquer byte de SMTP e devolve se este
+  // worker pode enviar. Qualquer erro de banco aqui sobe como exceção: sem
+  // reserva provada, nenhum SMTP é aberto (fail closed).
+  private async reservarEnvioProspeccao(chaveEnvio: string, leadId: string): Promise<boolean> {
+    const mensagemId = `envio:${chaveEnvio}`
+    const agora = new Date().toISOString()
+    const leaseVencido = new Date(Date.now() - LEASE_RESERVA_ENVIO_MS).toISOString()
+    const { data: inserida, error: erroInsercao } = await this.db.from('mensagens_processadas')
+      .upsert({ organizacao_id: this.organizacaoId, mensagem_id: mensagemId,
+        resultado: 'envio_reservado', lead_id: leadId, processado_em: agora },
+      { onConflict: 'organizacao_id,mensagem_id', ignoreDuplicates: true }).select('id')
+    if (erroInsercao) throw new Error(`Reserva de envio indisponível: ${erroInsercao.message}`)
+
+    if (!inserida?.length) {
+      // Já existe linha. SÓ é retomável a reserva que nunca chegou ao SMTP e
+      // cujo lease venceu. O filtro compõe o CAS: dois processos que tentem
+      // retomar a mesma linha serializam no UPDATE e o segundo não casa mais.
+      const { data: retomada, error: erroRetomada } = await this.db.from('mensagens_processadas')
+        .update({ resultado: 'envio_reservado', processado_em: agora })
+        .eq('organizacao_id', this.organizacaoId).eq('mensagem_id', mensagemId)
+        .eq('resultado', 'envio_reservado').lt('processado_em', leaseVencido)
+        .select('id')
+      if (erroRetomada) throw new Error(`Reserva de envio indisponível: ${erroRetomada.message}`)
+      if (!retomada?.length) {
+        // Tentativa que morreu com o SMTP em voo fica marcada como incerta,
+        // para a conferência humana achá-la. Isto NÃO libera reenvio.
+        const { error: erroIncerto } = await this.db.from('mensagens_processadas')
+          .update({ resultado: 'envio_incerto' })
+          .eq('organizacao_id', this.organizacaoId).eq('mensagem_id', mensagemId)
+          .eq('resultado', 'envio_em_curso').lt('processado_em', leaseVencido)
+        if (erroIncerto) log.erro('Falha ao marcar envio em curso abandonado como incerto.', { chaveEnvio, erro: erroIncerto.message })
+        return false
+      }
+      log.aviso('Reserva de envio abandonada antes do SMTP foi retomada.', { leadId, chaveEnvio })
+    }
+
+    // Ponto sem volta: a partir daqui a linha deixa de ser retomável, porque a
+    // próxima instrução abre SMTP e o resultado passa a ser desconhecível.
+    const { data: emCurso, error: erroEmCurso } = await this.db.from('mensagens_processadas')
+      .update({ resultado: 'envio_em_curso', processado_em: agora })
+      .eq('organizacao_id', this.organizacaoId).eq('mensagem_id', mensagemId)
+      .eq('resultado', 'envio_reservado')
+      .select('id')
+    if (erroEmCurso) throw new Error(`Reserva de envio indisponível: ${erroEmCurso.message}`)
+    return !!emCurso?.length
+  }
+
   async enviarEmailTemplate(leadId: string, templateTipo: string, campanhaId?: string | null, chaveEnvio?: string | null): Promise<{ enviado: boolean; assunto: string }> {
     const lead = await this.motor.store.buscarLead(leadId)
     if (!lead) throw new Error(`lead ${leadId} não encontrado`)
@@ -290,7 +356,7 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     if (campanhaId) {
       const { data: camp, error: campanhaError } = await this.db
         .from('campanhas')
-        .select('dry_run, publico, tipo')
+        .select('dry_run, publico, tipo, status')
         .eq('id', campanhaId)
         .eq('organizacao_id', this.organizacaoId)
         .maybeSingle()
@@ -303,6 +369,10 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       }
       campanhaPublico = (camp as { publico?: Record<string, unknown> | null } | null)?.publico ?? null
       campanhaTipo = (camp as { tipo?: string | null } | null)?.tipo ?? null
+      if (campanhaTipo === 'prospeccao' && (camp as { status?: string }).status
+        && !['ativa', 'concluida'].includes(String((camp as { status?: string }).status))) {
+        return { enviado: false, assunto }
+      }
       if ((camp as { dry_run?: boolean } | null)?.dry_run === true)
         return { enviado: false, assunto }
     }
@@ -320,6 +390,23 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       if (leadBloqueadoParaEnvioProspeccao(leadProspeccaoAntes)) {
         log.aviso('Envio de prospecção bloqueado (opt-out/bounce/perdido/descartado).', { leadId, campanhaId })
         return { enviado: false, assunto }
+      }
+      // A resposta cancela a execução pelo monitor Gmail. Esta checagem
+      // adicional cobre a janela em que a interação já existe e o cancelamento
+      // ainda não foi persistido.
+      const { data: resposta, error: respostaErro } = await this.db.from('interacoes')
+        .select('id').eq('organizacao_id', this.organizacaoId)
+        .eq('lead_id', leadId).eq('tipo', 'resposta').limit(1)
+      if (respostaErro) throw respostaErro
+      if (resposta?.length) return { enviado: false, assunto }
+      if (chaveEnvio) {
+        const execucaoId = chaveEnvio.split(':')[0]
+        const { data: execucaoAtual, error: execucaoErro } = await this.db
+          .from('workflow_execucoes').select('status, campanha_id')
+          .eq('organizacao_id', this.organizacaoId).eq('id', execucaoId).maybeSingle()
+        if (execucaoErro) throw execucaoErro
+        if (!execucaoAtual || execucaoAtual.status === 'cancelado'
+          || execucaoAtual.campanha_id !== campanhaId) return { enviado: false, assunto }
       }
     }
 
@@ -389,7 +476,13 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     // ciclos diferentes (ex.: renovação semestral) têm execuções distintas e
     // seguem enviando normalmente. Sem chave, o comportamento é o de antes.
     // Fica depois de TODOS os gates para não consumir a chave num envio bloqueado.
-    if (chaveEnvio) {
+    const envioProspeccao = campanhaTipo === 'prospeccao' && !!campanhaId && !!chaveEnvio
+    if (envioProspeccao && chaveEnvio) {
+      if (!await this.reservarEnvioProspeccao(chaveEnvio, leadId)) {
+        log.aviso('Envio de prospecção já reservado ou realizado; sem retry de SMTP.', { leadId, chaveEnvio })
+        return { enviado: false, assunto }
+      }
+    } else if (chaveEnvio) {
       const primeiraVez = await this.motor.store.reivindicarMensagem(`envio:${chaveEnvio}`, 'envio', leadId)
       if (!primeiraVez) {
         log.aviso('Envio já realizado para este passo — não reenvio.', { leadId, templateTipo, chaveEnvio })
@@ -420,10 +513,24 @@ export class AmbienteSupabase implements AmbienteWorkflow {
       await emailProvider.enviar(lead.contato_email, assunto, corpo, html)
     }
     } catch (erro) {
-      // Falha de SMTP não pode bloquear o passo para sempre: devolve a chave
-      // para a próxima tentativa da fila.
+      if (envioProspeccao && chaveEnvio) {
+        // Depois de iniciar SMTP não é possível provar que nada foi entregue.
+        // A reserva permanece para impedir reenvio cego; requer reconciliação.
+        const { error: marcacaoErro } = await this.db.from('mensagens_processadas')
+          .update({ resultado: 'envio_incerto' }).eq('organizacao_id', this.organizacaoId)
+          .eq('mensagem_id', `envio:${chaveEnvio}`)
+        if (marcacaoErro) log.erro('Falha ao registrar envio SMTP incerto.', { chaveEnvio, erro: marcacaoErro.message })
+        throw new ErroEnvioIncerto(`Resultado SMTP incerto para ${chaveEnvio}: ${erro instanceof Error ? erro.message : String(erro)}`)
+      }
+      // Renovação e outros tipos mantêm o comportamento anterior nesta rodada.
       if (chaveEnvio) await this.motor.store.liberarMensagem(`envio:${chaveEnvio}`)
       throw erro
+    }
+    if (envioProspeccao && chaveEnvio) {
+      const { error } = await this.db.from('mensagens_processadas')
+        .update({ resultado: 'envio_confirmado' }).eq('organizacao_id', this.organizacaoId)
+        .eq('mensagem_id', `envio:${chaveEnvio}`)
+      if (error) throw new ErroEnvioIncerto(`SMTP aceitou o envio, mas não foi possível confirmar a reserva: ${error.message}`)
     }
     // Efeito de PROSPECÇÃO sobre o lead (item 2/3 da entrega): tipo de
     // interação correto (abordagem/follow_up, não 'nota') + transição de
@@ -435,6 +542,7 @@ export class AmbienteSupabase implements AmbienteWorkflow {
     const efeitoProspeccao = leadProspeccaoAntes
       ? efeitoEnvioProspeccao(leadProspeccaoAntes.estagio, leadProspeccaoAntes.followups_enviados ?? 0)
       : null
+    try {
     await this.motor.store.registrarInteracao({
       lead_id: leadId,
       tipo: efeitoProspeccao?.tipoInteracao ?? 'nota',
@@ -449,6 +557,16 @@ export class AmbienteSupabase implements AmbienteWorkflow {
         estagio: efeitoProspeccao.estagioDestino,
         followups_enviados: efeitoProspeccao.followupsEnviados,
       })
+    }
+    } catch (erro) {
+      if (envioProspeccao && chaveEnvio) {
+        const { error: marcacaoErro } = await this.db.from('mensagens_processadas')
+          .update({ resultado: 'envio_confirmado_persistencia_pendente' })
+          .eq('organizacao_id', this.organizacaoId).eq('mensagem_id', `envio:${chaveEnvio}`)
+        if (marcacaoErro) log.erro('Falha ao registrar persistência pós-SMTP pendente.', { chaveEnvio, erro: marcacaoErro.message })
+        throw new ErroEnvioIncerto(`SMTP aceitou o envio, mas o histórico do lead ficou pendente: ${erro instanceof Error ? erro.message : String(erro)}`)
+      }
+      throw erro
     }
     // Cada envio real mantém um único monitor rápido por organização. A chave
     // temporal da fila deduplica campanhas/envios concorrentes. Falha ao

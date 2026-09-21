@@ -56,6 +56,16 @@ export interface WorkflowStore {
   }): Promise<WorkflowExecucao>
   buscarExecucao(id: string): Promise<WorkflowExecucao | null>
   atualizarExecucao(id: string, patch: PatchExecucao): Promise<void>
+  // Extensão persistente exclusiva de campanhas de prospecção. Ausente no
+  // MemoryStore legado; o executor exige sua presença no store de produção.
+  agendarEsperaProspeccao?(id: string, passoEsperado: number, proximoPasso: number, ate: string, claimToken?: string): Promise<WorkflowExecucao | null>
+  reivindicarRetomadaProspeccao?(id: string, geracao: number, passo: number, token: string): Promise<WorkflowExecucao | null>
+  liberarRetomadaProspeccao?(id: string, token: string): Promise<void>
+  reivindicarPublicacaoProspeccao?(id: string, geracao: number, token: string, checkpoint: string): Promise<boolean>
+  confirmarPublicacaoProspeccao?(id: string, geracao: number, token: string): Promise<void>
+  liberarPublicacaoProspeccao?(id: string, geracao: number, token: string): Promise<void>
+  rearmarRetomadaProspeccao?(id: string, geracao: number): Promise<WorkflowExecucao | null>
+  listarRetomadasProspeccao?(depois: string | null, limite: number): Promise<WorkflowExecucao[]>
   // Recupera a execução não cancelada que sustenta a idempotência do
   // enrollment. Além de evitar duplicidade, permite reagendar com segurança
   // uma campanha cuja publicação na fila tenha sido interrompida.

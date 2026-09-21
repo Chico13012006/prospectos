@@ -6,7 +6,8 @@
 // de interação (continua 'nota').
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BancoFalso, type Linha } from '@/lib/templates/__tests__/bancoFalso'
-import { AmbienteSupabase } from '../ambiente'
+import { AmbienteSupabase, ErroEnvioIncerto } from '../ambiente'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Motor } from '@/lib/engine'
 import type { TemplateEmail } from '@/lib/engine/store/store'
 
@@ -16,9 +17,10 @@ import type { TemplateEmail } from '@/lib/engine/store/store'
 // chave na org; para não abrir uma conexão SMTP real, GmailProvider é
 // mockado aqui (só quando a chave usada é esta — os demais testes deste
 // arquivo continuam usando o motor falso via `this.motor.email`).
-const { CONTA_TESTE, enviosGmailMock } = vi.hoisted(() => ({
+const { CONTA_TESTE, enviosGmailMock, smtpEstado } = vi.hoisted(() => ({
   CONTA_TESTE: 'PROSPECCAOENVIO_TESTE',
   enviosGmailMock: [] as { para: string; assunto: string; corpo: string; html?: string; cc?: string[] }[],
+  smtpEstado: { falharAposTentativa: false },
 }))
 vi.mock('@/lib/engine/email/gmailProvider', () => ({
   lerCredenciaisGmail: (papel?: string) =>
@@ -26,10 +28,11 @@ vi.mock('@/lib/engine/email/gmailProvider', () => ({
   GmailProvider: class {
     async enviar(para: string, assunto: string, corpo: string, html?: string, cc?: string[]) {
       enviosGmailMock.push({ para, assunto, corpo, html, cc })
+      if (smtpEstado.falharAposTentativa) throw new Error('conexão caiu após DATA')
     }
   },
 }))
-beforeEach(() => { enviosGmailMock.length = 0 })
+beforeEach(() => { enviosGmailMock.length = 0; smtpEstado.falharAposTentativa = false })
 
 const ORG = 'aaaaaaaa-0000-4000-8000-000000000001'
 const LEAD = 'aaaaaaaa-5555-4555-8555-000000000001'
@@ -121,6 +124,72 @@ function banco(campanha: Linha, orgConfiguracoes: Record<string, unknown> = {}) 
 // Org COM remetente dedicado — só para os testes de envio real de prospecção
 // (ver comentário do mock de GmailProvider acima).
 const configComRemetente = { nomenclaturas: { email_conta_key: CONTA_TESTE } }
+
+interface EstadoReserva { resultado: string; processado_em: string }
+
+// Fake de mensagens_processadas que APLICA os filtros do UPDATE — é neles que
+// mora o CAS da reserva (lease vencido, estado esperado). Um mock que só
+// registrasse .eq() não provaria nada sobre retomada nem sobre corrida.
+function clienteComReserva(opcoes: { falharReserva?: boolean } = {}) {
+  const base = banco({ tipo: 'prospeccao', status: 'ativa' }, configComRemetente)
+  base.linhas('workflow_execucoes').push({ id: 'exec-1', organizacao_id: ORG, campanha_id: CAMPANHA, status: 'aguardando' })
+  const reservas = new Map<string, EstadoReserva>()
+  // Ligado no teste para simular processo que morre ANTES de abrir o SMTP.
+  const falhas = { emCurso: false }
+  const original = base.cliente()
+  const client = {
+    from(tabela: string) {
+      if (tabela !== 'mensagens_processadas') return original.from(tabela)
+      return {
+        upsert(payload: { mensagem_id: string; resultado: string; processado_em: string }) {
+          return { async select() {
+            if (opcoes.falharReserva) return { data: null, error: { message: 'banco indisponível' } }
+            if (reservas.has(payload.mensagem_id)) return { data: [], error: null }
+            reservas.set(payload.mensagem_id, { resultado: payload.resultado, processado_em: payload.processado_em })
+            return { data: [{ id: 'reserva-1' }], error: null }
+          } }
+        },
+        update(patch: { resultado: string; processado_em?: string }) {
+          const iguais: Record<string, string> = {}
+          let menorQue: { coluna: string; valor: string } | null = null
+          const aplicar = (): { erro: string | null; linhas: { id: string }[] } => {
+            if (falhas.emCurso && patch.resultado === 'envio_em_curso') return { erro: 'banco indisponível', linhas: [] }
+            const atual = iguais.mensagem_id ? reservas.get(iguais.mensagem_id) : undefined
+            if (iguais.organizacao_id !== ORG || !iguais.mensagem_id || !atual) return { erro: null, linhas: [] }
+            if (iguais.resultado && atual.resultado !== iguais.resultado) return { erro: null, linhas: [] }
+            if (menorQue && !(atual.processado_em < menorQue.valor)) return { erro: null, linhas: [] }
+            reservas.set(iguais.mensagem_id, {
+              resultado: patch.resultado,
+              processado_em: patch.processado_em ?? atual.processado_em,
+            })
+            return { erro: null, linhas: [{ id: 'reserva-1' }] }
+          }
+          const query = {
+            eq(campo: string, valor: string) { iguais[campo] = valor; return query },
+            lt(campo: string, valor: string) { menorQue = { coluna: campo, valor }; return query },
+            async select() {
+              const r = aplicar()
+              return { data: r.linhas, error: r.erro ? { message: r.erro } : null }
+            },
+            then(resolve: (valor: { error: { message: string } | null }) => void) {
+              const r = aplicar()
+              resolve({ error: r.erro ? { message: r.erro } : null })
+            },
+          }
+          return query
+        },
+      }
+    },
+  } as unknown as SupabaseClient
+  return { client, base, reservas, falhas }
+}
+
+// Simula o tempo passando sobre uma reserva deixada para trás por um processo
+// que morreu: o lease (10 min) vence e ela volta a ser retomável.
+function envelhecerReserva(reservas: Map<string, EstadoReserva>, chave: string, minutos = 11) {
+  const atual = reservas.get(chave)!
+  reservas.set(chave, { ...atual, processado_em: new Date(Date.now() - minutos * 60_000).toISOString() })
+}
 
 async function comEnvioReal<T>(fn: () => Promise<T>): Promise<T> {
   const anterior = process.env.MODO_ENSAIO
@@ -244,5 +313,187 @@ describe('renovação — regressão obrigatória (comportamento preservado)', (
     expect(enviados).toHaveLength(1)
     expect(interacoes[0]).toMatchObject({ tipo: 'nota' })
     expect(atualizacoesLead).toEqual([])
+  })
+})
+
+describe('reserva estrita do SMTP de prospecção', () => {
+  it('falha fechada se não consegue confirmar reserva no banco', async () => {
+    const { motor } = motorFalso(leadBase(), [template()])
+    const { client } = clienteComReserva({ falharReserva: true })
+    const ambiente = new AmbienteSupabase(ORG, { client, motor })
+    await comEnvioReal(async () => {
+      await expect(ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1'))
+        .rejects.toThrow('Reserva de envio indisponível')
+    })
+    expect(enviosGmailMock).toHaveLength(0)
+  })
+
+  it('retry e job duplicado não repetem SMTP depois de envio confirmado', async () => {
+    const { motor } = motorFalso(leadBase(), [template()])
+    const { client, reservas } = clienteComReserva()
+    const ambiente = new AmbienteSupabase(ORG, { client, motor })
+    await comEnvioReal(async () => {
+      expect((await ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1')).enviado).toBe(true)
+      expect((await ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1')).enviado).toBe(false)
+    })
+    expect(enviosGmailMock).toHaveLength(1)
+    expect(reservas.get('envio:exec-1:email-1')?.resultado).toBe('envio_confirmado')
+  })
+
+  it('SMTP ambíguo fica incerto e não recebe retry cego', async () => {
+    const { motor } = motorFalso(leadBase(), [template()])
+    const { client, reservas } = clienteComReserva()
+    const ambiente = new AmbienteSupabase(ORG, { client, motor })
+    smtpEstado.falharAposTentativa = true
+    await comEnvioReal(async () => {
+      await expect(ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1'))
+        .rejects.toBeInstanceOf(ErroEnvioIncerto)
+      smtpEstado.falharAposTentativa = false
+      expect((await ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1')).enviado).toBe(false)
+    })
+    expect(enviosGmailMock).toHaveLength(1)
+    expect(reservas.get('envio:exec-1:email-1')?.resultado).toBe('envio_incerto')
+  })
+})
+
+// Ciclo de vida da reserva: reservado → em curso → confirmado. A reserva é
+// tomada ANTES do SMTP, então ela sozinha não prova entrega; o que separa
+// "abandonada antes de tentar" (retomável) de "tentativa em voo" (nunca
+// reenviada) é o estado + o lease.
+describe('lease da reserva de envio de prospecção', () => {
+  const CHAVE = 'envio:exec-1:email-1'
+
+  it('reserva abandonada antes do SMTP é retomada e envia uma única vez', async () => {
+    const { motor } = motorFalso(leadBase(), [template()])
+    const { client, reservas, falhas } = clienteComReserva()
+    const ambiente = new AmbienteSupabase(ORG, { client, motor })
+
+    // Processo morre entre a reserva e a abertura do SMTP.
+    falhas.emCurso = true
+    await comEnvioReal(async () => {
+      await expect(ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1'))
+        .rejects.toThrow('Reserva de envio indisponível')
+    })
+    expect(enviosGmailMock).toHaveLength(0)
+    expect(reservas.get(CHAVE)?.resultado).toBe('envio_reservado')
+
+    // Lease ainda vivo: ninguém rouba o passo de quem talvez ainda esteja nele.
+    falhas.emCurso = false
+    await comEnvioReal(async () => {
+      expect((await ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1')).enviado).toBe(false)
+    })
+    expect(enviosGmailMock).toHaveLength(0)
+
+    // Lease vencido: a reserva órfã volta a ser retomável e o envio acontece UMA vez.
+    envelhecerReserva(reservas, CHAVE)
+    await comEnvioReal(async () => {
+      expect((await ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1')).enviado).toBe(true)
+      expect((await ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1')).enviado).toBe(false)
+    })
+    expect(enviosGmailMock).toHaveLength(1)
+    expect(reservas.get(CHAVE)?.resultado).toBe('envio_confirmado')
+  })
+
+  it('tentativa morta com o SMTP em voo vira envio_incerto e nunca é reenviada', async () => {
+    const { motor } = motorFalso(leadBase(), [template()])
+    const { client, reservas } = clienteComReserva()
+    const ambiente = new AmbienteSupabase(ORG, { client, motor })
+    // Estado deixado por um processo que caiu DEPOIS de começar o SMTP.
+    reservas.set(CHAVE, { resultado: 'envio_em_curso', processado_em: new Date(Date.now() - 11 * 60_000).toISOString() })
+
+    await comEnvioReal(async () => {
+      expect((await ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1')).enviado).toBe(false)
+    })
+    expect(enviosGmailMock).toHaveLength(0)
+    expect(reservas.get(CHAVE)?.resultado).toBe('envio_incerto')
+
+    // Nem com mais tempo: ambiguidade de SMTP não vira reenvio automático.
+    envelhecerReserva(reservas, CHAVE, 60)
+    await comEnvioReal(async () => {
+      expect((await ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1')).enviado).toBe(false)
+    })
+    expect(enviosGmailMock).toHaveLength(0)
+    expect(reservas.get(CHAVE)?.resultado).toBe('envio_incerto')
+  })
+
+  it('duas tentativas concorrentes: só uma reserva prossegue', async () => {
+    const { motor } = motorFalso(leadBase(), [template()])
+    const { client, reservas } = clienteComReserva()
+    const ambiente = new AmbienteSupabase(ORG, { client, motor })
+
+    const resultados = await comEnvioReal(() => Promise.all([
+      ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1'),
+      ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1'),
+    ]))
+    expect(resultados.filter((r) => r.enviado)).toHaveLength(1)
+    expect(enviosGmailMock).toHaveLength(1)
+    expect(reservas.get(CHAVE)?.resultado).toBe('envio_confirmado')
+  })
+
+  it('renovação não passa pelo ciclo de reserva — nem toca em mensagens_processadas', async () => {
+    const { motor, enviados } = motorFalso(leadBase({ estagio: 'renovacao' }), [template()])
+    const base = banco({ tipo: 'renovacao' })
+    const client = {
+      from(tabela: string) {
+        if (tabela === 'mensagens_processadas') throw new Error('renovação não pode usar a reserva de prospecção')
+        return base.cliente().from(tabela)
+      },
+    } as unknown as SupabaseClient
+    const ambiente = new AmbienteSupabase(ORG, { client, motor })
+
+    const r = await comEnvioReal(() => ambiente.enviarEmailTemplate(LEAD, 'renovacao_1', CAMPANHA, 'exec-9:email-0'))
+
+    expect(r.enviado).toBe(true)
+    expect(enviados).toHaveLength(1)
+  })
+})
+
+// Gates que impedem o follow-up depois que a espera já venceu. Sem eles, o
+// despertar durável (0047) acordaria a execução e mandaria e-mail para quem já
+// respondeu ou para execução que o monitor de respostas cancelou.
+describe('gates de resposta e cancelamento no envio de prospecção', () => {
+  it('lead com interação de resposta não recebe follow-up', async () => {
+    const { motor } = motorFalso(leadBase(), [template()])
+    const { client, base, reservas } = clienteComReserva()
+    base.linhas('interacoes').push({ id: 'int-1', organizacao_id: ORG, lead_id: LEAD, tipo: 'resposta' })
+    const ambiente = new AmbienteSupabase(ORG, { client, motor })
+    await comEnvioReal(async () => {
+      expect((await ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1')).enviado).toBe(false)
+    })
+    expect(enviosGmailMock).toHaveLength(0)
+    // Gate antes da reserva: a chave de idempotência não é consumida à toa.
+    expect(reservas.size).toBe(0)
+  })
+
+  it('resposta de OUTRO lead não bloqueia o envio deste', async () => {
+    const { motor } = motorFalso(leadBase(), [template()])
+    const { client, base } = clienteComReserva()
+    base.linhas('interacoes').push({ id: 'int-2', organizacao_id: ORG, lead_id: 'outro-lead', tipo: 'resposta' })
+    const ambiente = new AmbienteSupabase(ORG, { client, motor })
+    await comEnvioReal(async () => {
+      expect((await ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1')).enviado).toBe(true)
+    })
+    expect(enviosGmailMock).toHaveLength(1)
+  })
+
+  it('execução cancelada durante a espera não envia', async () => {
+    const { motor } = motorFalso(leadBase(), [template()])
+    const { client, base } = clienteComReserva()
+    base.linhas('workflow_execucoes')[0].status = 'cancelado'
+    const ambiente = new AmbienteSupabase(ORG, { client, motor })
+    await comEnvioReal(async () => {
+      expect((await ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1')).enviado).toBe(false)
+    })
+    expect(enviosGmailMock).toHaveLength(0)
+  })
+
+  it('campanha pausada não envia, mesmo com a espera vencida', async () => {
+    const { motor } = motorFalso(leadBase(), [template()])
+    const base = banco({ tipo: 'prospeccao', status: 'pausada' }, configComRemetente)
+    const ambiente = new AmbienteSupabase(ORG, { client: base.cliente(), motor })
+    await comEnvioReal(async () => {
+      expect((await ambiente.enviarEmailTemplate(LEAD, 'follow_up_1', CAMPANHA, 'exec-1:email-1')).enviado).toBe(false)
+    })
+    expect(enviosGmailMock).toHaveLength(0)
   })
 })

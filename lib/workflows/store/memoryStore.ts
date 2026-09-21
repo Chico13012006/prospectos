@@ -13,7 +13,7 @@ import type {
 import type { PatchExecucao, PatchWorkflow, WorkflowStore } from './store'
 
 export class MemoryWorkflowStore implements WorkflowStore {
-  readonly organizacaoId: string | undefined = undefined
+  constructor(readonly organizacaoId?: string) {}
   private workflows = new Map<string, Workflow>()
   private versoes = new Map<string, WorkflowVersao>()
   private execucoes = new Map<string, WorkflowExecucao>()
@@ -28,6 +28,7 @@ export class MemoryWorkflowStore implements WorkflowStore {
     const ts = this.agora()
     const wf: Workflow = {
       id: randomUUID(),
+      organizacao_id: this.organizacaoId,
       nome: input.nome,
       status: 'rascunho',
       versao_atual_id: null,
@@ -72,6 +73,7 @@ export class MemoryWorkflowStore implements WorkflowStore {
         throw new Error(`versão ${input.numero} já existe para o workflow ${input.workflow_id}`)
     const versao: WorkflowVersao = {
       id: randomUUID(),
+      organizacao_id: this.organizacaoId,
       workflow_id: input.workflow_id,
       numero: input.numero,
       // Cópia profunda: a versão é imutável e não deve compartilhar referência
@@ -109,6 +111,7 @@ export class MemoryWorkflowStore implements WorkflowStore {
     const ts = this.agora()
     const ex: WorkflowExecucao = {
       id: randomUUID(),
+      organizacao_id: this.organizacaoId,
       workflow_id: input.workflow_id,
       versao_id: input.versao_id,
       lead_id: input.lead_id ?? null,
@@ -118,6 +121,13 @@ export class MemoryWorkflowStore implements WorkflowStore {
       passo_atual: 0,
       status: input.status ?? 'em_andamento',
       proxima_verificacao_em: input.proxima_verificacao_em ?? null,
+      agendamento_geracao: 0,
+      agendamento_publicado_em: null,
+      agendamento_checkpoint_em: null,
+      publicacao_token: null,
+      publicacao_expira_em: null,
+      claim_token: null,
+      claim_expira_em: null,
       iniciado_em: ts,
       atualizado_em: ts,
     }
@@ -136,6 +146,84 @@ export class MemoryWorkflowStore implements WorkflowStore {
     // Espelha o Supabase: 'cancelado' é terminal (só outro cancelamento passa).
     if (ex.status === 'cancelado' && patch.status !== 'cancelado') return
     this.execucoes.set(id, { ...ex, ...patch })
+  }
+
+  // Espelho síncrono das operações atômicas SQL, usado pelos testes de corrida.
+  async agendarEsperaProspeccao(id: string, passoEsperado: number, proximoPasso: number, ate: string, claimToken?: string): Promise<WorkflowExecucao | null> {
+    const ex = this.execucoes.get(id)
+    if (!ex || ex.passo_atual !== passoEsperado || ex.status === 'cancelado'
+      || (claimToken ? ex.claim_token !== claimToken || !ex.claim_expira_em || new Date(ex.claim_expira_em).getTime() <= Date.now()
+        : ex.status !== 'em_andamento' || !!ex.claim_token)) return null
+    Object.assign(ex, { passo_atual: proximoPasso, status: 'aguardando', proxima_verificacao_em: ate,
+      agendamento_geracao: (ex.agendamento_geracao ?? 0) + 1,
+      agendamento_publicado_em: null, agendamento_checkpoint_em: null,
+      publicacao_token: null, publicacao_expira_em: null,
+      claim_token: null, claim_expira_em: null })
+    return { ...ex }
+  }
+
+  async reivindicarRetomadaProspeccao(id: string, geracao: number, passo: number, token: string): Promise<WorkflowExecucao | null> {
+    const ex = this.execucoes.get(id)
+    if (!ex || ex.status !== 'aguardando' || ex.passo_atual !== passo
+      || (ex.agendamento_geracao ?? 0) !== geracao || !ex.proxima_verificacao_em
+      || new Date(ex.proxima_verificacao_em).getTime() > Date.now()
+      || ex.claim_token && ex.claim_expira_em && new Date(ex.claim_expira_em).getTime() > Date.now()) return null
+    ex.claim_token = token
+    ex.claim_expira_em = new Date(Date.now() + 600_000).toISOString()
+    return { ...ex }
+  }
+
+  async liberarRetomadaProspeccao(id: string, token: string): Promise<void> {
+    const ex = this.execucoes.get(id)
+    if (ex?.claim_token === token) { ex.claim_token = null; ex.claim_expira_em = null }
+  }
+
+  async reivindicarPublicacaoProspeccao(id: string, geracao: number, token: string, checkpoint: string): Promise<boolean> {
+    const ex = this.execucoes.get(id)
+    if (!ex || ex.status !== 'aguardando' || ex.agendamento_geracao !== geracao
+      || ex.agendamento_publicado_em
+      || ex.publicacao_token && ex.publicacao_expira_em
+        && new Date(ex.publicacao_expira_em).getTime() > Date.now()) return false
+    Object.assign(ex, { publicacao_token: token, agendamento_checkpoint_em: checkpoint,
+      publicacao_expira_em: new Date(Date.now() + 300_000).toISOString() })
+    return true
+  }
+
+  async confirmarPublicacaoProspeccao(id: string, geracao: number, token: string): Promise<void> {
+    const ex = this.execucoes.get(id)
+    if (ex?.agendamento_geracao === geracao && ex.publicacao_token === token) {
+      ex.agendamento_publicado_em = new Date().toISOString()
+      ex.publicacao_token = null; ex.publicacao_expira_em = null
+    }
+  }
+
+  async liberarPublicacaoProspeccao(id: string, geracao: number, token: string): Promise<void> {
+    const ex = this.execucoes.get(id)
+    if (ex?.agendamento_geracao === geracao && ex.publicacao_token === token) {
+      ex.publicacao_token = null; ex.publicacao_expira_em = null; ex.agendamento_checkpoint_em = null
+    }
+  }
+
+  async rearmarRetomadaProspeccao(id: string, geracao: number): Promise<WorkflowExecucao | null> {
+    const ex = this.execucoes.get(id)
+    if (!ex || ex.status !== 'aguardando' || ex.agendamento_geracao !== geracao
+      || ex.claim_token && ex.claim_expira_em && new Date(ex.claim_expira_em).getTime() > Date.now()) return null
+    Object.assign(ex, { agendamento_geracao: geracao + 1, agendamento_publicado_em: null,
+      agendamento_checkpoint_em: null, publicacao_token: null, publicacao_expira_em: null,
+      claim_token: null, claim_expira_em: null })
+    return { ...ex }
+  }
+
+  // Espelha workflow_prospeccao_reconciliar_lote. O filtro por campanha de
+  // prospecção só existe no SQL (este store não conhece campanhas).
+  async listarRetomadasProspeccao(depois: string | null, limite: number): Promise<WorkflowExecucao[]> {
+    return [...this.execucoes.values()]
+      .filter((ex) => ex.status === 'aguardando' && (!depois || ex.id > depois)
+        && (!!ex.proxima_verificacao_em && new Date(ex.proxima_verificacao_em).getTime() <= Date.now()
+          || !!ex.agendamento_checkpoint_em && new Date(ex.agendamento_checkpoint_em).getTime() <= Date.now()
+          || (ex.agendamento_geracao ?? 0) > 0 && !ex.agendamento_publicado_em
+          || !!ex.claim_token && !!ex.claim_expira_em && new Date(ex.claim_expira_em).getTime() <= Date.now()))
+      .sort((a, b) => a.id.localeCompare(b.id)).slice(0, limite).map((ex) => ({ ...ex }))
   }
 
   async buscarExecucaoParaLead(workflowId: string, leadId: string): Promise<WorkflowExecucao | null> {

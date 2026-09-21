@@ -113,3 +113,60 @@ describe('multi-tenant — SupabaseWorkflowStore filtra/grava organizacao_id', (
     expect(chains.workflow_execucao_eventos.temEq('execucao_id', 'E1')).toBe(true)
   })
 })
+
+// Retomada durável de prospecção (0047). Aqui o isolamento não está em .eq():
+// as operações são RPC, então a prova é que TODA chamada leva p_org da sessão
+// — nunca um id vindo do payload da fila — e que "nada casou" vira null.
+function mockRpc(resposta: unknown = []) {
+  const chamadas: { nome: string; args: Record<string, unknown> }[] = []
+  const client = {
+    rpc(nome: string, args: Record<string, unknown>) {
+      chamadas.push({ nome, args })
+      return Promise.resolve({ data: resposta, error: null })
+    },
+  } as unknown as SupabaseClient
+  return { client, chamadas }
+}
+
+describe('multi-tenant — RPCs de retomada de prospecção levam p_org', () => {
+  it('toda operação de retomada envia p_org da organização do store', async () => {
+    const { client, chamadas } = mockRpc()
+    const s = store(client)
+    await s.agendarEsperaProspeccao('E1', 1, 2, '2026-09-22T12:00:00.000Z', 'tok')
+    await s.reivindicarRetomadaProspeccao('E1', 3, 2, 'tok')
+    await s.liberarRetomadaProspeccao('E1', 'tok')
+    await s.reivindicarPublicacaoProspeccao('E1', 3, 'tok', '2026-09-22T12:00:00.000Z')
+    await s.confirmarPublicacaoProspeccao('E1', 3, 'tok')
+    await s.liberarPublicacaoProspeccao('E1', 3, 'tok')
+    await s.rearmarRetomadaProspeccao('E1', 3)
+    await s.listarRetomadasProspeccao(null, 200)
+    expect(chamadas).toHaveLength(8)
+    expect(chamadas.every((c) => c.args.p_org === ORG)).toBe(true)
+    expect(chamadas.map((c) => c.nome)).toEqual([
+      'workflow_prospeccao_agendar_espera',
+      'workflow_prospeccao_claim',
+      'workflow_prospeccao_liberar_claim',
+      'workflow_prospeccao_claim_publicacao',
+      'workflow_prospeccao_confirmar_publicacao',
+      'workflow_prospeccao_liberar_publicacao',
+      'workflow_prospeccao_rearmar',
+      'workflow_prospeccao_reconciliar_lote',
+    ])
+  })
+
+  it('setof vazio vira null — e linha sem id nunca passa por sucesso', async () => {
+    const vazio = store(mockRpc([]).client)
+    expect(await vazio.agendarEsperaProspeccao('E1', 1, 2, 'x')).toBeNull()
+    expect(await vazio.reivindicarRetomadaProspeccao('E1', 0, 0, 'tok')).toBeNull()
+    expect(await vazio.rearmarRetomadaProspeccao('E1', 0)).toBeNull()
+    expect(await vazio.listarRetomadasProspeccao(null, 10)).toEqual([])
+
+    // Compatível com um retorno composto nulo (objeto de campos nulos).
+    const nulo = store(mockRpc({ id: null, status: null }).client)
+    expect(await nulo.agendarEsperaProspeccao('E1', 1, 2, 'x')).toBeNull()
+    expect(await nulo.reivindicarRetomadaProspeccao('E1', 0, 0, 'tok')).toBeNull()
+
+    const casou = store(mockRpc([{ id: 'E1', agendamento_geracao: 4 }]).client)
+    expect(await casou.agendarEsperaProspeccao('E1', 1, 2, 'x')).toMatchObject({ id: 'E1', agendamento_geracao: 4 })
+  })
+})

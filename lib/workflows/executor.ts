@@ -4,19 +4,14 @@
 //     leads-alvo que ainda não têm execução (idempotente).
 //  2) STEPPING: avança cada execução pendente. Gate de condições (AND) no início;
 //     depois roda as ações em ordem. A ação 'esperar' SUSPENDE a execução
-//     (status='aguardando' + proxima_verificacao_em) e o poll a retoma no MESMO
-//     passo depois — a espera é PERSISTIDA (vive no banco), então sobrevive a
-//     reinício do processo. `passo_atual` garante que cada ação roda uma vez
-//     (semântica at-least-once: se cair entre efeito e persistência, a ação pode
-//     repetir no resume — tradeoff documentado, aceitável para esta v1).
-//
-// O timestamp persistido continua sendo a fonte de verdade das esperas. Para a
-// primeira mensagem de campanhas, uma fila durável apenas acorda cada execução
-// no horário salvo; as etapas posteriores seguem no poll/cron existente.
+//     (status='aguardando' + proxima_verificacao_em). Para prospecção a espera
+//     cria uma geração e publica um despertar durável; Renovação segue no poll.
 import type { WorkflowStore } from './store/store'
 import type { CtxExec, RegistroWorkflows } from './registro'
 import type { AmbienteWorkflow } from './ambiente'
+import { ErroEnvioIncerto } from './ambiente'
 import type { DefinicaoWorkflow } from './types'
+import type { EnfileirarRetomada } from './retomadaProspeccao'
 import { agendaPermiteProcessar } from '@/lib/campanhas/agenda'
 
 function ctxDe(
@@ -57,7 +52,7 @@ export async function processarExecucao(
   ambiente: AmbienteWorkflow,
   execucaoId: string,
   agoraISO: string = new Date().toISOString(),
-  opcoes: { propagarErro?: boolean; permitirRetryErro?: boolean; ignorarAgendaCampanha?: boolean } = {},
+  opcoes: { propagarErro?: boolean; permitirRetryErro?: boolean; ignorarAgendaCampanha?: boolean; claimToken?: string; enfileirarRetomada?: EnfileirarRetomada } = {},
 ): Promise<void> {
   const ex = await store.buscarExecucao(execucaoId)
   if (!ex) return
@@ -93,6 +88,13 @@ export async function processarExecucao(
         && !agendaPermiteProcessar(controle.diasSemana, agoraISO)
       ) return
       campanhaTipo = controle.tipo ?? null
+      if (campanhaTipo === 'prospeccao' && ex.claim_token
+        && ex.claim_expira_em && new Date(ex.claim_expira_em).getTime() > Date.now()
+        && ex.claim_token !== opcoes.claimToken) return
+      // O poll diário e callbacks antigos não podem executar o mesmo passo de
+      // prospecção que pertence ao worker com claim atômico.
+      if (campanhaTipo === 'prospeccao' && store.organizacaoId && ex.status === 'aguardando'
+        && (!opcoes.claimToken || ex.claim_token !== opcoes.claimToken)) return
     }
 
     const def = await definicaoDaExecucao(store, ex.versao_id)
@@ -122,15 +124,34 @@ export async function processarExecucao(
         throw new Error(`limite de passos excedido (${MAX_PASSOS}) — possível laço de ramificação`)
 
       const bloco = def.acoes[passo]
+      if (opcoes.claimToken) {
+        const atual = await store.buscarExecucao(ex.id)
+        if (!atual || atual.status === 'cancelado' || atual.claim_token !== opcoes.claimToken) return
+      }
       const res = await registro.obterAcao(bloco.tipo).executar(ctxDe(store, registro, ambiente, ex, bloco.config ?? {}, bloco.id, campanhaTipo))
       await log('acao_executada', { passo, acao: bloco.tipo })
 
       if (res.tipo === 'esperar') {
+        if (campanhaTipo === 'prospeccao' && store.organizacaoId) {
+          if (!store.agendarEsperaProspeccao) throw new Error('Store sem agendamento durável de prospecção.')
+          const agendada = await store.agendarEsperaProspeccao(ex.id, passo, passo + 1, res.ate, opcoes.claimToken)
+          if (!agendada) return // cancelamento ou claim perdido venceu a corrida
+          await log('aguardando', { ate: res.ate, geracao: agendada.agendamento_geracao })
+          try {
+            const { publicarRetomadaProspeccao } = await import('./retomadaProspeccao')
+            await publicarRetomadaProspeccao(store, agendada, { enfileirar: opcoes.enfileirarRetomada })
+          } catch (erro) {
+            // A intenção já foi persistida. O cron diário irá republicá-la.
+            await log('retomada_publicacao_falhou', {
+              geracao: agendada.agendamento_geracao,
+              mensagem: erro instanceof Error ? erro.message : String(erro),
+            })
+          }
+          return
+        }
         await store.atualizarExecucao(ex.id, {
-          passo_atual: passo + 1, // retoma DEPOIS da espera
-          status: 'aguardando',
-          proxima_verificacao_em: res.ate,
-          atualizado_em: agoraISO,
+          passo_atual: passo + 1, status: 'aguardando',
+          proxima_verificacao_em: res.ate, atualizado_em: agoraISO,
         })
         await log('aguardando', { ate: res.ate })
         return
@@ -153,13 +174,20 @@ export async function processarExecucao(
       } else {
         passo += 1
       }
-      await store.atualizarExecucao(ex.id, { passo_atual: passo, status: 'em_andamento', atualizado_em: agoraISO })
+      // Enquanto o claim da retomada está ativo, manter 'aguardando' permite
+      // que retry/watchdog recuperem o passo após uma queda entre ações.
+      await store.atualizarExecucao(ex.id, {
+        passo_atual: passo, status: opcoes.claimToken ? 'aguardando' : 'em_andamento', atualizado_em: agoraISO,
+      })
     }
 
     await store.atualizarExecucao(ex.id, { status: 'concluido', atualizado_em: agoraISO })
     await log('concluido')
   } catch (e) {
-    await store.atualizarExecucao(ex.id, { status: 'erro', atualizado_em: agoraISO })
+    // O worker de retomada deixa a execução aguardando para retry da fila;
+    // marcar erro aqui tornaria o claim seguinte inelegível.
+    if (!opcoes.claimToken || e instanceof ErroEnvioIncerto)
+      await store.atualizarExecucao(ex.id, { status: 'erro', atualizado_em: agoraISO })
     const mensagem = e instanceof Error ? e.message : String(e)
     await log('erro', { mensagem })
     try {
@@ -269,7 +297,7 @@ export async function processarExecucoesCampanha(
   campanhaId: string,
   execucaoIds: string[],
   agoraISO: string = new Date().toISOString(),
-  opcoes: { propagarErro?: boolean; permitirRetryErro?: boolean; ignorarAgendaCampanha?: boolean } = {},
+  opcoes: { propagarErro?: boolean; permitirRetryErro?: boolean; ignorarAgendaCampanha?: boolean; claimToken?: string; enfileirarRetomada?: EnfileirarRetomada } = {},
 ): Promise<number> {
   let processadas = 0
   for (const execucaoId of [...new Set(execucaoIds)]) {
