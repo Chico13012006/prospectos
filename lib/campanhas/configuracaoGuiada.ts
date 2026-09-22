@@ -261,6 +261,10 @@ export function normalizarPublicoCampanha(raw: unknown): Publico {
     objetivo: texto(obj.objetivo),
     responsavel: texto(obj.responsavel),
     responsavel_id: texto(obj.responsavel_id),
+    // Só 'lead' liga o roteamento por carteira; qualquer outro valor (inclusive
+    // ausente, que é o caso de toda campanha criada antes deste campo) mantém o
+    // responsável fixo da campanha como destino — comportamento legado.
+    retornoPara: obj.retornoPara === 'lead' ? 'lead' : 'campanha',
     idioma: texto(obj.idioma),
     prazo: texto(obj.prazo),
     empresas: {
@@ -341,7 +345,14 @@ export function validarCampanhaGuiada(publico: Publico): string[] {
   const op = publico.operacao
   const inicial = op?.mensagemInicial
   if (!op?.remetenteEmail) erros.push('Configure uma conta remetente no workspace.')
-  if (!publico.responsavel_id) erros.push('Defina o responsável pelos retornos.')
+  // Exigido nos dois modos: em 'lead' ele deixa de ser o destino e vira o
+  // fallback de lead sem responsável — sem ele, esse retorno cairia no
+  // CLOSER_EMAIL global (ou em lugar nenhum).
+  if (!publico.responsavel_id) {
+    erros.push(publico.retornoPara === 'lead'
+      ? 'Defina o responsável de fallback para leads sem responsável.'
+      : 'Defina o responsável pelos retornos.')
+  }
   if (op?.resposta?.notificarResponsavel !== false && !op?.resposta?.emailAssunto) {
     erros.push('Informe o assunto do e-mail de resposta ao responsável.')
   }

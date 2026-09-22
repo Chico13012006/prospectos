@@ -75,6 +75,10 @@ export interface ContextoCampanhaResposta {
   nome: string
   tipo: string | null
   responsavel: UsuarioBasico | null
+  // true = campanha configurada para devolver o retorno ao responsável do
+  // PRÓPRIO lead (carteira), usando `responsavel` acima só como fallback.
+  // Opcional: contexto montado por store antigo/teste vale como false (legado).
+  retornoParaResponsavelDoLead?: boolean
   notificarResponsavel: boolean
   emailAssunto: string | null
   emailCorpo: string | null

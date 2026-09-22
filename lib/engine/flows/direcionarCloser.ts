@@ -19,6 +19,11 @@ export interface PayloadDirecionarCloser {
   leadId: string
   textoResposta: string
   responsavelCampanha?: UsuarioBasico | null
+  // Inverte a ordem abaixo: o responsável do PRÓPRIO lead (carteira importada)
+  // passa na frente e `responsavelCampanha` vira fallback. Quem decide é o
+  // chamador — o handoff comercial nunca liga isto, porque o comercial sorteado
+  // no rodízio tem prioridade absoluta (ver detectarResposta).
+  preferirResponsavelDoLead?: boolean
   contextoCampanha?: ContextoCampanhaResposta | null
 }
 
@@ -58,18 +63,27 @@ export async function direcionarCloser(
     return { ok: false }
   }
 
-  // Closer = responsável do lead; fallback configurado (tela ou CLOSER_EMAIL).
+  // Closer = responsável indicado pelo chamador (campanha ou handoff) e
+  // responsável do lead, na ordem que `preferirResponsavelDoLead` definir;
+  // fallback configurado (tela ou CLOSER_EMAIL) quando nenhum tem e-mail.
+  //
+  // O responsável do lead só é buscado quando entra na conta — campanha no modo
+  // legado com responsável resolvido não faz a consulta extra.
+  const buscarResponsavelDoLead = async (): Promise<UsuarioBasico | null> => {
+    if (!lead.responsavel_id) return null
+    const u = await store.buscarUsuario(lead.responsavel_id)
+    return u?.email ? u : null
+  }
+  const daCampanha = payload.responsavelCampanha?.email ? payload.responsavelCampanha : null
+  const escolhido = payload.preferirResponsavelDoLead
+    ? (await buscarResponsavelDoLead()) ?? daCampanha
+    : daCampanha ?? (await buscarResponsavelDoLead())
+
   let closerEmail = (await getEngineConfig(store.organizacaoId)).closerEmailFallback
   let closerNome = 'Closer'
-  if (payload.responsavelCampanha?.email) {
-    closerEmail = payload.responsavelCampanha.email
-    closerNome = payload.responsavelCampanha.nome
-  } else if (lead.responsavel_id) {
-    const u = await store.buscarUsuario(lead.responsavel_id)
-    if (u?.email) {
-      closerEmail = u.email
-      closerNome = u.nome
-    }
+  if (escolhido) {
+    closerEmail = escolhido.email
+    closerNome = escolhido.nome
   }
 
   const ms = lead.ultimo_contato ? Date.now() - new Date(lead.ultimo_contato).getTime() : 0

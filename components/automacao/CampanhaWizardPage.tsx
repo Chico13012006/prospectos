@@ -201,6 +201,12 @@ export default function CampanhaWizardPage({
   const [paginaEmpresas, setPaginaEmpresas] = useState(1)
 
   const responsavel = membros.find((membro) => membro.id === publico.responsavel_id)
+  // Modo carteira: o retorno vai para o responsável de cada lead e `responsavel`
+  // acima vira fallback. Campanha antiga não tem o campo — e segue com a pessoa fixa.
+  const retornoPorCarteira = publico.retornoPara === 'lead'
+  const destinoRetorno = retornoPorCarteira
+    ? `responsável de cada lead (fallback: ${nomeMembro(responsavel)})`
+    : nomeMembro(responsavel)
   const mensagemInicial = publico.operacao?.mensagemInicial ?? mensagemVazia()
   const followups = publico.operacao?.followups ?? []
   const disparoUnico = campanhaEhDisparoUnico(tipo)
@@ -711,11 +717,27 @@ export default function CampanhaWizardPage({
                 <input className={input} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Novidade de agosto" />
               </div>
               <div>
-                <label className={label}>Responsável pelos retornos</label>
+                <label className={label}>Retorno vai para</label>
+                <select
+                  className={input}
+                  value={retornoPorCarteira ? 'lead' : 'campanha'}
+                  onChange={(e) => setPublico((atual) => ({ ...atual, retornoPara: e.target.value === 'lead' ? 'lead' : 'campanha' }))}
+                >
+                  <option value="campanha">Uma pessoa fixa</option>
+                  <option value="lead">O responsável de cada lead</option>
+                </select>
+                <label className={`${label} mt-3`}>
+                  {retornoPorCarteira ? 'Fallback (lead sem responsável)' : 'Responsável pelos retornos'}
+                </label>
                 <select className={input} value={publico.responsavel_id ?? ''} onChange={(e) => setPublico((atual) => ({ ...atual, responsavel_id: e.target.value || undefined }))}>
                   <option value="">Não configurado</option>
                   {membros.map((membro) => <option key={membro.id} value={membro.id}>{nomeMembro(membro)}</option>)}
                 </select>
+                {retornoPorCarteira && (
+                  <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                    Cada resposta vai para o responsável do lead. Quem não tiver responsável com e-mail cai nesta pessoa.
+                  </p>
+                )}
               </div>
               <div>
                 <label className={label}>Objetivo interno (opcional)</label>
@@ -1108,9 +1130,17 @@ export default function CampanhaWizardPage({
               </div>
               <div className="rounded-xl border border-[#30384e] bg-[#11151f] p-4">
                 <div className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">Responsável pelo retorno</div>
-                <div className="text-sm font-medium text-slate-200">{nomeMembro(responsavel)}</div>
-                <div className="mt-1 break-all text-xs text-slate-500">{textoOuNaoConfigurado(responsavel?.email)}</div>
-                <p className="mt-4 text-xs leading-5 text-slate-500">{responsavel?.email ? 'A campanha prioriza este responsável quando encaminha a oportunidade.' : 'Sem e-mail neste perfil, o motor mantém os fallbacks existentes.'}</p>
+                <div className="text-sm font-medium text-slate-200">
+                  {retornoPorCarteira ? 'Responsável de cada lead' : nomeMembro(responsavel)}
+                </div>
+                <div className="mt-1 break-all text-xs text-slate-500">
+                  {retornoPorCarteira
+                    ? `Fallback: ${nomeMembro(responsavel)}${responsavel?.email ? ` <${responsavel.email}>` : ''}`
+                    : textoOuNaoConfigurado(responsavel?.email)}
+                </div>
+                <p className="mt-4 text-xs leading-5 text-slate-500">{retornoPorCarteira
+                  ? 'Cada resposta vai para o responsável gravado no lead; sem responsável com e-mail, o motor usa o fallback acima.'
+                  : responsavel?.email ? 'A campanha prioriza este responsável quando encaminha a oportunidade.' : 'Sem e-mail neste perfil, o motor mantém os fallbacks existentes.'}</p>
               </div>
               <div className="rounded-xl border border-indigo-500/25 bg-indigo-500/5 p-4">
                 <div className="mb-3 flex items-center gap-2 text-sm font-medium text-indigo-200"><Mail size={16} /> E-mail ao responsável</div>
@@ -1179,15 +1209,15 @@ export default function CampanhaWizardPage({
               ) : (
                 <> A cadência será: <strong className="text-slate-100">{resumoCadencia}</strong>.</>
               )}
-              {' '}Se alguém responder, o retorno será encaminhado a
-              {' '}<strong className="text-slate-100">{nomeMembro(responsavel)}</strong>.
+              {' '}Se alguém responder, o retorno será encaminhado {retornoPorCarteira ? 'ao' : 'a'}
+              {' '}<strong className="text-slate-100">{destinoRetorno}</strong>.
             </div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {[
                 ['Público', previa ? `${previa.elegiveis} elegíveis de ${previa.totalSelecionado} selecionados` : 'Não configurado'],
                 ['Remetente', textoOuNaoConfigurado(publico.operacao?.remetenteEmail)],
-                ['Responsável', nomeMembro(responsavel)],
+                ['Responsável', destinoRetorno],
                 ['Mensagem', textoOuNaoConfigurado(mensagemInicial.assunto)],
                 [disparoUnico ? 'Envio' : 'Cadência', resumoCadencia],
                 ['Regra de resposta', disparoUnico ? 'Encaminhar ao responsável' : 'Parar cadência e encaminhar ao responsável'],

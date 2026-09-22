@@ -41,6 +41,13 @@ export async function buscarContextoResumoOperacional(
     responsavel = perfil?.nome?.trim() || responsavelLegado
   }
 
+  // No modo carteira o destino é o responsável de cada lead; o perfil acima é
+  // só o fallback. A tela de detalhe mostra a mesma frase que o wizard, para
+  // ninguém ler "Responsável: Fulano" e achar que todo retorno vai para ele.
+  if (publico.retornoPara === 'lead') {
+    responsavel = `Responsável de cada lead (fallback: ${responsavel ?? 'não configurado'})`
+  }
+
   const { data: orgRow, error: orgError } = await admin
     .from('organizacoes')
     .select('configuracoes')

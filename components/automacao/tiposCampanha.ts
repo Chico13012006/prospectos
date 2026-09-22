@@ -113,6 +113,12 @@ export interface Publico {
   objetivo?: string;
   responsavel?: string;    // legado — preferir responsavel_id
   responsavel_id?: string;
+  // Para onde vai o aviso quando o lead responde. 'campanha' (padrão e
+  // comportamento legado) manda sempre para `responsavel_id`; 'lead' manda para
+  // o responsável do PRÓPRIO lead (carteira importada), com `responsavel_id`
+  // como fallback de lead sem responsável ou sem e-mail. Campanha sempre tem
+  // `responsavel_id` — ele nunca deixa de ser exigido, só muda de papel.
+  retornoPara?: 'campanha' | 'lead';
   idioma?: string;
   prazo?: string;
   empresas?: PublicoEmpresas;

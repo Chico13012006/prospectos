@@ -412,6 +412,12 @@ export async function detectarResposta(
       // para resposta positiva. Se o handoff atribuiu um comercial, o aviso vai
       // para ELE (prevalece sobre o responsável fixo da campanha e sobre o
       // responsável antigo do lead).
+      //
+      // Sem handoff, a campanha decide: no modo 'lead' (carteira importada) o
+      // responsável do próprio lead passa na frente do responsável fixo. Com
+      // handoff o flag fica desligado de propósito — o rodízio acabou de gravar
+      // leads.responsavel_id, e reordenar aqui só criaria uma segunda leitura
+      // do mesmo dado com chance de divergir.
       if (closerEnfileirado.has(lead.id)) {
         log.info('Closer já avisado deste lead nesta passada; não duplico o aviso.', { leadId: lead.id })
       } else {
@@ -420,6 +426,8 @@ export async function detectarResposta(
           leadId: lead.id,
           textoResposta: msg.corpo,
           responsavelCampanha: responsavelHandoff ?? responsavelCampanha,
+          preferirResponsavelDoLead: !responsavelHandoff
+            && contextoCampanha?.retornoParaResponsavelDoLead === true,
           contextoCampanha,
         })
       }

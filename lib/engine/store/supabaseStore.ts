@@ -316,6 +316,9 @@ export class SupabaseStore implements Store {
       nome: campanhaRow.nome,
       tipo: campanhaRow.tipo,
       responsavel,
+      // Só o valor explícito 'lead' inverte a precedência; campanha antiga (sem
+      // o campo) continua encaminhando para o responsável fixo.
+      retornoParaResponsavelDoLead: publico?.retornoPara === 'lead',
       notificarResponsavel: resposta.notificarResponsavel !== false,
       emailAssunto: typeof resposta.emailAssunto === 'string' ? resposta.emailAssunto : null,
       emailCorpo: typeof resposta.emailCorpo === 'string' ? resposta.emailCorpo : null,

@@ -451,6 +451,53 @@ describe('Fluxo 3 — direcionarCloser', () => {
     expect(email.enviados[0].para).toBe('campanha@empresa.com')
   })
 
+  // Modo carteira (publico.retornoPara='lead'): base importada em que cada lead
+  // já tem dono. O responsável fixo da campanha deixa de ser o destino e passa
+  // a ser só a rede de segurança.
+  it('modo carteira: encaminha ao responsável do PRÓPRIO lead, não ao fixo da campanha', async () => {
+    const lead = makeLead({ estagio: 'interessado', responsavel_id: 'dono-da-carteira' })
+    const store = new MemoryStore([lead], [{ id: 'dono-da-carteira', nome: 'Dono da carteira', email: 'carteira@empresa.com' }])
+    const email = new SimulatedProvider()
+    const r = await direcionarCloser(store, email, {
+      leadId: lead.id,
+      textoResposta: 'Tenho interesse.',
+      responsavelCampanha: { id: 'perfil-campanha', nome: 'Dona da campanha', email: 'campanha@empresa.com' },
+      preferirResponsavelDoLead: true,
+    })
+    expect(r.closer).toBe('carteira@empresa.com')
+    expect(email.enviados[0].para).toBe('carteira@empresa.com')
+  })
+
+  it('modo carteira: lead SEM responsável cai no fixo da campanha', async () => {
+    const lead = makeLead({ estagio: 'interessado' })
+    const store = new MemoryStore([lead], [])
+    const email = new SimulatedProvider()
+    const r = await direcionarCloser(store, email, {
+      leadId: lead.id,
+      textoResposta: 'Tenho interesse.',
+      responsavelCampanha: { id: 'perfil-campanha', nome: 'Dona da campanha', email: 'campanha@empresa.com' },
+      preferirResponsavelDoLead: true,
+    })
+    expect(r.closer).toBe('campanha@empresa.com')
+    expect(email.enviados[0].para).toBe('campanha@empresa.com')
+  })
+
+  // Legado do HubSpot: responsavel_id preenchido, mas o usuário não tem e-mail
+  // cadastrado. Sem este fallback o aviso sumiria no CLOSER_EMAIL global.
+  it('modo carteira: responsável do lead SEM e-mail cai no fixo da campanha', async () => {
+    const lead = makeLead({ estagio: 'interessado', responsavel_id: 'sem-email' })
+    const store = new MemoryStore([lead], [{ id: 'sem-email', nome: 'Comercial sem e-mail', email: '' }])
+    const email = new SimulatedProvider()
+    const r = await direcionarCloser(store, email, {
+      leadId: lead.id,
+      textoResposta: 'Tenho interesse.',
+      responsavelCampanha: { id: 'perfil-campanha', nome: 'Dona da campanha', email: 'campanha@empresa.com' },
+      preferirResponsavelDoLead: true,
+    })
+    expect(r.closer).toBe('campanha@empresa.com')
+    expect(email.enviados[0].para).toBe('campanha@empresa.com')
+  })
+
   it('notifica o responsável com contexto completo e marca com_closer', async () => {
     const closer = { id: 'u1', nome: 'João Closer', email: 'joao@inovacode.com.br' }
     const lead = makeLead({

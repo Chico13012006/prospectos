@@ -9,7 +9,7 @@ import { SimulatedProvider } from './email/simulatedProvider'
 import { GmailProvider, lerCredenciaisGmail, type PapelEmail } from './email/gmailProvider'
 import type { Store } from './store/store'
 import type { EmailProvider } from './email/provider'
-import { direcionarCloser } from './flows/direcionarCloser'
+import { direcionarCloser, type PayloadDirecionarCloser } from './flows/direcionarCloser'
 import { detectarResposta } from './flows/detectarResposta'
 import { followUp } from './flows/followUp'
 import { executarAcao } from './flows/executarAcao'
@@ -44,7 +44,10 @@ export function escolherEmailProvider(papel: PapelEmail = 'followup'): EmailProv
 // sai pela conta de PROSPECÇÃO (item 2.7).
 export function registrarHandlers(motor: Motor) {
   motor.fila.registrar('direcionar_closer', (p) =>
-    direcionarCloser(motor.store, motor.emailProspeccao, p as { leadId: string; textoResposta: string }),
+    // Payload completo: quem enfileira manda responsável e modo de retorno
+    // junto. O cast estreito de antes escondia esses campos do leitor (eles
+    // sempre chegaram em runtime, já que a fila carrega o objeto inteiro).
+    direcionarCloser(motor.store, motor.emailProspeccao, p as PayloadDirecionarCloser),
   )
 }
 

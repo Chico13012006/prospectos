@@ -290,6 +290,50 @@ describe('origem da resposta — só prospecção entra no handoff', () => {
     expect(fila.pendentes()).toBe(1)
   })
 
+  // Modo carteira: base importada com responsável por lead (HubSpot). A campanha
+  // de follow-up não tem rodízio (teste 14), então quem decide o destino é o
+  // próprio lead — o responsável fixo vira fallback dentro do Fluxo 3.
+  it('15. campanha no modo carteira → o Fluxo 3 recebe a ordem invertida (responsável do lead na frente)', async () => {
+    const lead = makeLead({ estagio: 'follow_up', contato_email: 'ana@acme.com.br', ultimo_contato: SEMANA_PASSADA })
+    const store = new StoreTeste([lead])
+    store.contexto = { ...contextoCampanha('followup'), retornoParaResponsavelDoLead: true }
+    email.injetar(msg())
+    await detectarResposta(store, email, fila)
+    const payloads: { preferirResponsavelDoLead?: boolean }[] = []
+    fila.registrar('direcionar_closer', async (p) => { payloads.push(p as typeof payloads[number]) })
+    await fila.processar()
+    expect(payloads).toHaveLength(1)
+    expect(payloads[0].preferirResponsavelDoLead).toBe(true)
+  })
+
+  it('16. campanha legada (sem o campo) mantém o responsável fixo na frente', async () => {
+    const lead = makeLead({ estagio: 'follow_up', contato_email: 'ana@acme.com.br', ultimo_contato: SEMANA_PASSADA })
+    const store = new StoreTeste([lead])
+    store.contexto = contextoCampanha('followup')
+    email.injetar(msg())
+    await detectarResposta(store, email, fila)
+    const payloads: { preferirResponsavelDoLead?: boolean }[] = []
+    fila.registrar('direcionar_closer', async (p) => { payloads.push(p as typeof payloads[number]) })
+    await fila.processar()
+    expect(payloads[0].preferirResponsavelDoLead).toBe(false)
+  })
+
+  // Prioridade do rodízio é absoluta: o handoff acabou de gravar
+  // leads.responsavel_id, e reordenar aqui só duplicaria a mesma leitura.
+  it('17. handoff atribuiu comercial → o modo carteira NÃO reordena o Fluxo 3', async () => {
+    const lead = makeLead({ estagio: 'primeiro_contato', contato_email: 'ana@acme.com.br', ultimo_contato: SEMANA_PASSADA })
+    const store = new StoreTeste([lead])
+    store.contexto = { ...contextoCampanha('prospeccao'), retornoParaResponsavelDoLead: true }
+    const g = gatilhoFake()
+    email.injetar(msg())
+    await detectarResposta(store, email, fila, { classificarResposta: classificar('positivo'), handoffProspeccao: g.hook })
+    const payloads: { preferirResponsavelDoLead?: boolean; responsavelCampanha?: { email?: string } | null }[] = []
+    fila.registrar('direcionar_closer', async (p) => { payloads.push(p as typeof payloads[number]) })
+    await fila.processar()
+    expect(payloads[0].preferirResponsavelDoLead).toBe(false)
+    expect(payloads[0].responsavelCampanha?.email).toBe('bruno@a')
+  })
+
   it('lead de campanha de PROSPECÇÃO (fora da cadência legada) responde positivo → handoff com etapa da campanha', async () => {
     const lead = makeLead({ estagio: 'novos_leads', contato_email: 'ana@acme.com.br', ultimo_contato: SEMANA_PASSADA })
     const store = new StoreTeste([lead])

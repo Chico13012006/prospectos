@@ -55,6 +55,21 @@ describe('configuração guiada de campanha', () => {
     expect(validarCampanhaGuiada(completa)).toEqual([])
   })
 
+  it('retorno por carteira: só o valor explícito liga o modo, e o fixo continua exigido como fallback', () => {
+    // Campanha criada antes do campo: o destino segue sendo o responsável fixo.
+    expect(normalizarPublicoCampanha({ responsavel_id: 'perfil-1' }).retornoPara).toBe('campanha')
+    // Valor inválido não liga o modo por engano.
+    expect(normalizarPublicoCampanha({ retornoPara: 'qualquer-coisa' }).retornoPara).toBe('campanha')
+    expect(normalizarPublicoCampanha({ retornoPara: 'lead' }).retornoPara).toBe('lead')
+
+    // No modo carteira o fixo vira fallback — mas continua obrigatório, senão o
+    // lead sem responsável não teria para onde ir.
+    const semFallback = normalizarPublicoCampanha({ retornoPara: 'lead', selecao: { modo: 'manual', leadIds: ['lead-1'] } })
+    expect(validarCampanhaGuiada(semFallback)).toContain('Defina o responsável de fallback para leads sem responsável.')
+    const comFallback = normalizarPublicoCampanha({ retornoPara: 'lead', responsavel_id: 'perfil-1' })
+    expect(validarCampanhaGuiada(comFallback)).not.toContain('Defina o responsável de fallback para leads sem responsável.')
+  })
+
   it('trata somente comunicado como disparo único imposto pelo servidor', () => {
     const publico = aplicarRegraPublicoPorTipo(normalizarPublicoCampanha({
       agenda: { diasSemana: [] },
