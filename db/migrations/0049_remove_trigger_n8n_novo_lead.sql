@@ -1,0 +1,37 @@
+-- ============================================================================
+-- Migration 0049 — Remove o trigger de webhook do n8n em public.leads
+-- ----------------------------------------------------------------------------
+-- Estado antes desta migration (confirmado em produção via pg_trigger):
+--
+--   CREATE TRIGGER "prospectOS-novo-lead"
+--     AFTER INSERT ON public.leads FOR EACH ROW
+--     EXECUTE FUNCTION supabase_functions.http_request(
+--       'https://automachico.app.n8n.cloud/webhook/prospectOS-novo-lead',
+--       'POST', '{"Content-type":"application/json"}', '{}', '5000');
+--
+-- Por que remover:
+--   - O motor de cadência em lib/engine substituiu o n8n. O webhook não tem
+--     mais consumidor.
+--   - O trigger é AFTER INSERT FOR EACH ROW com timeout de 5000ms. Toda
+--     inserção de lead — inclusive importação em lote — paga essa chamada
+--     HTTP externa dentro da transação.
+--   - Ele acopla o schema public ao schema supabase_functions, o que impede
+--     reconstruir o banco a partir do repositório (ver 0000_schema_base.sql,
+--     onde este trigger foi deliberadamente omitido pelo mesmo motivo).
+--
+-- IDEMPOTENTE: "drop trigger if exists". Pode rodar mais de uma vez.
+--
+-- ROLLBACK (executar manualmente apenas se o n8n voltar a ter função):
+--   CREATE TRIGGER "prospectOS-novo-lead"
+--     AFTER INSERT ON public.leads FOR EACH ROW
+--     EXECUTE FUNCTION supabase_functions.http_request(
+--       'https://automachico.app.n8n.cloud/webhook/prospectOS-novo-lead',
+--       'POST', '{"Content-type":"application/json"}', '{}', '5000');
+--   Requer o schema supabase_functions presente (extensão pg_net / Database
+--   Webhooks habilitada no projeto Supabase).
+--
+-- NÃO remove a função supabase_functions.http_request nem a extensão: elas são
+-- infraestrutura do Supabase e podem estar em uso por outros webhooks.
+-- ============================================================================
+
+drop trigger if exists "prospectOS-novo-lead" on public.leads;
