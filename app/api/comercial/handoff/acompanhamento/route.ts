@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server'
 import { autorizar } from '@/lib/engine/http'
 import { listarOrganizacoesAtivas } from '@/lib/engine'
 import { createSupabaseAdminClient } from '@/lib/supabase-admin'
-import { executarTickAcompanhamentoOrg } from '@/lib/comercial/handoff/composicao'
+import { executarTickAcompanhamentoOrg, rodizioHandoffLigadoNaOrg } from '@/lib/comercial/handoff/composicao'
 import { reprocessarComandosGrupoOrg } from '@/lib/comercial/grupo/composicao'
 
 export const runtime = 'nodejs'
@@ -27,6 +27,13 @@ async function executar(req: Request) {
     const porOrg: Record<string, unknown> = {}
     for (const org of orgs) {
       try {
+        // Rodízio desligado (padrão): não nasce handoff novo, então não há
+        // corrente de check-in a manter. Sai antes de qualquer efeito, para
+        // "desativado" significar mesmo silêncio total nesta organização.
+        if (!await rodizioHandoffLigadoNaOrg(admin, org)) {
+          porOrg[org] = { ignorado: 'rodizio_desligado' }
+          continue
+        }
         // Fase 4: comandos do grupo que ficaram recebidos/falhos/presos.
         let comandos: unknown = null
         try { comandos = await reprocessarComandosGrupoOrg(admin, org) } catch (e) { comandos = { erro: e instanceof Error ? e.message : String(e) } }

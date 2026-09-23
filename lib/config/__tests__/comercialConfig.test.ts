@@ -73,3 +73,35 @@ describe('workspaceConfig.comercial.campanhaRetornoId', () => {
     expect(mesclarWorkspaceConfig(com, { comercialCampanhaRetornoId: null }).comercial).toEqual({ grupoWhatsappId: '120363019502650977-group', handoffRevisaoMinutos: 5 })
   })
 })
+
+// Chave-mestra do rodízio: DESLIGADA por padrão (a distribuição é por carteira
+// do lead). Só `true` explícito, gravado pela tela, reativa.
+import { rodizioHandoffAtivo } from '../workspaceConfig'
+
+describe('workspaceConfig.comercial.rodizioHandoff', () => {
+  it('ausente/inválido → desligado; só o booleano true liga', () => {
+    expect(rodizioHandoffAtivo(parseWorkspaceConfig({}))).toBe(false)
+    expect(rodizioHandoffAtivo(null)).toBe(false)
+    expect(rodizioHandoffAtivo(parseWorkspaceConfig({ comercial: { rodizioHandoff: 'true' } }))).toBe(false)
+    expect(rodizioHandoffAtivo(parseWorkspaceConfig({ comercial: { rodizioHandoff: 1 } }))).toBe(false)
+    expect(rodizioHandoffAtivo(parseWorkspaceConfig({ comercial: { rodizioHandoff: false } }))).toBe(false)
+    expect(rodizioHandoffAtivo(parseWorkspaceConfig({ comercial: { rodizioHandoff: true } }))).toBe(true)
+  })
+
+  it('org com participantes e grupo configurados continua desligada até religar', () => {
+    // Estado real da Laudo de Brinquedos antes desta mudança: grupo salvo e
+    // gente marcada no rodízio, mas sem a chave nova no blob.
+    const legado = parseWorkspaceConfig({ comercial: { grupoWhatsappId: '120363019502650977-group' } })
+    expect(rodizioHandoffAtivo(legado)).toBe(false)
+
+    const ligado = mesclarWorkspaceConfig(legado, { comercialRodizioHandoff: true })
+    expect(ligado.comercial).toEqual({ grupoWhatsappId: '120363019502650977-group', rodizioHandoff: true })
+    expect(rodizioHandoffAtivo(ligado)).toBe(true)
+
+    // Desligar remove a chave (o blob não guarda o valor padrão) sem perder o grupo.
+    const desligado = mesclarWorkspaceConfig(ligado, { comercialRodizioHandoff: false })
+    expect(desligado.comercial).toEqual({ grupoWhatsappId: '120363019502650977-group' })
+    expect(rodizioHandoffAtivo(desligado)).toBe(false)
+    expect(rodizioHandoffAtivo(mesclarWorkspaceConfig(ligado, { comercialRodizioHandoff: null }))).toBe(false)
+  })
+})

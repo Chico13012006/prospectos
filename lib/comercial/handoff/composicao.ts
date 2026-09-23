@@ -4,7 +4,7 @@
 // testes e scripts injetam fakes direto no serviço.
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { handoffRevisaoMinutosEfetivo, parseWorkspaceConfig } from '@/lib/config/workspaceConfig'
+import { handoffRevisaoMinutosEfetivo, parseWorkspaceConfig, rodizioHandoffAtivo } from '@/lib/config/workspaceConfig'
 import { sendGroupText } from '@/lib/whatsapp/zapi'
 import { SupabaseHandoffRepository } from './supabaseRepository'
 import { SupabaseNotificacaoHandoffRepository } from '../notificacoes/supabaseRepository'
@@ -30,6 +30,12 @@ export async function lerGrupoComercialDaOrg(admin: SupabaseClient, organizacaoI
 // Janela do check-in (minutos), com o padrão de 7 dias.
 export async function lerJanelaRevisaoDaOrg(admin: SupabaseClient, organizacaoId: string): Promise<number> {
   return handoffRevisaoMinutosEfetivo(await lerConfigComercialDaOrg(admin, organizacaoId))
+}
+
+// Rodízio automático ligado nesta organização? Padrão: NÃO (a distribuição é
+// pela carteira do lead). Lido a cada ciclo, como as demais preferências.
+export async function rodizioHandoffLigadoNaOrg(admin: SupabaseClient, organizacaoId: string): Promise<boolean> {
+  return rodizioHandoffAtivo(await lerConfigComercialDaOrg(admin, organizacaoId))
 }
 
 // Adapter Z-API → porta EnviadorGrupo. Credenciais vêm do env no servidor.

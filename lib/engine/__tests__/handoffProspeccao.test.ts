@@ -334,6 +334,33 @@ describe('origem da resposta — só prospecção entra no handoff', () => {
     expect(payloads[0].responsavelCampanha?.email).toBe('bruno@a')
   })
 
+  // Rodízio DESLIGADO na organização: o motor não monta o gatilho, então
+  // nenhum handoff nasce. A classificação NÃO depende disso — continua
+  // separando positivo/negativo/neutro.
+  it('18. rodízio desligado: resposta NEGATIVA de prospecção ainda marca o lead como perdido', async () => {
+    const lead = makeLead({ estagio: 'primeiro_contato', contato_email: 'ana@acme.com.br', ultimo_contato: SEMANA_PASSADA })
+    const store = new StoreTeste([lead])
+    store.contexto = contextoCampanha('prospeccao')
+    email.injetar(msg())
+    await detectarResposta(store, email, fila, { classificarResposta: classificar('negativo') })
+    const atualizado = await store.buscarLead(lead.id)
+    expect(atualizado?.estagio).toBe('perdido')
+    expect(atualizado?.perdido).toBe(true)
+    // Sem gatilho não há handoff — logo, nada de "aguardando distribuição".
+    expect(store.interacoes.some((i) => i.descricao.includes('Handoff comercial'))).toBe(false)
+  })
+
+  it('19. rodízio desligado: resposta POSITIVA segue para o closer, sem handoff nem nota de distribuição', async () => {
+    const lead = makeLead({ estagio: 'primeiro_contato', contato_email: 'ana@acme.com.br', ultimo_contato: SEMANA_PASSADA })
+    const store = new StoreTeste([lead])
+    store.contexto = contextoCampanha('prospeccao')
+    email.injetar(msg())
+    await detectarResposta(store, email, fila, { classificarResposta: classificar('positivo') })
+    expect((await store.buscarLead(lead.id))?.estagio).toBe('interessado')
+    expect(fila.pendentes()).toBe(1)
+    expect(store.interacoes.some((i) => i.descricao.includes('aguardando distribuição'))).toBe(false)
+  })
+
   it('lead de campanha de PROSPECÇÃO (fora da cadência legada) responde positivo → handoff com etapa da campanha', async () => {
     const lead = makeLead({ estagio: 'novos_leads', contato_email: 'ana@acme.com.br', ultimo_contato: SEMANA_PASSADA })
     const store = new StoreTeste([lead])

@@ -50,6 +50,10 @@ export async function PUT(req: Request) {
     comercialCampanhaRetornoId: typeof b.comercialCampanhaRetornoId === 'string' || b.comercialCampanhaRetornoId === null
       ? b.comercialCampanhaRetornoId
       : undefined,
+    // Rodízio automático do handoff; false/null volta ao padrão (desligado).
+    comercialRodizioHandoff: typeof b.comercialRodizioHandoff === 'boolean' || b.comercialRodizioHandoff === null
+      ? b.comercialRodizioHandoff
+      : undefined,
     camposUI: Array.isArray(b.camposUI) ? b.camposUI : undefined,
     operacao: b.operacao && typeof b.operacao === 'object' ? b.operacao : undefined,
   })

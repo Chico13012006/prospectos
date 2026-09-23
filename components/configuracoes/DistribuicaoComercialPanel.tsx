@@ -16,6 +16,10 @@ export default function DistribuicaoComercialPanel() {
   const [erro, setErro] = useState<string | null>(null);
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
   const [salvoId, setSalvoId] = useState<string | null>(null);
+  // Chave-mestra do rodízio. Desligada por padrão: a distribuição passou a ser
+  // pela carteira do lead. Enquanto estiver off, nenhum handoff nasce.
+  const [rodizio, setRodizio] = useState(false);
+  const [salvandoRodizio, setSalvandoRodizio] = useState(false);
   const [grupo, setGrupo] = useState('');
   const [grupoSalvo, setGrupoSalvo] = useState('');
   const [salvandoGrupo, setSalvandoGrupo] = useState(false);
@@ -42,6 +46,7 @@ export default function DistribuicaoComercialPanel() {
     const j = await res.json();
     setParticipantes(Array.isArray(j.participantes) ? j.participantes : []);
     setPodeEditar(!!j.podeEditar);
+    setRodizio(cfg?.config?.comercial?.rodizioHandoff === true);
     const g = typeof cfg?.config?.comercial?.grupoWhatsappId === 'string' ? cfg.config.comercial.grupoWhatsappId : '';
     setGrupo(g); setGrupoSalvo(g);
     const jm = typeof cfg?.config?.comercial?.handoffRevisaoMinutos === 'number' ? String(cfg.config.comercial.handoffRevisaoMinutos) : '';
@@ -80,6 +85,24 @@ export default function DistribuicaoComercialPanel() {
     } finally { setSalvandoGrupo(false); }
   }
 
+  async function alternarRodizio() {
+    if (salvandoRodizio || !podeEditar) return;
+    setSalvandoRodizio(true); setErro(null);
+    try {
+      const res = await fetch('/api/configuracoes/workspace', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comercialRodizioHandoff: !rodizio }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        setErro(j?.erro ?? 'Não foi possível salvar.');
+        return;
+      }
+      const j = await res.json();
+      setRodizio(j?.config?.comercial?.rodizioHandoff === true);
+    } finally { setSalvandoRodizio(false); }
+  }
+
   async function alternar(p: Participante) {
     if (salvandoId || !podeEditar) return;
     setSalvandoId(p.usuarioId); setErro(null);
@@ -112,6 +135,34 @@ export default function DistribuicaoComercialPanel() {
           Quem participa do rodízio (round-robin) quando um lead vira oportunidade. Desmarcar alguém
           (férias, por exemplo) tira a pessoa dos próximos ciclos sem mexer nos leads que ela já tem.
         </p>
+      </div>
+
+      <div className="rounded-lg border border-[#2a3147] bg-[#0f1117] p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-slate-200">Rodízio automático</div>
+            <p className="text-xs text-slate-500 mt-1">
+              {rodizio
+                ? 'Ligado: resposta positiva de prospecção é sorteada entre os participantes abaixo e avisada no grupo.'
+                : 'Desligado: o retorno vai para o responsável do lead ou para o responsável da campanha. Nenhum handoff é criado e o grupo não é avisado.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={rodizio}
+            onClick={alternarRodizio}
+            disabled={!podeEditar || salvandoRodizio}
+            className={`text-xs px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5 shrink-0 transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+              rodizio
+                ? 'border-green-500/40 bg-green-500/15 text-green-300'
+                : 'border-[#2a3147] text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {salvandoRodizio ? <Loader2 size={12} className="animate-spin" /> : rodizio ? <Check size={12} /> : null}
+            {rodizio ? 'Ligado' : 'Desligado'}
+          </button>
+        </div>
       </div>
 
       {!podeEditar && participantes && (
@@ -161,9 +212,11 @@ export default function DistribuicaoComercialPanel() {
 
       {participantes && participantes.length > 0 && (
         <p className="text-xs text-slate-500">
-          {ativos === 0
-            ? 'Ninguém participa: novos handoffs ficam "aguardando distribuição" até alguém ser marcado.'
-            : `${ativos} de ${participantes.length} no rodízio. Ordem: alfabética por nome.`}
+          {!rodizio
+            ? 'Rodízio desligado: esta lista fica guardada e só volta a valer se você religar acima.'
+            : ativos === 0
+              ? 'Ninguém participa: novos handoffs ficam "aguardando distribuição" até alguém ser marcado.'
+              : `${ativos} de ${participantes.length} no rodízio. Ordem: alfabética por nome.`}
         </p>
       )}
 

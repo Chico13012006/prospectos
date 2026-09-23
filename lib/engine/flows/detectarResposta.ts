@@ -305,14 +305,19 @@ export async function detectarResposta(
         })
       }
 
-      // Classificação (Fase 2) só para resposta de PROSPECÇÃO com os hooks
-      // ligados. Fora disso (renovação/comunicado, scripts sem hooks) vale a
-      // semântica antiga: toda resposta humana é tratada como interesse. No
-      // retry (proxima_acao='aguardando_closer') a decisão anterior já foi
-      // "positivo" — não reclassifica (a IA poderia divergir e mover o lead).
+      // Classificação (Fase 2) só para resposta de PROSPECÇÃO com o
+      // classificador ligado. Fora disso (renovação/comunicado, scripts sem
+      // hooks) vale a semântica antiga: toda resposta humana é tratada como
+      // interesse. No retry (proxima_acao='aguardando_closer') a decisão
+      // anterior já foi "positivo" — não reclassifica (a IA poderia divergir e
+      // mover o lead).
+      //
+      // NÃO depende de `handoffProspeccao`: com o rodízio desligado o motor
+      // continua separando positivo/negativo/neutro — quem some é só a
+      // distribuição automática, não a leitura da resposta.
       const deProspeccao = respostaVemDeProspeccao(emCadencia, contextoCampanha, retomandoEncaminhamento || pendenteDeTratamento)
       let classificacao: ResultadoClassificacao = { classificacao: 'positivo', via: 'regra', motivo: 'sem classificador' }
-      if (opts.classificarResposta && opts.handoffProspeccao && deProspeccao && !retomandoEncaminhamento) {
+      if (opts.classificarResposta && deProspeccao && !retomandoEncaminhamento) {
         classificacao = await opts.classificarResposta({ assunto: msg.assunto, corpo: msg.corpo })
       }
       const positiva = classificacao.classificacao === 'positivo'

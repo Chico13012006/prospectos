@@ -18,7 +18,7 @@ import { enviarRelatorioSemanal, coletarKpisSemana, montarEmailRelatorio } from 
 import { extrairContatosAlternativos } from '@/lib/ia/contatosAlternativos'
 import { classificarResposta } from '@/lib/comercial/respostas/classificarResposta'
 import { criarClassificadorIa } from '@/lib/comercial/respostas/classificadorIa'
-import { montarHookHandoffProspeccao, reprocessarAlertasHandoff } from '@/lib/comercial/handoff/composicao'
+import { montarHookHandoffProspeccao, reprocessarAlertasHandoff, rodizioHandoffLigadoNaOrg } from '@/lib/comercial/handoff/composicao'
 
 export interface Motor {
   store: Store
@@ -71,13 +71,22 @@ async function detectarEEncaminharRespostas(motor: Motor) {
   // Handoff comercial (Fase 2): classificador (regras + IA) e gatilho de
   // handoff/aviso ao grupo, compostos sobre o client admin. Sem org (store em
   // memória) o gatilho fica desligado — o motor se comporta como antes.
+  //
+  // O gatilho também fica desligado quando a organização não usa o rodízio
+  // (padrão do produto). Aí não nasce handoff, nem nota "aguardando
+  // distribuição", nem aviso ao grupo: o retorno vai direto ao responsável
+  // (carteira do lead ou responsável da campanha). A CLASSIFICAÇÃO continua —
+  // ela não depende do rodízio.
   const admin = motor.store.organizacaoId ? createSupabaseAdminClient() : null
+  const rodizioLigado = admin && motor.store.organizacaoId
+    ? await rodizioHandoffLigadoNaOrg(admin, motor.store.organizacaoId)
+    : false
   const classificadorIa = criarClassificadorIa()
   const resultado = await detectarResposta(motor.store, motor.email, motor.fila, {
     extrairContatos: extrairContatosAlternativos,
     adiarConfirmacaoLeitura: true,
     classificarResposta: (r) => classificarResposta(r, classificadorIa),
-    handoffProspeccao: admin ? montarHookHandoffProspeccao(admin) : undefined,
+    handoffProspeccao: admin && rodizioLigado ? montarHookHandoffProspeccao(admin) : undefined,
   })
   await motor.fila.processar()
   const jobsComErro = motor.fila.escaninhoErro().length

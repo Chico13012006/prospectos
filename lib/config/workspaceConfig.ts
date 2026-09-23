@@ -119,6 +119,11 @@ export interface ComercialConfig {
   // onde o lead volta quando o grupo responde "#CODIGO 2". Ausente = usa a
   // única campanha de follow-up ativa da org; com mais de uma, é obrigatório.
   campanhaRetornoId?: string
+  // Rodízio automático do handoff: distribuir resposta positiva de prospecção
+  // entre os comerciais participantes. DESLIGADO por padrão (ver
+  // `rodizioHandoffAtivo`) — a distribuição passou a ser por carteira do lead.
+  // Só quem marcar explicitamente volta a ter o rodízio.
+  rodizioHandoff?: boolean
 }
 
 export const HANDOFF_REVISAO_MINUTOS_PADRAO = 10080 // 7 dias
@@ -126,6 +131,13 @@ export const HANDOFF_REVISAO_MINUTOS_PADRAO = 10080 // 7 dias
 export function handoffRevisaoMinutosEfetivo(cfg: WorkspaceConfig | null | undefined): number {
   const v = cfg?.comercial?.handoffRevisaoMinutos
   return typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : HANDOFF_REVISAO_MINUTOS_PADRAO
+}
+
+// Rodízio DESLIGADO por padrão: a decisão do produto é distribuir pela carteira
+// do lead, não por sorteio. Org nenhuma volta a rodar rodízio por acidente de
+// dado antigo — só o valor booleano `true`, gravado pela tela, reativa.
+export function rodizioHandoffAtivo(cfg: WorkspaceConfig | null | undefined): boolean {
+  return cfg?.comercial?.rodizioHandoff === true
 }
 
 export interface WorkspaceConfig {
@@ -226,6 +238,7 @@ export function parseWorkspaceConfig(bruto: unknown): WorkspaceConfig {
       comercial.handoffRevisaoMinutos = c.handoffRevisaoMinutos
     }
     if (typeof c.campanhaRetornoId === 'string' && c.campanhaRetornoId.trim()) comercial.campanhaRetornoId = c.campanhaRetornoId.trim()
+    if (typeof c.rodizioHandoff === 'boolean') comercial.rodizioHandoff = c.rodizioHandoff
     if (Object.keys(comercial).length > 0) out.comercial = comercial
   }
   if (Array.isArray(obj.camposUI)) {
@@ -320,6 +333,8 @@ export interface WorkspaceConfigEditavel {
   comercialHandoffRevisaoMinutos?: number | null
   // Campanha de follow-up de retorno. String vazia/null LIMPA.
   comercialCampanhaRetornoId?: string | null
+  // Rodízio automático do handoff. false/null volta ao padrão (desligado).
+  comercialRodizioHandoff?: boolean | null
   camposUI?: CampoUI[]
   operacao?: OperacaoConfig
 }
@@ -348,6 +363,12 @@ export function mesclarWorkspaceConfig(atual: WorkspaceConfig, patch: WorkspaceC
     const id = typeof patch.comercialCampanhaRetornoId === 'string' ? patch.comercialCampanhaRetornoId.trim() : ''
     const { campanhaRetornoId: _anterior, ...resto } = next.comercial ?? atual.comercial ?? {}
     next.comercial = id ? { ...resto, campanhaRetornoId: id } : resto
+  }
+  if (patch.comercialRodizioHandoff !== undefined) {
+    const { rodizioHandoff: _anterior, ...resto } = next.comercial ?? atual.comercial ?? {}
+    // Só `true` grava a chave; false/null a remove e o padrão (desligado) volta
+    // a valer — o blob não guarda o valor padrão.
+    next.comercial = patch.comercialRodizioHandoff === true ? { ...resto, rodizioHandoff: true } : resto
   }
   if (Array.isArray(patch.camposUI)) next.camposUI = patch.camposUI
   if (patch.operacao) next.operacao = patch.operacao
