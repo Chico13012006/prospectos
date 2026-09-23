@@ -21,6 +21,9 @@
 --
 -- IDEMPOTENTE: "drop trigger if exists". Pode rodar mais de uma vez.
 --
+-- APLICADA em produção em 23/09/2026 (confirmado via pg_trigger antes/depois:
+-- trigger existia e habilitado, e some após a execução).
+--
 -- ROLLBACK (executar manualmente apenas se o n8n voltar a ter função):
 --   CREATE TRIGGER "prospectOS-novo-lead"
 --     AFTER INSERT ON public.leads FOR EACH ROW
