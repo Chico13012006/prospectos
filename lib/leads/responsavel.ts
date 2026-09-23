@@ -102,3 +102,83 @@ export function vincularResponsavel(
 
   return { ok: true, usuario: alvoUsuario, via: 'nome' }
 }
+
+// --- Responsável vindo de uma PLANILHA --------------------------------------
+// Aqui a entrada não é um membro de auth: é texto cru de uma célula ("Aline
+// Muller", "aline@empresa.com", "ALINE"). Mesma filosofia do bridge acima —
+// e-mail exato manda, nome só quando inequívoco, e ambiguidade PARA em vez de
+// escolher um destino silencioso. A diferença é que aqui o nome casa INTEIRO
+// (não por prefixo): planilha não tem a garantia de curadoria que a tela de
+// equipe tem, e "Bruno" com dois Brunos na organização não pode virar um chute.
+
+export type VinculoPlanilha =
+  | { ok: true; usuario: UsuarioRef; via: 'email' | 'nome' }
+  | { ok: false; motivo: 'vazio' | 'nao_encontrado' }
+  | { ok: false; motivo: 'ambiguo'; detalhe: string }
+
+export function resolverResponsavelDaPlanilha(
+  valorBruto: string | null | undefined,
+  usuarios: UsuarioRef[],
+): VinculoPlanilha {
+  const valor = norm(valorBruto)
+  if (!valor) return { ok: false, motivo: 'vazio' }
+
+  const porEmailExato = usuarios.filter((u) => norm(u.email) === valor)
+  if (porEmailExato.length === 1) return { ok: true, usuario: porEmailExato[0], via: 'email' }
+  if (porEmailExato.length > 1) {
+    return { ok: false, motivo: 'ambiguo', detalhe: `"${valorBruto}" casa com ${porEmailExato.length} usuários por e-mail.` }
+  }
+
+  const porNomeExato = usuarios.filter((u) => norm(u.nome) === valor)
+  if (porNomeExato.length === 1) return { ok: true, usuario: porNomeExato[0], via: 'nome' }
+  if (porNomeExato.length > 1) {
+    return { ok: false, motivo: 'ambiguo', detalhe: `"${valorBruto}" casa com ${porNomeExato.length} usuários por nome.` }
+  }
+
+  return { ok: false, motivo: 'nao_encontrado' }
+}
+
+// Resolve a coluna inteira de uma vez. Devolve o mapa valor→usuário para as
+// linhas que resolveram e a lista de valores que NÃO resolveram, com o motivo —
+// é o que a prévia mostra para a pessoa corrigir a planilha antes de importar.
+export interface ResolucaoColunaResponsavel {
+  porValor: Map<string, UsuarioRef>
+  naoResolvidos: { valor: string; motivo: 'nao_encontrado' | 'ambiguo'; detalhe?: string; linhas: number }[]
+}
+
+export function resolverColunaResponsavel(
+  valores: string[],
+  usuarios: UsuarioRef[],
+): ResolucaoColunaResponsavel {
+  const ocorrencias = new Map<string, number>()
+  for (const v of valores) {
+    const chave = norm(v)
+    if (chave) ocorrencias.set(chave, (ocorrencias.get(chave) ?? 0) + 1)
+  }
+  const porValor = new Map<string, UsuarioRef>()
+  const naoResolvidos: ResolucaoColunaResponsavel['naoResolvidos'] = []
+  const originalDe = new Map<string, string>()
+  for (const v of valores) {
+    const chave = norm(v)
+    if (chave && !originalDe.has(chave)) originalDe.set(chave, v.trim())
+  }
+  for (const [chave, linhas] of ocorrencias) {
+    const r = resolverResponsavelDaPlanilha(originalDe.get(chave) ?? chave, usuarios)
+    if (r.ok) porValor.set(chave, r.usuario)
+    else if (r.motivo !== 'vazio') {
+      naoResolvidos.push({
+        valor: originalDe.get(chave) ?? chave,
+        motivo: r.motivo,
+        detalhe: 'detalhe' in r ? r.detalhe : undefined,
+        linhas,
+      })
+    }
+  }
+  naoResolvidos.sort((a, b) => b.linhas - a.linhas)
+  return { porValor, naoResolvidos }
+}
+
+// Chave de busca no mapa devolvido por resolverColunaResponsavel.
+export function chaveResponsavelPlanilha(valor: string | null | undefined): string {
+  return norm(valor)
+}

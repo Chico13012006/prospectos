@@ -26,32 +26,38 @@ export function camposBaseImportacao(organizacaoId: string) {
 // Linhas prontas para inserir em `leads`. O estágio sai da regra única de
 // lib/leads/estagioInicial.ts: com a regra da organização ligada, quem chega
 // com validade do laudo nasce em `renovacao`; os demais seguem `novos_leads`.
-// O responsável é sempre o usuário autenticado, já resolvido pela rota.
+//
+// O responsável vem de CADA LINHA da planilha, já resolvido pela rota para uma
+// linha real de `usuarios`. Linha cujo responsável não resolveu não chega aqui:
+// a rota a separa antes, para nenhum lead nascer com dono errado.
 export function montarLeadsImportacao(
   leads: LeadPadrao[],
   opts: {
     organizacaoId: string
-    responsavel: Pick<UsuarioRef, 'id' | 'nome'>
+    resolverResponsavel: (lead: LeadPadrao) => Pick<UsuarioRef, 'id' | 'nome'>
     estagioRenovacaoPorValidade: boolean
   },
 ) {
   const base = camposBaseImportacao(opts.organizacaoId)
-  return leads.map((l) => ({
-    ...base,
-    estagio: estagioInicialLead(l.data_validade, opts.estagioRenovacaoPorValidade),
-    contato_nome: l.contato_nome,
-    contato_email: l.contato_email,
-    empresa: l.empresa,
-    segmento: l.segmento,
-    origem: l.origem,
-    contato_telefone: l.contato_telefone,
-    contato_cargo: l.contato_cargo,
-    cidade: l.cidade,
-    estado: l.estado,
-    data_validade: l.data_validade,
-    responsavel_id: opts.responsavel.id,
-    responsavel_nome: opts.responsavel.nome,
-  }))
+  return leads.map((l) => {
+    const responsavel = opts.resolverResponsavel(l)
+    return {
+      ...base,
+      estagio: estagioInicialLead(l.data_validade, opts.estagioRenovacaoPorValidade),
+      contato_nome: l.contato_nome,
+      contato_email: l.contato_email,
+      empresa: l.empresa,
+      segmento: l.segmento,
+      origem: l.origem,
+      contato_telefone: l.contato_telefone,
+      contato_cargo: l.contato_cargo,
+      cidade: l.cidade,
+      estado: l.estado,
+      data_validade: l.data_validade,
+      responsavel_id: responsavel.id,
+      responsavel_nome: responsavel.nome,
+    }
+  })
 }
 
 export function montarAvisoImportacao(

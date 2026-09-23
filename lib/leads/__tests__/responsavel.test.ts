@@ -77,3 +77,60 @@ describe('vincularResponsavel', () => {
     expect(r).toEqual({ ok: false, motivo: 'nao_encontrado' })
   })
 })
+
+// --- Responsável vindo da planilha ------------------------------------------
+// Texto cru de célula, não membro de auth. E-mail exato manda; nome casa
+// INTEIRO (não por prefixo, como no bridge da equipe); ambiguidade PARA.
+import { resolverResponsavelDaPlanilha, resolverColunaResponsavel, chaveResponsavelPlanilha } from '../responsavel'
+
+describe('responsável vindo da planilha de importação', () => {
+  const usuarios = [
+    { id: 'u1', nome: 'Aline Muller', email: 'aline@empresa.com' },
+    { id: 'u2', nome: 'Bruno Lima', email: 'bruno@empresa.com' },
+    { id: 'u3', nome: 'Bruno Veloso', email: 'executivo@empresa.com' },
+  ]
+
+  it('casa por e-mail exato, ignorando caixa e espaços', () => {
+    const r = resolverResponsavelDaPlanilha('  ALINE@EMPRESA.COM ', usuarios)
+    expect(r).toMatchObject({ ok: true, via: 'email' })
+    expect(r.ok && r.usuario.id).toBe('u1')
+  })
+
+  it('casa por nome INTEIRO, sem acento e sem caixa', () => {
+    const r = resolverResponsavelDaPlanilha('aline muller', usuarios)
+    expect(r).toMatchObject({ ok: true, via: 'nome' })
+    expect(r.ok && r.usuario.id).toBe('u1')
+  })
+
+  it('nome parcial NÃO resolve — planilha não tem curadoria para chutar prefixo', () => {
+    expect(resolverResponsavelDaPlanilha('Bruno', usuarios)).toEqual({ ok: false, motivo: 'nao_encontrado' })
+    expect(resolverResponsavelDaPlanilha('Aline', usuarios)).toEqual({ ok: false, motivo: 'nao_encontrado' })
+  })
+
+  it('dois usuários com o mesmo nome param em ambíguo, não escolhem um', () => {
+    const homonimos = [...usuarios, { id: 'u4', nome: 'Aline Muller', email: 'aline2@empresa.com' }]
+    const r = resolverResponsavelDaPlanilha('Aline Muller', homonimos)
+    expect(r).toMatchObject({ ok: false, motivo: 'ambiguo' })
+  })
+
+  it('célula vazia é "vazio", não "não encontrado"', () => {
+    expect(resolverResponsavelDaPlanilha('   ', usuarios)).toEqual({ ok: false, motivo: 'vazio' })
+    expect(resolverResponsavelDaPlanilha(null, usuarios)).toEqual({ ok: false, motivo: 'vazio' })
+  })
+
+  it('resolve a coluna inteira e agrupa o que não resolveu por valor, com a contagem de linhas', () => {
+    const { porValor, naoResolvidos } = resolverColunaResponsavel(
+      ['Aline Muller', 'aline@empresa.com', 'Fulano', 'Fulano', 'Fulano', 'Bruno'],
+      usuarios,
+    )
+    expect(porValor.get(chaveResponsavelPlanilha('Aline Muller'))?.id).toBe('u1')
+    expect(porValor.get(chaveResponsavelPlanilha('ALINE@EMPRESA.COM'))?.id).toBe('u1')
+    // Ordenado por impacto: o que afeta mais linhas primeiro.
+    expect(naoResolvidos.map((n) => [n.valor, n.linhas])).toEqual([['Fulano', 3], ['Bruno', 1]])
+  })
+
+  it('usuário sem e-mail cadastrado ainda resolve pelo nome', () => {
+    const semEmail = [{ id: 'u9', nome: 'Carla Dias', email: null }]
+    expect(resolverResponsavelDaPlanilha('Carla Dias', semEmail)).toMatchObject({ ok: true, via: 'nome' })
+  })
+})

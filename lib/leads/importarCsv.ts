@@ -6,8 +6,8 @@
 //
 // `mapearLead` do HubSpot NÃO vive aqui (é específico do CSV de lá, com colunas
 // tipo "Associated Company"): ele continua no próprio script. Aqui mora o
-// mapeamento do TEMPLATE PADRÃO desta tela. Nome, e-mail, empresa e nicho são
-// obrigatórios; origem e demais dados são opcionais.
+// mapeamento do TEMPLATE PADRÃO desta tela. Nome, e-mail, empresa e responsável
+// são obrigatórios; nicho, origem e demais dados são opcionais.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizarNicho } from '@/lib/nichos/normalizar'
 
@@ -75,6 +75,12 @@ export interface LeadPadrao {
   // o lead entra na base, mas fica parado até alguém classificar. A prévia
   // avisa quantos estão nessa situação (`semSegmento` em ResultadoPlanilha).
   segmento: string | null
+  // OBRIGATÓRIO: quem é o dono deste lead na carteira. Texto cru da planilha
+  // (nome ou e-mail do comercial) — quem resolve para uma linha de `usuarios` é
+  // o servidor, que tem a lista da organização. Sem isso a campanha no modo
+  // "responsável de cada lead" não tem para onde rotear o retorno, e era o que
+  // fazia a importação carimbar o usuário logado em todas as linhas.
+  responsavel: string
   origem: string
   contato_telefone: string | null
   contato_cargo: string | null
@@ -87,7 +93,7 @@ export interface LeadPadrao {
   data_validade: string | null
 }
 
-export type MotivoPulo = 'sem_nome' | 'sem_email' | 'email_invalido' | 'sem_empresa'
+export type MotivoPulo = 'sem_nome' | 'sem_email' | 'email_invalido' | 'sem_empresa' | 'sem_responsavel'
 export interface LinhaPulada { linha: number; motivo: MotivoPulo }
 export interface ResultadoPlanilha {
   validos: LeadPadrao[]
@@ -114,6 +120,12 @@ const ALIASES: Record<keyof Omit<LeadPadrao, never>, string[]> = {
   contato_email: ['email', 'e-mail', 'e mail', 'mail'],
   empresa: ['empresa', 'company', 'organizacao', 'razao social', 'associated company'],
   segmento: ['nicho', 'segmento', 'setor', 'industry', 'mercado'],
+  // 'contact owner'/'lead owner' cobrem a exportação do HubSpot sem renomear
+  // coluna na mão; 'proprietario' é como o HubSpot BR traduz.
+  responsavel: [
+    'responsavel', 'responsavel comercial', 'comercial', 'dono', 'vendedor',
+    'proprietario', 'owner', 'contact owner', 'lead owner', 'hubspot owner',
+  ],
   origem: ['origem', 'source', 'canal', 'origem do lead', 'fonte'],
   contato_telefone: ['telefone', 'phone', 'celular', 'fone', 'numero de telefone', 'whatsapp'],
   contato_cargo: ['cargo', 'title', 'role', 'posicao', 'funcao', 'job title'],
@@ -183,6 +195,11 @@ export function mapearLeadPadrao(
   const empresa = get('empresa')
   if (!empresa) return { motivo: 'sem_empresa' }
 
+  // Obrigatório. A conferência de que o valor corresponde a um comercial da
+  // organização é do servidor; aqui só garantimos que a célula veio preenchida.
+  const responsavel = get('responsavel')
+  if (!responsavel) return { motivo: 'sem_responsavel' }
+
   // Ausente é aceito: vira null e o lead entra sem classificação.
   const segmento = normalizarNicho(get('segmento'))
 
@@ -194,6 +211,7 @@ export function mapearLeadPadrao(
       contato_email: email,
       empresa,
       segmento,
+      responsavel,
       origem: get('origem') || ORIGEM_PADRAO_IMPORT,
       contato_telefone: telefone,
       contato_cargo: get('contato_cargo') || null,

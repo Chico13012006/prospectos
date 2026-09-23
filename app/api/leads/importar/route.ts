@@ -6,7 +6,7 @@ import {
   buscarEmailsExistentes,
   resumirNichosImportacao,
 } from '@/lib/leads/importarCsv'
-import { resolverResponsavelPorAuthId } from '@/lib/leads/responsavelServer'
+import { chaveResponsavelPlanilha, resolverColunaResponsavel } from '@/lib/leads/responsavel'
 import { montarAvisoImportacao, montarLeadsImportacao } from '@/lib/leads/importacaoOperacional'
 import { ESTAGIO_RENOVACAO, estagioInicialLead, regraRenovacaoPorValidadeAtiva } from '@/lib/leads/estagioInicial'
 import { parseWorkspaceConfig } from '@/lib/config/workspaceConfig'
@@ -14,8 +14,9 @@ import { criarCiclosIniciais } from '@/lib/laudos/ciclos'
 
 // Importação de leads em LOTE pela tela (2.2). Roda server-side com service role
 // (nunca expõe a chave ao client). Dois modos no mesmo endpoint:
-//   modo=previa    → só conta (válidos / pulados / duplicados / já existentes)
-//   modo=confirmar → resolve o responsável, dedupe e INSERE
+//   modo=previa    → só conta (válidos / pulados / duplicados / já existentes /
+//                    responsáveis não reconhecidos)
+//   modo=confirmar → resolve o responsável de CADA LINHA, dedupe e INSERE
 // Parsing/validação/dedupe vêm do módulo compartilhado (mesma lógica do script).
 
 const LOTE = 50
@@ -84,8 +85,32 @@ export async function POST(req: NextRequest) {
       .not('nicho', 'is', null)
     if (templatesError) throw templatesError
 
+    // Responsável por LINHA. A coluna é obrigatória (o parser já pulou quem veio
+    // com a célula vazia); aqui conferimos que o valor corresponde a um comercial
+    // ATIVO desta organização. Valor que não resolve não vira lead: importar com
+    // dono errado é pior que não importar, e a prévia mostra o que corrigir.
+    const { data: usuariosOrg, error: usuariosErro } = await admin
+      .from('usuarios')
+      .select('id, nome, email')
+      .eq('organizacao_id', org)
+      .eq('ativo', true)
+    if (usuariosErro) throw usuariosErro
+    const usuarios = (usuariosOrg ?? []).map((u) => ({
+      id: u.id as string,
+      nome: (u.nome as string | null) ?? null,
+      email: (u.email as string | null) ?? null,
+    }))
+    const { porValor: responsavelPorValor, naoResolvidos } = resolverColunaResponsavel(
+      novos.map((lead) => lead.responsavel),
+      usuarios,
+    )
+    const responsavelDe = (lead: { responsavel: string }) =>
+      responsavelPorValor.get(chaveResponsavelPlanilha(lead.responsavel)) ?? null
+    const importaveis = novos.filter((lead) => !!responsavelDe(lead))
+    const semResponsavelValido = novos.length - importaveis.length
+
     const nichos = resumirNichosImportacao(
-      novos,
+      importaveis,
       (templatesNicho ?? []).map((template) => template.nicho).filter((nicho): nicho is string => typeof nicho === 'string'),
     )
 
@@ -97,19 +122,26 @@ export async function POST(req: NextRequest) {
       jaExistentes,
       novos: novos.length,
       nichos,
-      // Contado sobre os que REALMENTE entram (novos), não sobre o arquivo
-      // inteiro: é esse o número que descreve o estado da base depois da
-      // importação. Segmento é opcional aqui, mas sem ele o motor não escolhe
-      // template e o lead fica parado — a prévia diz isso em voz alta.
-      semSegmento: novos.filter((lead) => !lead.segmento).length,
-      // Validade do laudo é opcional. `comValidade` conta sobre os novos (o que
-      // a renovação vai ter para trabalhar); `validadeInvalida` é sobre o
+      // Quantos REALMENTE entram: novos menos os que têm responsável que não
+      // corresponde a nenhum comercial ativo da organização.
+      importaveis: importaveis.length,
+      semResponsavelValido,
+      // Valores da coluna Responsável que não foram reconhecidos, com quantas
+      // linhas cada um afeta — é a lista do que corrigir na planilha.
+      responsaveisNaoReconhecidos: naoResolvidos,
+      // Contados sobre os que REALMENTE entram, não sobre o arquivo inteiro:
+      // é esse o número que descreve o estado da base depois da importação.
+      // Segmento é opcional aqui, mas sem ele o motor não escolhe template e o
+      // lead fica parado — a prévia diz isso em voz alta.
+      semSegmento: importaveis.filter((lead) => !lead.segmento).length,
+      // Validade do laudo é opcional. `comValidade` conta sobre os que entram (o
+      // que a renovação vai ter para trabalhar); `validadeInvalida` é sobre o
       // arquivo — célula preenchida que não virou data. Nenhum dos dois
       // bloqueia a importação.
-      comValidade: novos.filter((lead) => !!lead.data_validade).length,
-      // Quantos dos novos nascem em `renovacao` pela regra da organização
+      comValidade: importaveis.filter((lead) => !!lead.data_validade).length,
+      // Quantos dos que entram nascem em `renovacao` pela regra da organização
       // (fora da prospecção). Sem a flag, é sempre 0.
-      emRenovacao: novos.filter((lead) => estagioInicialLead(lead.data_validade, renovacaoPorValidade) === ESTAGIO_RENOVACAO).length,
+      emRenovacao: importaveis.filter((lead) => estagioInicialLead(lead.data_validade, renovacaoPorValidade) === ESTAGIO_RENOVACAO).length,
       validadeInvalida,
     }
 
@@ -117,30 +149,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ resumo })
     }
 
-    // O responsável é sempre o próprio usuário autenticado. O payload do CSV
-    // não pode atribuir carteira a outro comercial.
-    const vinculo = await resolverResponsavelPorAuthId(admin, org, user.id)
-    if (!vinculo.ok) {
-      // Bloqueia e avisa (decisão do Chico): não cria lead com responsável errado
-      // nem sem CC. Cadastro/desambiguação em `usuarios` resolve.
-      const detalhe = vinculo.motivo === 'ambiguo' ? vinculo.detalhe : undefined
+    // Nenhuma linha com responsável reconhecido: não há o que importar. Devolve
+    // a lista do que corrigir em vez de um "0 inseridos" mudo.
+    if (importaveis.length === 0) {
       return NextResponse.json(
         {
-          erro: 'Sua conta não está vinculada a um usuário comercial ativo.',
-          motivo: vinculo.motivo,
-          detalhe,
+          erro: novos.length === 0
+            ? 'Nenhum contato novo para importar.'
+            : 'Nenhuma linha tem um responsável que corresponda a um comercial ativo desta organização.',
+          resumo,
         },
-        { status: 400 },
+        { status: novos.length === 0 ? 200 : 400 },
       )
     }
 
-    if (novos.length === 0) {
-      return NextResponse.json({ inseridos: 0, resumo, responsavel: { nome: vinculo.usuario.nome } })
-    }
-
-    const payload = montarLeadsImportacao(novos, {
+    const payload = montarLeadsImportacao(importaveis, {
       organizacaoId: org,
-      responsavel: vinculo.usuario,
+      // Já filtramos `importaveis` por este mesmo mapa: aqui o responsável existe.
+      resolverResponsavel: (lead) => responsavelDe(lead)!,
       estagioRenovacaoPorValidade: renovacaoPorValidade,
     })
 
@@ -167,8 +193,14 @@ export async function POST(req: NextRequest) {
       const { data: admins } = await admin
         .from('perfis').select('id').eq('organizacao_id', org).eq('role', 'admin')
       const totalPulados = Object.values(puladosPorMotivo).reduce((soma, n) => soma + n, 0)
-      const nomeComercial = vinculo.usuario.nome ?? vinculo.usuario.email ?? 'Comercial'
-      const aviso = montarAvisoImportacao(nomeComercial, {
+      // Quem IMPORTOU (o usuário logado) — não confundir com os responsáveis
+      // dos leads, que agora vêm da planilha e podem ser vários.
+      const { data: perfilAutor } = await admin
+        .from('perfis').select('nome').eq('organizacao_id', org).eq('id', user.id).maybeSingle()
+      const nomeAutor = (perfilAutor as { nome?: string | null } | null)?.nome?.trim()
+        || user.email
+        || 'Comercial'
+      const aviso = montarAvisoImportacao(nomeAutor, {
         novos: inseridos,
         jaExistentes,
         duplicadosNoArquivo: duplicados,
@@ -194,7 +226,18 @@ export async function POST(req: NextRequest) {
       console.error('[leads/importar] importação concluída, mas aviso ao gestor falhou:', erroAviso)
     }
 
-    return NextResponse.json({ inseridos, resumo, responsavel: { nome: vinculo.usuario.nome }, avisoCriado })
+    // Quantos leads cada comercial recebeu — é o que a tela mostra no lugar do
+    // antigo "Responsável: <usuário logado>", que agora seria mentira.
+    const porResponsavel = new Map<string, { nome: string; leads: number }>()
+    for (const lead of importaveis) {
+      const u = responsavelDe(lead)!
+      const atual = porResponsavel.get(u.id) ?? { nome: u.nome ?? 'Sem nome', leads: 0 }
+      atual.leads += 1
+      porResponsavel.set(u.id, atual)
+    }
+    const responsaveis = [...porResponsavel.values()].sort((a, b) => b.leads - a.leads)
+
+    return NextResponse.json({ inseridos, resumo, responsaveis, avisoCriado })
   } catch (err) {
     console.error('[leads/importar] erro:', err)
     return NextResponse.json({ erro: 'Erro interno ao importar.' }, { status: 500 })

@@ -14,6 +14,10 @@ type Resumo = {
   jaExistentes: number
   novos: number
   nichos: Array<{ nicho: string; leads: number; templateAtivo: boolean }>
+  // Quantos realmente entram: novos menos os que têm responsável não reconhecido.
+  importaveis: number
+  semResponsavelValido: number
+  responsaveisNaoReconhecidos: Array<{ valor: string; motivo: string; detalhe?: string; linhas: number }>
   semSegmento: number
   comValidade: number
   emRenovacao: number
@@ -24,6 +28,7 @@ const MOTIVO_LABEL: Record<string, string> = {
   sem_email: 'sem e-mail',
   email_invalido: 'e-mail inválido',
   sem_empresa: 'sem empresa',
+  sem_responsavel: 'sem responsável',
 }
 
 function rotuloNicho(nicho: string): string {
@@ -43,7 +48,7 @@ export default function ImportarLeadsModal({
   const [carregandoPrevia, setCarregandoPrevia] = useState(false)
   const [inserindo, setInserindo] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
-  const [feito, setFeito] = useState<{ inseridos: number; responsavel?: string } | null>(null)
+  const [feito, setFeito] = useState<{ inseridos: number; responsaveis?: Array<{ nome: string; leads: number }> } | null>(null)
 
   async function escolherArquivo(f: File | null) {
     setFile(f)
@@ -80,7 +85,7 @@ export default function ImportarLeadsModal({
         setErro([data.erro, data.detalhe].filter(Boolean).join(' — ') || 'Falha ao importar.')
         return
       }
-      setFeito({ inseridos: data.inseridos ?? 0, responsavel: data.responsavel?.nome })
+      setFeito({ inseridos: data.inseridos ?? 0, responsaveis: data.responsaveis })
       onImported()
     } catch {
       setErro('Erro de conexão ao importar.')
@@ -107,7 +112,17 @@ export default function ImportarLeadsModal({
           <div className="flex flex-col items-center text-center gap-3 py-6">
             <CheckCircle2 size={40} className="text-emerald-400" />
             <p className="text-slate-100 font-medium">{feito.inseridos} lead{feito.inseridos === 1 ? '' : 's'} importado{feito.inseridos === 1 ? '' : 's'}</p>
-            {feito.responsavel && <p className="text-sm text-slate-400">Responsável: {feito.responsavel}</p>}
+            {feito.responsaveis && feito.responsaveis.length > 0 && (
+              <div className="w-full max-w-xs space-y-1 text-sm">
+                <p className="text-xs uppercase tracking-wide text-slate-600">Distribuídos entre</p>
+                {feito.responsaveis.map((r) => (
+                  <div key={r.nome} className="flex justify-between gap-3 text-slate-400">
+                    <span className="truncate">{r.nome}</span>
+                    <span className="tabular-nums text-slate-300">{r.leads}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <button onClick={onClose} className="mt-2 text-sm px-4 py-2 rounded-lg text-white font-medium" style={{ backgroundColor: '#1e3a5f' }}>Fechar</button>
           </div>
         ) : (
@@ -120,7 +135,12 @@ export default function ImportarLeadsModal({
               <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => escolherArquivo(e.target.files?.[0] ?? null)} />
             </label>
             <p className="text-xs text-slate-600 mt-1.5">
-              Obrigatórias: <span className="text-slate-500">Nome, E-mail, Empresa, Nicho/Segmento</span> · Opcionais: Origem, Telefone, Cargo, Cidade, Estado e Validade do laudo (dd/mm/aaaa).
+              Obrigatórias: <span className="text-slate-500">Nome, E-mail, Empresa, Responsável</span> · Opcionais: Nicho/Segmento, Origem, Telefone, Cargo, Cidade, Estado e Validade do laudo (dd/mm/aaaa).
+            </p>
+            <p className="text-xs leading-5 text-slate-600 mt-1">
+              <span className="text-slate-500">Responsável</span> é o comercial dono do lead — use o nome ou o e-mail exato de
+              um membro ativo da equipe. É quem recebe o retorno quando a campanha estiver no modo
+              &ldquo;responsável de cada lead&rdquo;.
             </p>
 
             {carregandoPrevia && (
@@ -135,7 +155,31 @@ export default function ImportarLeadsModal({
                 {resumo.duplicadosNoArquivo > 0 && <div className="flex justify-between"><span className="text-slate-400">Duplicadas no arquivo</span><span className="text-slate-300 tabular-nums">{resumo.duplicadosNoArquivo}</span></div>}
                 {resumo.jaExistentes > 0 && <div className="flex justify-between"><span className="text-slate-400">Já existem na base</span><span className="text-slate-300 tabular-nums">{resumo.jaExistentes}</span></div>}
                 {pulosTexto && <div className="flex justify-between gap-3"><span className="text-slate-400">Puladas</span><span className="text-amber-300/80 text-right">{pulosTexto}</span></div>}
-                <div className="flex justify-between pt-1 border-t border-[#2a3147] mt-1"><span className="text-slate-200 font-medium">A inserir</span><span className="text-emerald-400 font-semibold tabular-nums">{resumo.novos}</span></div>
+                {resumo.semResponsavelValido > 0 && (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-400">Responsável não reconhecido</span>
+                    <span className="text-rose-400 tabular-nums">{resumo.semResponsavelValido}</span>
+                  </div>
+                )}
+                <div className="flex justify-between pt-1 border-t border-[#2a3147] mt-1"><span className="text-slate-200 font-medium">A inserir</span><span className="text-emerald-400 font-semibold tabular-nums">{resumo.importaveis}</span></div>
+                {resumo.responsaveisNaoReconhecidos.length > 0 && (
+                  <div className="pt-2 mt-2 border-t border-[#2a3147] space-y-1.5">
+                    <p className="text-xs font-medium text-rose-300">Responsáveis que não existem na equipe</p>
+                    {resumo.responsaveisNaoReconhecidos.map((item) => (
+                      <div key={item.valor} className="flex items-start justify-between gap-3 text-xs">
+                        <span className="text-slate-300 truncate">“{item.valor}”</span>
+                        <span className="text-rose-300/80 shrink-0">
+                          {item.linhas} linha{item.linhas === 1 ? '' : 's'}
+                          {item.motivo === 'ambiguo' ? ' · ambíguo' : ''}
+                        </span>
+                      </div>
+                    ))}
+                    <p className="text-xs leading-5 text-rose-300/80">
+                      Essas linhas não serão importadas. Corrija a planilha para o nome ou e-mail exato de um
+                      membro ativo, ou cadastre a pessoa em Equipe antes de importar.
+                    </p>
+                  </div>
+                )}
                 {resumo.semSegmento > 0 && (
                   <div className="flex justify-between gap-3">
                     <span className="text-slate-400">Sem segmento</span>
@@ -197,11 +241,11 @@ export default function ImportarLeadsModal({
             )}
 
             {/* 3) Destino operacional */}
-            {resumo && resumo.novos > 0 && (
+            {resumo && resumo.importaveis > 0 && (
               <div className="mt-4 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
-                <p className="text-sm font-medium text-slate-200">Os leads serão atribuídos a você</p>
+                <p className="text-sm font-medium text-slate-200">Cada lead vai para o responsável indicado na planilha</p>
                 <p className="text-xs leading-5 text-slate-400 mt-1">
-                  A importação não inicia campanha nem envia e-mails. Um gestor será avisado para preparar e ativar seu follow-up.
+                  A importação não inicia campanha nem envia e-mails. Um gestor será avisado para preparar e ativar o follow-up.
                 </p>
               </div>
             )}
@@ -212,11 +256,11 @@ export default function ImportarLeadsModal({
               <button onClick={onClose} disabled={inserindo} className="text-sm px-4 py-2 rounded-lg text-slate-300 hover:bg-[#0f1117]">Cancelar</button>
               <button
                 onClick={confirmar}
-                disabled={!file || !resumo || resumo.novos === 0 || inserindo}
+                disabled={!file || !resumo || resumo.importaveis === 0 || inserindo}
                 className="text-sm px-4 py-2 rounded-lg text-white font-medium flex items-center gap-2 disabled:opacity-50"
                 style={{ backgroundColor: '#1e3a5f' }}
               >
-                {inserindo && <Loader2 size={14} className="animate-spin" />} Importar {resumo && resumo.novos > 0 ? `${resumo.novos}` : ''}
+                {inserindo && <Loader2 size={14} className="animate-spin" />} Importar {resumo && resumo.importaveis > 0 ? `${resumo.importaveis}` : ''}
               </button>
             </div>
           </>

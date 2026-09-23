@@ -47,8 +47,8 @@ describe('emailValido', () => {
 
 describe('processarPlanilhaPadrao', () => {
   it('mapeia cabeçalhos pt/en e acentos e normaliza e-mail', () => {
-    const csv = 'Nome;E-mail;Empresa;Nicho;Origem;Telefone;Cargo;Cidade;Estado\n' +
-      'Ana;ANA@X.COM;Acme;Ótica;LinkedIn;(11) 99999-0000;CEO;São Paulo;SP'
+    const csv = 'Nome;E-mail;Empresa;Nicho;Responsável;Origem;Telefone;Cargo;Cidade;Estado\n' +
+      'Ana;ANA@X.COM;Acme;Ótica;Aline Muller;LinkedIn;(11) 99999-0000;CEO;São Paulo;SP'
     const { validos, pulados } = processarPlanilhaPadrao(csv)
     expect(pulados).toHaveLength(0)
     expect(validos[0]).toEqual<LeadPadrao>({
@@ -56,6 +56,7 @@ describe('processarPlanilhaPadrao', () => {
       contato_email: 'ana@x.com',
       empresa: 'Acme',
       segmento: 'oticas',
+      responsavel: 'Aline Muller',
       origem: 'LinkedIn',
       contato_telefone: '11999990000',
       contato_cargo: 'CEO',
@@ -65,25 +66,45 @@ describe('processarPlanilhaPadrao', () => {
     })
   })
 
-  it('pula linhas sem nome, e-mail válido ou empresa', () => {
-    const csv = 'nome;email;empresa;nicho\n' +
-      ';a@x.com;Acme;Varejo\n' +          // sem_nome
-      'B;;Acme;Varejo\n' +                // sem_email
-      'C;invalido;Acme;Varejo\n' +        // email_invalido
-      'D;d@x.com;;Varejo\n' +             // sem_empresa
-      'F;f@x.com;Acme;Varejo'             // válido
+  it('pula linhas sem nome, e-mail válido, empresa ou responsável', () => {
+    const csv = 'nome;email;empresa;nicho;responsavel\n' +
+      ';a@x.com;Acme;Varejo;Ana\n' +      // sem_nome
+      'B;;Acme;Varejo;Ana\n' +            // sem_email
+      'C;invalido;Acme;Varejo;Ana\n' +    // email_invalido
+      'D;d@x.com;;Varejo;Ana\n' +         // sem_empresa
+      'E;e@x.com;Acme;Varejo;\n' +        // sem_responsavel
+      'F;f@x.com;Acme;Varejo;Ana'         // válido
     const { validos, pulados } = processarPlanilhaPadrao(csv)
     expect(validos).toHaveLength(1)
     expect(validos[0].contato_email).toBe('f@x.com')
     expect(pulados.map((p) => p.motivo).sort()).toEqual(
-      ['email_invalido', 'sem_email', 'sem_empresa', 'sem_nome'],
+      ['email_invalido', 'sem_email', 'sem_empresa', 'sem_nome', 'sem_responsavel'],
     )
   })
 
+  // A coluna é obrigatória: planilha sem ela não importa NADA, em vez de
+  // carimbar um dono qualquer como o importador antigo fazia.
+  it('planilha SEM a coluna Responsável pula todas as linhas', () => {
+    const { validos, pulados } = processarPlanilhaPadrao(
+      'nome;email;empresa;nicho\nA;a@x.com;Acme;Varejo\nB;b@x.com;Beta;Varejo',
+    )
+    expect(validos).toHaveLength(0)
+    expect(pulados.map((p) => p.motivo)).toEqual(['sem_responsavel', 'sem_responsavel'])
+  })
+
+  it('aceita os aliases de responsável do HubSpot', () => {
+    for (const cab of ['Responsável', 'Comercial', 'Owner', 'Contact owner', 'Proprietario', 'Vendedor']) {
+      const { validos } = processarPlanilhaPadrao(
+        `nome;email;empresa;${cab}\nA;a@x.com;Acme;aline@empresa.com`,
+      )
+      expect(validos[0]?.responsavel, cab).toBe('aline@empresa.com')
+    }
+  })
+
   it('importa lead SEM segmento — a planilha externa raramente traz nicho', () => {
-    const csv = 'nome;email;empresa;nicho\n' +
-      'Sem nicho;sem@x.com;Acme;\n' +
-      'Com nicho;com@x.com;Acme;Varejo'
+    const csv = 'nome;email;empresa;nicho;responsavel\n' +
+      'Sem nicho;sem@x.com;Acme;;Ana\n' +
+      'Com nicho;com@x.com;Acme;Varejo;Ana'
     const { validos, pulados, semSegmento } = processarPlanilhaPadrao(csv)
 
     expect(pulados).toHaveLength(0)
@@ -96,7 +117,7 @@ describe('processarPlanilhaPadrao', () => {
 
   it('planilha sem NENHUMA coluna de nicho importa tudo', () => {
     const { validos, pulados, semSegmento } = processarPlanilhaPadrao(
-      'nome;email;empresa\nA;a@x.com;Acme\nB;b@x.com;Beta',
+      'nome;email;empresa;responsavel\nA;a@x.com;Acme;Ana\nB;b@x.com;Beta;Ana',
     )
     expect(pulados).toHaveLength(0)
     expect(validos).toHaveLength(2)
@@ -105,7 +126,7 @@ describe('processarPlanilhaPadrao', () => {
 
   it('resumo de nichos ignora quem não tem segmento, sem quebrar', () => {
     const { validos } = processarPlanilhaPadrao(
-      'nome;email;empresa;nicho\nA;a@x.com;Acme;\nB;b@x.com;Beta;Varejo',
+      'nome;email;empresa;nicho;responsavel\nA;a@x.com;Acme;;Ana\nB;b@x.com;Beta;Varejo;Ana',
     )
     expect(resumirNichosImportacao(validos, ['varejo'])).toEqual([
       { nicho: 'varejo', leads: 1, templateAtivo: true },
@@ -113,13 +134,13 @@ describe('processarPlanilhaPadrao', () => {
   })
 
   it('usa origem padrão quando a coluna Origem falta/está vazia', () => {
-    const { validos } = processarPlanilhaPadrao('nome;email;empresa;nicho\nA;a@x.com;Acme;Indústria')
+    const { validos } = processarPlanilhaPadrao('nome;email;empresa;nicho;responsavel\nA;a@x.com;Acme;Indústria;Ana')
     expect(validos[0].origem).toBe(ORIGEM_PADRAO_IMPORT)
   })
 
   it('aceita aliases de nicho e mantém taxonomia aberta normalizada', () => {
     const { validos } = processarPlanilhaPadrao(
-      'Name,Email,Company,Industry\nA,a@x.com,Acme,Mineração',
+      'Name,Email,Company,Industry,Owner\nA,a@x.com,Acme,Mineração,Ana',
     )
     expect(validos[0].segmento).toBe('mineracao')
   })
@@ -129,7 +150,7 @@ describe('processarPlanilhaPadrao', () => {
   it('lê a coluna de validade (aliases pt/en, com acento) e grava em ISO', () => {
     for (const cab of ['Validade', 'Data de Validade', 'Vencimento', 'Validade do Laudo', 'Expiration']) {
       const { validos, validadeInvalida } = processarPlanilhaPadrao(
-        `nome;email;empresa;${cab}\nA;a@x.com;Acme;15/03/2027`,
+        `nome;email;empresa;responsavel;${cab}\nA;a@x.com;Acme;Ana;15/03/2027`,
       )
       expect(validos[0].data_validade, cab).toBe('2027-03-15')
       expect(validadeInvalida).toBe(0)
@@ -138,7 +159,7 @@ describe('processarPlanilhaPadrao', () => {
 
   it('planilha SEM coluna de validade importa tudo com validade null — o campo é opcional', () => {
     const { validos, pulados, validadeInvalida } = processarPlanilhaPadrao(
-      'nome;email;empresa\nA;a@x.com;Acme\nB;b@x.com;Beta',
+      'nome;email;empresa;responsavel\nA;a@x.com;Acme;Ana\nB;b@x.com;Beta;Ana',
     )
     expect(pulados).toHaveLength(0)
     expect(validos.map((l) => l.data_validade)).toEqual([null, null])
@@ -147,7 +168,7 @@ describe('processarPlanilhaPadrao', () => {
 
   it('célula de validade vazia não pula a linha nem conta como inválida', () => {
     const { validos, pulados, validadeInvalida } = processarPlanilhaPadrao(
-      'nome;email;empresa;validade\nA;a@x.com;Acme;\nB;b@x.com;Beta;01/01/2027',
+      'nome;email;empresa;responsavel;validade\nA;a@x.com;Acme;Ana;\nB;b@x.com;Beta;Ana;01/01/2027',
     )
     expect(pulados).toHaveLength(0)
     expect(validos[0].data_validade).toBeNull()
@@ -157,11 +178,11 @@ describe('processarPlanilhaPadrao', () => {
 
   it('validade que não é data: lead ENTRA (sem validade) e a prévia recebe a contagem', () => {
     const { validos, pulados, validadeInvalida } = processarPlanilhaPadrao(
-      'nome;email;empresa;validade\n' +
-      'A;a@x.com;Acme;31/02/2027\n' +      // dia inexistente
-      'B;b@x.com;Beta;em breve\n' +        // texto
-      'C;c@x.com;Gama;15/03/27\n' +        // ano de 2 dígitos (ambíguo)
-      'D;d@x.com;Delta;2027-03-15',        // válida
+      'nome;email;empresa;responsavel;validade\n' +
+      'A;a@x.com;Acme;Ana;31/02/2027\n' +      // dia inexistente
+      'B;b@x.com;Beta;Ana;em breve\n' +        // texto
+      'C;c@x.com;Gama;Ana;15/03/27\n' +        // ano de 2 dígitos (ambíguo)
+      'D;d@x.com;Delta;Ana;2027-03-15',        // válida
     )
     expect(pulados).toHaveLength(0)
     expect(validos).toHaveLength(4)

@@ -44,18 +44,18 @@ describe('estágio inicial por validade', () => {
 
 describe('importação CSV respeita a regra da organização', () => {
   const csv = [
-    'Nome;E-mail;Empresa;Nicho;Validade',
-    'Ana;ana@parque-a.com.br;Parque A;Buffet infantil;15/10/2026',
-    'Bruno;bruno@parque-b.com.br;Parque B;Buffet infantil;',
-    'Carla;carla@parque-c.com.br;Parque C;Buffet infantil;2027-01-31',
-    'Davi;davi@parque-d.com.br;Parque D;Buffet infantil;31/02/2026',
+    'Nome;E-mail;Empresa;Nicho;Responsável;Validade',
+    'Ana;ana@parque-a.com.br;Parque A;Buffet infantil;Comercial;15/10/2026',
+    'Bruno;bruno@parque-b.com.br;Parque B;Buffet infantil;Comercial;',
+    'Carla;carla@parque-c.com.br;Parque C;Buffet infantil;Comercial;2027-01-31',
+    'Davi;davi@parque-d.com.br;Parque D;Buffet infantil;Comercial;31/02/2026',
   ].join('\n')
   const responsavel = { id: 'usuario-1', nome: 'Comercial' }
 
   function linhasDoCsv(estagioRenovacaoPorValidade: boolean) {
     const { validos } = processarPlanilhaPadrao(csv)
     const { unicos } = dedupeInternaPorEmail(validos)
-    return montarLeadsImportacao(unicos, { organizacaoId: 'org-1', responsavel, estagioRenovacaoPorValidade })
+    return montarLeadsImportacao(unicos, { organizacaoId: 'org-1', resolverResponsavel: () => responsavel, estagioRenovacaoPorValidade })
   }
 
   it('CSV misto com a regra: validade → renovacao; sem validade (ou inválida) → novos_leads', () => {
