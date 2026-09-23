@@ -16,7 +16,7 @@ import { log } from '@/lib/engine/logger'
 import type { Motor } from '@/lib/engine'
 import type { Lead } from '@/lib/engine/types'
 import { montarEmailCampanhaHtml } from '@/lib/campanhas/emailCampanha'
-import { enviarEmailCampanhaComCopia } from '@/lib/campanhas/emailComCopiaServidor'
+import { enviarEmailCampanhaComCopia, escolherResponsavelCampanha } from '@/lib/campanhas/emailComCopiaServidor'
 import { parseWorkspaceConfig } from '@/lib/config/workspaceConfig'
 import {
   fraseValidadeRenovacao,
@@ -444,7 +444,17 @@ export class AmbienteSupabase implements AmbienteWorkflow {
         })
       }
     }
-    const responsavelNome = contextoCampanha?.responsavel?.nome?.trim()
+    // Assinatura do corpo = a MESMA pessoa que vai no CC (ver
+    // escolherResponsavelCampanha). No modo carteira é o responsável do lead;
+    // fora dele, o responsável geral da campanha, como sempre foi.
+    const preferirResponsavelDoLead = contextoCampanha?.retornoParaResponsavelDoLead === true
+    const responsavelAssinatura = escolherResponsavelCampanha({
+      responsavelCampanha: contextoCampanha?.responsavel,
+      responsavelLead,
+      preferirResponsavelDoLead,
+    })
+    const responsavelNome = responsavelAssinatura?.nome?.trim()
+      || contextoCampanha?.responsavel?.nome?.trim()
       || responsavelLead?.nome?.trim()
       || null
     const operacao = campanhaPublico?.operacao && typeof campanhaPublico.operacao === 'object'
@@ -508,6 +518,7 @@ export class AmbienteSupabase implements AmbienteWorkflow {
         remetenteEmail: emailCred?.user,
         responsavelCampanha: contextoCampanha?.responsavel,
         responsavelLead,
+        preferirResponsavelDoLead,
       })
     } else {
       await emailProvider.enviar(lead.contato_email, assunto, corpo, html)
