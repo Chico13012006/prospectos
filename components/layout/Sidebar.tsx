@@ -15,6 +15,7 @@ import {
   Zap,
   LogOut,
   Bot,
+  Radar,
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
@@ -26,6 +27,7 @@ const mainNav = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/pipeline', icon: Kanban, label: 'Pipeline de Contato' },
   { href: '/base-leads', icon: Database, label: 'Base de Leads' },
+  { href: '/prospeccao', icon: Radar, label: 'Prospecção' },
   { href: '/reunioes', icon: Calendar, label: 'Reuniões' },
   { href: '/inteligencia-comercial', icon: BrainCircuit, label: 'Inteligência Comercial' },
   { href: '/comercial', icon: Briefcase, label: 'Comercial' },

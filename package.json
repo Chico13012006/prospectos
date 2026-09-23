@@ -16,6 +16,7 @@
     "engine:cadencia-once": "tsx scripts/engine-cadencia-once.ts",
     "engine:cadencia-dry": "tsx scripts/engine-cadencia-dry.ts",
     "prospeccao:hotelaria": "tsx scripts/prospeccao-freetier-hotelaria.ts",
+    "catalogo:rf": "tsx scripts/catalogo-rf-carregar.ts",
     "import:hubspot": "tsx scripts/importar-hubspot.ts",
     "popular:responsavel": "tsx scripts/popular-responsavel.ts",
     "workflows:tick-teste": "tsx scripts/tick-workflows-teste.ts"

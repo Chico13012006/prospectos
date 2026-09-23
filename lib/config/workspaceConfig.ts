@@ -15,7 +15,7 @@
 // junto com as fases). Se a superfície crescer muito, aí sim avaliamos um zod.
 
 // Suba este número ao mudar o formato do blob, e adicione o passo em `migrar()`.
-export const WORKSPACE_CONFIG_SCHEMA_VERSION = 4
+export const WORKSPACE_CONFIG_SCHEMA_VERSION = 5
 
 // Objetivos que o produto já consegue medir de ponta a ponta. Novos objetivos
 // só entram nesta allowlist quando houver dado operacional real para dashboard,
@@ -140,8 +140,53 @@ export function rodizioHandoffAtivo(cfg: WorkspaceConfig | null | undefined): bo
   return cfg?.comercial?.rodizioHandoff === true
 }
 
+// Perfil de busca da tela de prospecção (consulta o catálogo RF, migration 0050).
+// Ausência = organização ainda não definiu o perfil; a tela pede para configurar.
+export const PORTES_PROSPECCAO = ['micro', 'pequeno', 'demais', 'nao_informado'] as const
+export type PorteProspeccao = (typeof PORTES_PROSPECCAO)[number]
+
+export const UFS_BRASIL = [
+  'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA',
+  'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO',
+] as const
+
+export const PROSPECCAO_LIMITES = { cnaes: 20, municipios: 100 } as const
+
+export interface ProspeccaoConfig {
+  cnaes?: string[]          // 7 dígitos, sem máscara (ex.: '5510801')
+  ufs?: string[]            // vazio = Brasil inteiro
+  municipios?: string[]     // códigos de município da RF; vazio = todos das UFs
+  portes?: PorteProspeccao[] // vazio = todos
+  excluirMei?: boolean
+  // Casar também pelo CNAE secundário. Desligado por padrão: traz empresas de
+  // outro ramo que só listam a atividade como acessória.
+  incluirCnaesSecundarios?: boolean
+}
+
+function listaUnica(v: unknown, valido: (s: string) => boolean, max: number): string[] {
+  if (!Array.isArray(v)) return []
+  return [...new Set(v.filter((x): x is string => typeof x === 'string').map((x) => x.trim()).filter(valido))].slice(0, max)
+}
+
+export function parseProspeccaoConfig(bruto: unknown): ProspeccaoConfig | undefined {
+  if (!ehObjeto(bruto)) return undefined
+  const p: ProspeccaoConfig = {}
+  const cnaes = listaUnica(bruto.cnaes, (s) => /^\d{7}$/.test(s), PROSPECCAO_LIMITES.cnaes)
+  const ufs = listaUnica(bruto.ufs, (s) => (UFS_BRASIL as readonly string[]).includes(s), UFS_BRASIL.length)
+  const municipios = listaUnica(bruto.municipios, (s) => /^\d{1,7}$/.test(s), PROSPECCAO_LIMITES.municipios)
+  const portes = listaUnica(bruto.portes, (s) => (PORTES_PROSPECCAO as readonly string[]).includes(s), PORTES_PROSPECCAO.length)
+  if (cnaes.length) p.cnaes = cnaes
+  if (ufs.length) p.ufs = ufs
+  if (municipios.length) p.municipios = municipios
+  if (portes.length) p.portes = portes as PorteProspeccao[]
+  if (typeof bruto.excluirMei === 'boolean') p.excluirMei = bruto.excluirMei
+  if (typeof bruto.incluirCnaesSecundarios === 'boolean') p.incluirCnaesSecundarios = bruto.incluirCnaesSecundarios
+  return Object.keys(p).length ? p : undefined
+}
+
 export interface WorkspaceConfig {
   _schema_version: number
+  prospeccao?: ProspeccaoConfig
   // Chaves das preferências. Todas OPCIONAIS — ausência = padrão do produto.
   // Crescem nas fases seguintes (dashboard, Configurações > Processo comercial).
   dashboardWidgets?: string[]
@@ -191,6 +236,8 @@ function migrar(bruto: Record<string, unknown>): Record<string, unknown> {
   if (v < 3) cfg = { ...cfg, _schema_version: 3 }
   // v3 -> v4: adiciona comercial (grupo de avisos do handoff). Ausência = sem grupo.
   if (v < 4) cfg = { ...cfg, _schema_version: 4 }
+  // v4 -> v5: adiciona prospeccao (perfil de busca). Ausência = perfil não definido.
+  if (v < 5) cfg = { ...cfg, _schema_version: 5 }
   return cfg
 }
 
@@ -289,6 +336,8 @@ export function parseWorkspaceConfig(bruto: unknown): WorkspaceConfig {
     }
     if (Object.keys(operacao).length) out.operacao = operacao
   }
+  const prospeccao = parseProspeccaoConfig(obj.prospeccao)
+  if (prospeccao) out.prospeccao = prospeccao
   return out
 }
 
@@ -337,6 +386,8 @@ export interface WorkspaceConfigEditavel {
   comercialRodizioHandoff?: boolean | null
   camposUI?: CampoUI[]
   operacao?: OperacaoConfig
+  // Perfil de busca da prospecção. Substitui o perfil inteiro; null LIMPA.
+  prospeccao?: ProspeccaoConfig | null
 }
 
 export function mesclarWorkspaceConfig(atual: WorkspaceConfig, patch: WorkspaceConfigEditavel): WorkspaceConfig {
@@ -372,5 +423,10 @@ export function mesclarWorkspaceConfig(atual: WorkspaceConfig, patch: WorkspaceC
   }
   if (Array.isArray(patch.camposUI)) next.camposUI = patch.camposUI
   if (patch.operacao) next.operacao = patch.operacao
+  if (patch.prospeccao !== undefined) {
+    const perfil = patch.prospeccao === null ? undefined : parseProspeccaoConfig(patch.prospeccao)
+    if (perfil) next.prospeccao = perfil
+    else delete next.prospeccao
+  }
   return serializeWorkspaceConfig(next)
 }
