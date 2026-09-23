@@ -23,6 +23,7 @@ import {
   Send,
   ShieldCheck,
   Trash2,
+  UserRound,
   Users,
 } from 'lucide-react'
 import {
@@ -711,38 +712,72 @@ export default function CampanhaWizardPage({
               })}
             </div>
             )}
-            <div className="mt-5 grid gap-4 lg:grid-cols-3">
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
               <div>
                 <label className={label}>Nome da campanha</label>
                 <input className={input} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Novidade de agosto" />
               </div>
               <div>
-                <label className={label}>Retorno vai para</label>
-                <select
-                  className={input}
-                  value={retornoPorCarteira ? 'lead' : 'campanha'}
-                  onChange={(e) => setPublico((atual) => ({ ...atual, retornoPara: e.target.value === 'lead' ? 'lead' : 'campanha' }))}
-                >
-                  <option value="campanha">Uma pessoa fixa</option>
-                  <option value="lead">O responsável de cada lead</option>
-                </select>
-                <label className={`${label} mt-3`}>
-                  {retornoPorCarteira ? 'Fallback (lead sem responsável)' : 'Responsável pelos retornos'}
+                <label className={label}>Objetivo interno (opcional)</label>
+                <textarea maxLength={200} className={`${input} min-h-[42px] resize-y`} value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Contexto para quem revisar a campanha" />
+                <div className="mt-1 text-right text-[11px] text-slate-600">{descricao.length}/200</div>
+              </div>
+            </div>
+
+            {/* Escolha explícita, em cartão: a diferença entre carteira e pessoa
+                única muda para quem vai CADA resposta, então não cabe escondida
+                num select de uma coluna. */}
+            <div className="mt-5 rounded-xl border border-[#2a3147] bg-[#11151f] p-4">
+              <h3 className="text-sm font-semibold text-slate-100">Quem recebe os retornos?</h3>
+              <p className="mt-1 text-xs text-slate-500">Quando o contato responder, o aviso da oportunidade vai para quem você escolher aqui.</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {[
+                  {
+                    id: 'lead' as const,
+                    Icone: Users,
+                    titulo: 'Responsável de cada lead',
+                    descricao: 'Cada resposta vai para o comercial que já é dono daquele lead na base.',
+                  },
+                  {
+                    id: 'campanha' as const,
+                    Icone: UserRound,
+                    titulo: 'Um responsável geral',
+                    descricao: 'Todas as respostas desta campanha vão para a mesma pessoa.',
+                  },
+                ].map((opcao) => {
+                  const ativa = (retornoPorCarteira ? 'lead' : 'campanha') === opcao.id
+                  return (
+                    <button
+                      key={opcao.id}
+                      type="button"
+                      onClick={() => setPublico((atual) => ({ ...atual, retornoPara: opcao.id }))}
+                      className={`flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all ${ativa ? 'border-indigo-400 bg-gradient-to-br from-indigo-500/20 to-violet-500/10' : 'border-[#2a3147] bg-[#151a27] hover:border-[#46506d]'}`}
+                    >
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${ativa ? 'bg-indigo-500 text-white' : 'bg-indigo-500/10 text-indigo-300'}`}>
+                        <opcao.Icone size={17} />
+                      </span>
+                      <span>
+                        <span className="block text-sm font-semibold text-slate-100">{opcao.titulo}</span>
+                        <span className="mt-1 block text-xs leading-5 text-slate-500">{opcao.descricao}</span>
+                      </span>
+                      {ativa && <CheckCircle2 size={16} className="ml-auto shrink-0 text-indigo-200" />}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="mt-4 max-w-sm">
+                <label className={label}>
+                  {retornoPorCarteira ? 'Se o lead não tiver responsável, avisar' : 'Responsável geral desta campanha'}
                 </label>
                 <select className={input} value={publico.responsavel_id ?? ''} onChange={(e) => setPublico((atual) => ({ ...atual, responsavel_id: e.target.value || undefined }))}>
                   <option value="">Não configurado</option>
                   {membros.map((membro) => <option key={membro.id} value={membro.id}>{nomeMembro(membro)}</option>)}
                 </select>
-                {retornoPorCarteira && (
-                  <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                    Cada resposta vai para o responsável do lead. Quem não tiver responsável com e-mail cai nesta pessoa.
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className={label}>Objetivo interno (opcional)</label>
-                <textarea maxLength={200} className={`${input} min-h-[42px] resize-y`} value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Contexto para quem revisar a campanha" />
-                <div className="mt-1 text-right text-[11px] text-slate-600">{descricao.length}/200</div>
+                <p className="mt-1.5 text-[11px] leading-4 text-slate-500">
+                  {retornoPorCarteira
+                    ? 'Obrigatório: é a rede de segurança para lead sem responsável ou com responsável sem e-mail cadastrado.'
+                    : 'Vale para toda a campanha, independente de quem seja o dono do lead na base.'}
+                </p>
               </div>
             </div>
           </section>
