@@ -1,0 +1,86 @@
+// Filtros da busca de prospecção. O perfil da organização é o ponto de
+// partida; a tela pode ajustar. Tudo que vem do cliente é revalidado aqui
+// antes de virar parâmetro das RPCs (migration 0051).
+
+import {
+  PORTES_PROSPECCAO,
+  PROSPECCAO_LIMITES,
+  UFS_BRASIL,
+  type PorteProspeccao,
+  type ProspeccaoConfig,
+} from '@/lib/config/workspaceConfig'
+
+export interface FiltrosBusca {
+  cnaes: string[]
+  incluirCnaesSecundarios: boolean
+  ufs: string[]
+  municipios: string[]
+  portes: PorteProspeccao[]
+  excluirMei: boolean
+  soComEmail: boolean
+  texto: string
+}
+
+export const LIMITE_PAGINA = 50
+const TEXTO_MAX = 80
+
+function lista<T extends string>(v: unknown, valido: (s: string) => boolean, max: number): T[] {
+  if (!Array.isArray(v)) return []
+  return [...new Set(v.filter((x): x is string => typeof x === 'string').map((x) => x.trim()).filter(valido))].slice(0, max) as T[]
+}
+
+export function filtrosDoPerfil(perfil: ProspeccaoConfig | undefined): FiltrosBusca {
+  return {
+    cnaes: perfil?.cnaes ?? [],
+    incluirCnaesSecundarios: perfil?.incluirCnaesSecundarios ?? false,
+    ufs: perfil?.ufs ?? [],
+    municipios: perfil?.municipios ?? [],
+    portes: perfil?.portes ?? [],
+    excluirMei: perfil?.excluirMei ?? false,
+    soComEmail: false,
+    texto: '',
+  }
+}
+
+/** Valida o que veio do cliente; campo ausente/inválido cai no valor do perfil. */
+export function normalizarFiltros(bruto: unknown, perfil: ProspeccaoConfig | undefined): FiltrosBusca {
+  const base = filtrosDoPerfil(perfil)
+  if (!bruto || typeof bruto !== 'object' || Array.isArray(bruto)) return base
+  const b = bruto as Record<string, unknown>
+  const texto = typeof b.texto === 'string' ? b.texto.trim().slice(0, TEXTO_MAX) : ''
+  return {
+    cnaes: Array.isArray(b.cnaes) ? lista(b.cnaes, (s) => /^\d{7}$/.test(s), PROSPECCAO_LIMITES.cnaes) : base.cnaes,
+    incluirCnaesSecundarios:
+      typeof b.incluirCnaesSecundarios === 'boolean' ? b.incluirCnaesSecundarios : base.incluirCnaesSecundarios,
+    ufs: Array.isArray(b.ufs) ? lista(b.ufs, (s) => (UFS_BRASIL as readonly string[]).includes(s), UFS_BRASIL.length) : base.ufs,
+    municipios: Array.isArray(b.municipios)
+      ? lista(b.municipios, (s) => /^\d{1,7}$/.test(s), PROSPECCAO_LIMITES.municipios)
+      : base.municipios,
+    portes: Array.isArray(b.portes)
+      ? lista<PorteProspeccao>(b.portes, (s) => (PORTES_PROSPECCAO as readonly string[]).includes(s), PORTES_PROSPECCAO.length)
+      : base.portes,
+    excluirMei: typeof b.excluirMei === 'boolean' ? b.excluirMei : base.excluirMei,
+    soComEmail: b.soComEmail === true,
+    // `%` e `_` são curingas do ILIKE: escapados para a busca ser literal.
+    texto: texto.replace(/[\\%_]/g, (c) => `\\${c}`),
+  }
+}
+
+export function cursorValido(v: unknown): string | null {
+  return typeof v === 'string' && /^\d{14}$/.test(v) ? v : null
+}
+
+/** Parâmetros comuns de prospeccao_buscar / prospeccao_contar. */
+export function paramsRpc(org: string, f: FiltrosBusca) {
+  return {
+    p_org: org,
+    p_cnaes: f.cnaes,
+    p_secundarios: f.incluirCnaesSecundarios,
+    p_ufs: f.ufs,
+    p_municipios: f.municipios,
+    p_portes: f.portes,
+    p_excluir_mei: f.excluirMei,
+    p_so_com_email: f.soComEmail,
+    p_texto: f.texto,
+  }
+}

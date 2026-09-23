@@ -2,11 +2,12 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Settings, Sliders, SlidersHorizontal, Palette, Target } from 'lucide-react';
+import { Settings, Sliders, SlidersHorizontal, Palette, Target, Radar } from 'lucide-react';
 import ParametrosMotorPanel from '@/components/configuracoes/ParametrosMotorPanel';
 import ProcessoComercialPanel from '@/components/configuracoes/ProcessoComercialPanel';
 import PersonalizacaoPanel from '@/components/configuracoes/PersonalizacaoPanel';
 import ObjetivosOperacaoPanel from '@/components/configuracoes/ObjetivosOperacaoPanel';
+import PerfilProspeccaoPanel from '@/components/configuracoes/PerfilProspeccaoPanel';
 
 // Configurações por workspace: objetivos, motor, processo e personalização.
 // Deep-links por ?tab. useSearchParams exige Suspense.
@@ -18,8 +19,8 @@ export default function ConfiguracoesPage() {
   );
 }
 
-type Aba = 'objetivos' | 'motor' | 'processo' | 'personalizacao';
-const ABAS: Aba[] = ['objetivos', 'motor', 'processo', 'personalizacao'];
+type Aba = 'objetivos' | 'prospeccao' | 'motor' | 'processo' | 'personalizacao';
+const ABAS: Aba[] = ['objetivos', 'prospeccao', 'motor', 'processo', 'personalizacao'];
 
 function Inner() {
   const searchParams = useSearchParams();
@@ -69,6 +70,7 @@ function Inner() {
 
   const TABS: { id: Aba; label: string; Icon: typeof Sliders }[] = [
     { id: 'objetivos', label: 'Objetivos da operação', Icon: Target },
+    { id: 'prospeccao', label: 'Perfil de busca', Icon: Radar },
     { id: 'motor', label: 'Motor de cadência', Icon: Sliders },
     { id: 'processo', label: 'Processo comercial', Icon: SlidersHorizontal },
     { id: 'personalizacao', label: 'Personalização', Icon: Palette },
@@ -101,6 +103,7 @@ function Inner() {
       </div>
 
       {aba === 'objetivos' && <ObjetivosOperacaoPanel />}
+      {aba === 'prospeccao' && <PerfilProspeccaoPanel />}
       {aba === 'motor' && <ParametrosMotorPanel />}
       {aba === 'processo' && <ProcessoComercialPanel />}
       {aba === 'personalizacao' && <PersonalizacaoPanel />}
