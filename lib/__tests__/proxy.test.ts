@@ -17,6 +17,12 @@ describe('matcher do proxy', () => {
     expect(passaPeloProxy('/icon.svg')).toBe(false)
   })
 
+  it('libera imagens estáticas de public/ (logos de templates de e-mail)', () => {
+    expect(passaPeloProxy('/next.svg')).toBe(false)
+    expect(passaPeloProxy('/laudos/logo-laudo-tecnico.jpg')).toBe(false)
+    expect(passaPeloProxy('/proposta/base-proposta.png')).toBe(false)
+  })
+
   it('mantém as páginas privadas protegidas', () => {
     expect(passaPeloProxy('/dashboard')).toBe(true)
     expect(passaPeloProxy('/pipeline')).toBe(true)

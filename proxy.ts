@@ -42,6 +42,8 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|icon.svg|api/|definir-senha|criar-organizacao).*)',
+    // Arquivos estáticos de public/ (logos, ícones) precisam abrir sem sessão:
+    // e-mail de cliente e navegador deslogado também os carregam.
+    '/((?!_next/static|_next/image|favicon.ico|icon.svg|api/|definir-senha|criar-organizacao|.*\\.(?:svg|png|jpe?g|gif|webp|ico)$).*)',
   ],
 };
