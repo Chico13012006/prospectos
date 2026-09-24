@@ -15,7 +15,7 @@
 // junto com as fases). Se a superfície crescer muito, aí sim avaliamos um zod.
 
 // Suba este número ao mudar o formato do blob, e adicione o passo em `migrar()`.
-export const WORKSPACE_CONFIG_SCHEMA_VERSION = 5
+export const WORKSPACE_CONFIG_SCHEMA_VERSION = 6
 
 // Objetivos que o produto já consegue medir de ponta a ponta. Novos objetivos
 // só entram nesta allowlist quando houver dado operacional real para dashboard,
@@ -184,9 +184,62 @@ export function parseProspeccaoConfig(bruto: unknown): ProspeccaoConfig | undefi
   return Object.keys(p).length ? p : undefined
 }
 
+// Pesquisas salvas da Prospecção ("Hotéis SP | Microempresa | 40 empresas").
+// Ficam FORA do perfil: o perfil é substituído/limpo inteiro no PUT, e limpar
+// o perfil não pode apagar as pesquisas da equipe.
+export const PESQUISAS_LIMITES = { total: 20, nome: 60, quantidadeMax: 500 } as const
+
+export interface FiltrosPesquisaSalva extends ProspeccaoConfig {
+  soComEmail?: boolean
+}
+
+export interface PesquisaSalva {
+  id: string
+  nome: string
+  filtros: FiltrosPesquisaSalva
+  quantidade: number | null // null = sem limite
+  criadaEm: string
+}
+
+export function parseFiltrosPesquisa(bruto: unknown): FiltrosPesquisaSalva | undefined {
+  const base = parseProspeccaoConfig(bruto)
+  // Sem atividade a busca não roda: pesquisa sem CNAE não é válida.
+  if (!base?.cnaes?.length) return undefined
+  const f: FiltrosPesquisaSalva = { ...base }
+  if (ehObjeto(bruto) && bruto.soComEmail === true) f.soComEmail = true
+  return f
+}
+
+export function quantidadeValida(v: unknown): number | null {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= PESQUISAS_LIMITES.quantidadeMax ? v : null
+}
+
+export function parsePesquisasSalvas(bruto: unknown): PesquisaSalva[] | undefined {
+  if (!Array.isArray(bruto)) return undefined
+  const vistos = new Set<string>()
+  const lista: PesquisaSalva[] = []
+  for (const item of bruto) {
+    if (!ehObjeto(item) || typeof item.id !== 'string' || !item.id || vistos.has(item.id)) continue
+    const nome = typeof item.nome === 'string' ? item.nome.trim().slice(0, PESQUISAS_LIMITES.nome) : ''
+    const filtros = parseFiltrosPesquisa(item.filtros)
+    if (!nome || !filtros) continue
+    vistos.add(item.id)
+    lista.push({
+      id: item.id,
+      nome,
+      filtros,
+      quantidade: quantidadeValida(item.quantidade),
+      criadaEm: typeof item.criadaEm === 'string' ? item.criadaEm : '',
+    })
+    if (lista.length >= PESQUISAS_LIMITES.total) break
+  }
+  return lista.length ? lista : undefined
+}
+
 export interface WorkspaceConfig {
   _schema_version: number
   prospeccao?: ProspeccaoConfig
+  prospeccaoPesquisas?: PesquisaSalva[]
   // Chaves das preferências. Todas OPCIONAIS — ausência = padrão do produto.
   // Crescem nas fases seguintes (dashboard, Configurações > Processo comercial).
   dashboardWidgets?: string[]
@@ -238,6 +291,8 @@ function migrar(bruto: Record<string, unknown>): Record<string, unknown> {
   if (v < 4) cfg = { ...cfg, _schema_version: 4 }
   // v4 -> v5: adiciona prospeccao (perfil de busca). Ausência = perfil não definido.
   if (v < 5) cfg = { ...cfg, _schema_version: 5 }
+  // v5 -> v6: adiciona prospeccaoPesquisas (pesquisas salvas). Ausência = nenhuma.
+  if (v < 6) cfg = { ...cfg, _schema_version: 6 }
   return cfg
 }
 
@@ -338,6 +393,8 @@ export function parseWorkspaceConfig(bruto: unknown): WorkspaceConfig {
   }
   const prospeccao = parseProspeccaoConfig(obj.prospeccao)
   if (prospeccao) out.prospeccao = prospeccao
+  const pesquisas = parsePesquisasSalvas(obj.prospeccaoPesquisas)
+  if (pesquisas) out.prospeccaoPesquisas = pesquisas
   return out
 }
 
@@ -388,6 +445,8 @@ export interface WorkspaceConfigEditavel {
   operacao?: OperacaoConfig
   // Perfil de busca da prospecção. Substitui o perfil inteiro; null LIMPA.
   prospeccao?: ProspeccaoConfig | null
+  // Pesquisas salvas. Substitui a lista inteira; lista vazia/null LIMPA.
+  prospeccaoPesquisas?: PesquisaSalva[] | null
 }
 
 export function mesclarWorkspaceConfig(atual: WorkspaceConfig, patch: WorkspaceConfigEditavel): WorkspaceConfig {
@@ -427,6 +486,11 @@ export function mesclarWorkspaceConfig(atual: WorkspaceConfig, patch: WorkspaceC
     const perfil = patch.prospeccao === null ? undefined : parseProspeccaoConfig(patch.prospeccao)
     if (perfil) next.prospeccao = perfil
     else delete next.prospeccao
+  }
+  if (patch.prospeccaoPesquisas !== undefined) {
+    const lista = patch.prospeccaoPesquisas === null ? undefined : parsePesquisasSalvas(patch.prospeccaoPesquisas)
+    if (lista) next.prospeccaoPesquisas = lista
+    else delete next.prospeccaoPesquisas
   }
   return serializeWorkspaceConfig(next)
 }

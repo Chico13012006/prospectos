@@ -3,21 +3,23 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  Building2, Check, ChevronDown, ChevronRight, Database, Download, Filter, LayoutGrid, ListChecks, Mail,
+  Bookmark, Building2, Check, ChevronDown, ChevronRight, Database, Download, Filter, LayoutGrid, ListChecks, Mail,
   Plus, Radar, RotateCcw, Search, Settings, SlidersHorizontal, Trash2, X,
 } from 'lucide-react';
-import type { FiltrosBusca } from '@/lib/prospeccao/filtros';
+import { LIMITE_PAGINA, type FiltrosBusca } from '@/lib/prospeccao/filtros';
 import type { ResultadoCatalogo, StatusCatalogo } from '@/lib/prospeccao/buscaServidor';
 import { ROTULO_QUALIDADE, type QualidadeEmail } from '@/lib/prospeccao/qualidadeEmail';
 import { formatarCnae, iniciais, nomeLegivel, rotuloPorte, ROTULO_PORTE } from '@/lib/prospeccao/rotulos';
 import { gruposDoPerfil, nomeAtividade } from '@/lib/prospeccao/nichos';
+import { nomeSugerido } from '@/lib/prospeccao/pesquisas';
 import { formatarCnpj } from '@/lib/empresas/cnpj';
-import { PORTES_PROSPECCAO, type PorteProspeccao } from '@/lib/config/workspaceConfig';
+import { PESQUISAS_LIMITES, PORTES_PROSPECCAO, quantidadeValida, type PesquisaSalva, type PorteProspeccao } from '@/lib/config/workspaceConfig';
 import DetalheEmpresa, { type Decisor } from '@/components/prospeccao/DetalheEmpresa';
 import ImportarProspeccaoModal from '@/components/prospeccao/ImportarProspeccaoModal';
 import CaixaSelecao from '@/components/prospeccao/CaixaSelecao';
 import PerfilBuscaPainel from '@/components/prospeccao/PerfilBuscaPainel';
 import SeletorEstados from '@/components/prospeccao/SeletorEstados';
+import PesquisasSalvas, { SalvarPesquisa } from '@/components/prospeccao/PesquisasSalvas';
 import { iconeDoNicho } from '@/components/prospeccao/iconesNicho';
 import s from '@/components/prospeccao/Prospeccao.module.css';
 
@@ -204,10 +206,18 @@ export default function ProspeccaoPage() {
   // '' = todos os nichos do perfil.
   const [nicho, setNicho] = useState('');
   const [editandoPerfil, setEditandoPerfil] = useState(false);
+  // Quantidade desejada: a lista para nela (null = sem limite). O texto do
+  // campo aplica com debounce; valor fora de 1–500 não vale.
+  const [quantidade, setQuantidade] = useState<number | null>(null);
+  const [quantidadeTexto, setQuantidadeTexto] = useState('');
+  const [pesquisas, setPesquisas] = useState<PesquisaSalva[]>([]);
+  const [podeEditarPesquisas, setPodeEditarPesquisas] = useState(false);
+  const [pesquisaAtiva, setPesquisaAtiva] = useState<string | null>(null);
+  const [salvandoPesquisa, setSalvandoPesquisa] = useState(false);
   // Só a resposta da busca mais recente pode escrever no estado.
   const buscaAtual = useRef(0);
 
-  const buscar = useCallback(async (f: FiltrosBusca | null, apos: string | null) => {
+  const buscar = useCallback(async (f: FiltrosBusca | null, apos: string | null, limite?: number) => {
     const id = ++buscaAtual.current;
     setCarregando(true);
     setErro(null);
@@ -215,7 +225,7 @@ export default function ProspeccaoPage() {
       const res = await fetch('/api/prospeccao/busca', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filtros: f ?? undefined, cursor: apos }),
+        body: JSON.stringify({ filtros: f ?? undefined, cursor: apos, limite }),
       });
       const corpo = (await res.json().catch(() => ({}))) as Partial<RespostaApi> & { erro?: string };
       if (id !== buscaAtual.current) return;
@@ -237,6 +247,27 @@ export default function ProspeccaoPage() {
   // 1ª carga: sem filtros → o servidor aplica o perfil e devolve os filtros efetivos.
   useEffect(() => { buscar(null, null); }, [buscar]);
 
+  useEffect(() => {
+    fetch('/api/prospeccao/pesquisas')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((corpo) => {
+        if (!corpo) return;
+        setPesquisas(corpo.pesquisas ?? []);
+        setPodeEditarPesquisas(!!corpo.podeEditar);
+      })
+      .catch(() => { /* sem atalhos: a busca segue funcionando */ });
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const bruto = quantidadeTexto.trim();
+      const n = bruto === '' ? null : quantidadeValida(Number(bruto));
+      if (bruto !== '' && n === null) return; // inválido: não aplica
+      if (n !== quantidade) { setQuantidade(n); setPesquisaAtiva(null); }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [quantidadeTexto, quantidade]);
+
   // Texto com debounce; demais filtros disparam na hora.
   useEffect(() => {
     if (!filtros) return;
@@ -251,8 +282,8 @@ export default function ProspeccaoPage() {
     if (!filtros) return;
     if (primeiraExecucao.current) { primeiraExecucao.current = false; return; }
     setAberto(null);
-    buscar(filtros, null);
-  }, [filtros, buscar]);
+    buscar(filtros, null, quantidade ? Math.min(quantidade, LIMITE_PAGINA) : undefined);
+  }, [filtros, quantidade, buscar]);
 
   // Perfil salvo no painel: recomeça do perfil novo (o servidor devolve os
   // filtros efetivos, e o efeito de filtros não dispara uma 2ª busca).
@@ -265,7 +296,70 @@ export default function ProspeccaoPage() {
   }
 
   function atualizar(patch: Partial<FiltrosBusca>) {
+    setPesquisaAtiva(null);
     setFiltros((f) => (f ? { ...f, ...patch } : f));
+  }
+
+  function definirQuantidade(n: number | null) {
+    setQuantidade(n);
+    setQuantidadeTexto(n ? String(n) : '');
+  }
+
+  // Aplica uma pesquisa salva por inteiro (filtros + quantidade).
+  function aplicarPesquisa(p: PesquisaSalva) {
+    const f = p.filtros;
+    const cnaes = f.cnaes ?? [];
+    const grupo = grupos.find((g) => g.cnaes.length === cnaes.length && g.cnaes.every((c) => cnaes.includes(c)));
+    setNicho(grupo?.id ?? '');
+    setTexto('');
+    definirQuantidade(p.quantidade);
+    setFiltros({
+      cnaes,
+      ufs: f.ufs ?? [],
+      municipios: f.municipios ?? [],
+      portes: f.portes ?? [],
+      excluirMei: !!f.excluirMei,
+      incluirCnaesSecundarios: !!f.incluirCnaesSecundarios,
+      soComEmail: !!f.soComEmail,
+      texto: '',
+    });
+    setPesquisaAtiva(p.id);
+  }
+
+  const filtrosParaSalvar = filtros && {
+    cnaes: filtros.cnaes,
+    ufs: filtros.ufs,
+    municipios: filtros.municipios,
+    portes: filtros.portes,
+    excluirMei: filtros.excluirMei,
+    incluirCnaesSecundarios: filtros.incluirCnaesSecundarios,
+    soComEmail: filtros.soComEmail,
+  };
+
+  // Chamada às rotas de pesquisas salvas; devolve a mensagem de erro, se houver.
+  async function chamarPesquisas(url: string, metodo: string, corpo?: unknown): Promise<{ erro: string | null; lista: PesquisaSalva[] }> {
+    try {
+      const res = await fetch(url, {
+        method: metodo,
+        headers: corpo ? { 'Content-Type': 'application/json' } : undefined,
+        body: corpo ? JSON.stringify(corpo) : undefined,
+      });
+      const r = await res.json().catch(() => ({}));
+      if (!res.ok) return { erro: r?.erro || 'Não foi possível concluir.', lista: pesquisas };
+      const lista: PesquisaSalva[] = r.pesquisas ?? [];
+      setPesquisas(lista);
+      return { erro: null, lista };
+    } catch {
+      return { erro: 'Sem conexão. Tente de novo.', lista: pesquisas };
+    }
+  }
+
+  async function salvarPesquisa(nome: string): Promise<string | null> {
+    const antes = new Set(pesquisas.map((p) => p.id));
+    const r = await chamarPesquisas('/api/prospeccao/pesquisas', 'POST', { nome, filtros: filtrosParaSalvar, quantidade });
+    // A pesquisa recém-salva é a que está aplicada.
+    if (!r.erro) setPesquisaAtiva(r.lista.find((p) => !antes.has(p.id))?.id ?? null);
+    return r.erro;
   }
 
   const grupos = useMemo(() => gruposDoPerfil(perfil?.cnaes ?? []), [perfil]);
@@ -352,8 +446,9 @@ export default function ProspeccaoPage() {
       filtros.excluirMei !== perfil.excluirMei,
       filtros.incluirCnaesSecundarios !== perfil.incluirCnaesSecundarios,
       !!texto,
+      quantidade !== null,
     ].filter(Boolean).length;
-  }, [filtros, perfil, texto]);
+  }, [filtros, perfil, texto, quantidade]);
 
   const semPerfil = temPerfil === false;
 
@@ -363,6 +458,8 @@ export default function ProspeccaoPage() {
     ? (filtros.portes.length === 0 ? '' : filtros.portes.length === 1 ? filtros.portes[0] : '__varios__')
     : '';
   const carregados = itens.length;
+  // Há mais para carregar: o servidor tem próxima página E a quantidade não foi atingida.
+  const temMais = !!cursor && (quantidade === null || carregados < quantidade);
 
   return (
     <div className="h-screen overflow-y-auto">
@@ -415,6 +512,21 @@ export default function ProspeccaoPage() {
               </button>
             </div>
           )}
+
+          {!semPerfil && (
+            <PesquisasSalvas
+              pesquisas={pesquisas}
+              ativa={pesquisaAtiva}
+              podeEditar={podeEditarPesquisas}
+              onAplicar={aplicarPesquisa}
+              onRenomear={async (id, nome) => (await chamarPesquisas(`/api/prospeccao/pesquisas/${encodeURIComponent(id)}`, 'PATCH', { nome })).erro}
+              onExcluir={async (id) => {
+                const r = await chamarPesquisas(`/api/prospeccao/pesquisas/${encodeURIComponent(id)}`, 'DELETE');
+                if (!r.erro && pesquisaAtiva === id) setPesquisaAtiva(null);
+                return r.erro;
+              }}
+            />
+          )}
         </header>
 
         <div className={s.content}>
@@ -438,16 +550,39 @@ export default function ProspeccaoPage() {
                 <section className={`${s.panel} ${s.panelBody}`}>
                   <div className={s.panelHeader}>
                     <CabecalhoBloco icone={Filter} titulo="Filtros" subtitulo="Partem do perfil de busca; ajuste à vontade nesta pesquisa." />
+                    <div className="flex items-center gap-4">
+                    {podeEditarPesquisas && !salvandoPesquisa && (
+                      <button
+                        type="button"
+                        onClick={() => setSalvandoPesquisa(true)}
+                        disabled={pesquisas.length >= PESQUISAS_LIMITES.total || filtros.cnaes.length === 0}
+                        title={pesquisas.length >= PESQUISAS_LIMITES.total ? `Limite de ${PESQUISAS_LIMITES.total} pesquisas salvas` : 'Guardar estes filtros como atalho'}
+                        className={`${s.linkAction} disabled:opacity-50 focus-ring rounded`}
+                      >
+                        <Bookmark size={12} /> Salvar pesquisa
+                      </button>
+                    )}
                     {ajustesAtivos > 0 && (
                       <button
                         type="button"
-                        onClick={() => { setTexto(''); setNicho(''); setFiltros({ ...perfil }); }}
+                        onClick={() => { setTexto(''); setNicho(''); definirQuantidade(null); setPesquisaAtiva(null); setFiltros({ ...perfil }); }}
                         className={`${s.linkAction} focus-ring rounded`}
                       >
                         <RotateCcw size={12} /> Voltar ao perfil
                       </button>
                     )}
+                    </div>
                   </div>
+
+                  {salvandoPesquisa && filtrosParaSalvar && (
+                    <div className="mt-3">
+                      <SalvarPesquisa
+                        sugestao={nomeSugerido(filtrosParaSalvar, quantidade)}
+                        onSalvar={salvarPesquisa}
+                        onFechar={() => setSalvandoPesquisa(false)}
+                      />
+                    </div>
+                  )}
 
                   <div className={s.filterGrid}>
                     <Campo rotulo="Buscar">
@@ -495,7 +630,25 @@ export default function ProspeccaoPage() {
                         {PORTES_PROSPECCAO.map((p) => <option key={p} value={p}>{ROTULO_PORTE[p]}</option>)}
                       </Selecao>
                     </Campo>
+
+                    <Campo rotulo="Quantidade">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={PESQUISAS_LIMITES.quantidadeMax}
+                        value={quantidadeTexto}
+                        onChange={(e) => setQuantidadeTexto(e.target.value)}
+                        placeholder="Sem limite"
+                        className={`${s.field} px-3 focus-ring`}
+                      />
+                    </Campo>
                   </div>
+                  {quantidadeTexto.trim() !== '' && quantidadeValida(Number(quantidadeTexto)) === null && (
+                    <p className="mt-2 text-xs text-amber-300">
+                      Quantidade entre 1 e {PESQUISAS_LIMITES.quantidadeMax}.
+                    </p>
+                  )}
 
                   <div className={s.toggleRow}>
                     <Alternar ativo={filtros.soComEmail} onChange={(v) => atualizar({ soComEmail: v })}>Só com e-mail</Alternar>
@@ -519,8 +672,12 @@ export default function ProspeccaoPage() {
                   icone={ListChecks}
                   rotulo="Na lista"
                   valor={carregados.toLocaleString('pt-BR')}
-                  proporcao={total ? carregados / total : null}
-                  detalhe={cursor ? 'use “Carregar mais” no fim da lista' : 'todas as encontradas estão na lista'}
+                  proporcao={quantidade ? carregados / Math.max(1, Math.min(quantidade, total ?? quantidade)) : total ? carregados / total : null}
+                  detalhe={
+                    quantidade && total !== null && total > quantidade
+                      ? `de ${quantidade.toLocaleString('pt-BR')} desejadas${temMais ? ' — use “Carregar mais”' : ''}`
+                      : temMais ? 'use “Carregar mais” no fim da lista' : 'todas as encontradas estão na lista'
+                  }
                 />
                 <Indicador
                   tom="emerald"
@@ -665,11 +822,11 @@ export default function ProspeccaoPage() {
                     )}
                   </tbody>
                 </table>
-                {cursor && (
+                {temMais && (
                   <div className={s.loadMore}>
                     <button
                       type="button"
-                      onClick={() => buscar(filtros, cursor)}
+                      onClick={() => buscar(filtros, cursor, quantidade ? quantidade - carregados : undefined)}
                       disabled={carregando}
                       className={`${s.outlineButton} focus-ring`}
                     >

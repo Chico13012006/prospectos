@@ -66,6 +66,11 @@ export function normalizarFiltros(bruto: unknown, perfil: ProspeccaoConfig | und
   }
 }
 
+/** Tamanho da página pedido pelo cliente, sempre entre 1 e LIMITE_PAGINA. */
+export function limitePagina(v: unknown): number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 1 ? Math.min(v, LIMITE_PAGINA) : LIMITE_PAGINA
+}
+
 export function cursorValido(v: unknown): string | null {
   return typeof v === 'string' && /^\d{14}$/.test(v) ? v : null
 }

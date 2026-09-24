@@ -181,7 +181,7 @@
 /* Campos dos filtros */
 .filterGrid {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(0, 1fr)) minmax(0, 0.7fr);
   gap: 12px;
   margin-top: 12px;
 }
@@ -686,6 +686,69 @@
   cursor: pointer;
 }
 .comboOptionAtiva { background: rgba(18, 67, 108, 0.55); }
+
+/* Pesquisas salvas */
+.savedRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.savedLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 2px;
+  color: #93a4c0;
+  font-size: 12px;
+}
+
+.savedChip {
+  display: inline-flex;
+  max-width: 340px;
+  align-items: center;
+  border: 1px solid #17557f;
+  border-radius: 999px;
+  background: rgba(4, 28, 52, 0.8);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.savedChip:hover { border-color: #2286cf; }
+
+.savedChipAtivo,
+.savedChipAtivo:hover {
+  border-color: rgba(25, 230, 180, 0.7);
+  box-shadow: 0 0 12px rgba(25, 230, 180, 0.15);
+}
+
+.savedChipMain {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: #dce8f7;
+  font-size: 12px;
+  font-weight: 600;
+}
+.savedChipAtivo .savedChipMain { color: #b7f7e6; }
+
+.savedActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding-right: 6px;
+}
+
+.inlineForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.inlineForm .field { width: 300px; max-width: 100%; }
 
 @media (max-width: 1280px) {
   .kpiGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

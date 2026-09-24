@@ -2,7 +2,7 @@
 // `org` vem SEMPRE da sessão (resolverAcesso), nunca do payload.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { LIMITE_PAGINA, paramsRpc, type FiltrosBusca } from './filtros'
+import { limitePagina, paramsRpc, type FiltrosBusca } from './filtros'
 import { classificarEmail, type QualidadeEmail } from './qualidadeEmail'
 
 export interface ResultadoCatalogo {
@@ -58,15 +58,17 @@ export async function buscarProspeccao(
   org: string,
   filtros: FiltrosBusca,
   cursor: string | null,
-  opcoes: { contar: boolean }
+  opcoes: { contar: boolean; limite?: number }
 ): Promise<RespostaBusca> {
   // Sem CNAE a busca varreria o catálogo inteiro: a tela pede para configurar.
   if (filtros.cnaes.length === 0) {
     return { itens: [], proximoCursor: null, total: 0, catalogo: await statusCatalogo(admin) }
   }
   const params = paramsRpc(org, filtros)
+  // Quantidade desejada: a página traz só o que falta (nunca mais que LIMITE_PAGINA).
+  const limite = limitePagina(opcoes.limite)
   const [pagina, contagem, catalogo] = await Promise.all([
-    admin.rpc('prospeccao_buscar', { ...params, p_apos_cnpj: cursor, p_limite: LIMITE_PAGINA }),
+    admin.rpc('prospeccao_buscar', { ...params, p_apos_cnpj: cursor, p_limite: limite }),
     // Contagem só na primeira página: paginar não muda o total.
     opcoes.contar ? admin.rpc('prospeccao_contar', params) : Promise.resolve({ data: null, error: null }),
     statusCatalogo(admin),
@@ -82,7 +84,7 @@ export async function buscarProspeccao(
   }))
   return {
     itens,
-    proximoCursor: itens.length === LIMITE_PAGINA ? itens[itens.length - 1].cnpj : null,
+    proximoCursor: itens.length === limite ? itens[itens.length - 1].cnpj : null,
     total: contagem.data === null ? null : Number(contagem.data),
     catalogo,
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { cursorValido, filtrosDoPerfil, normalizarFiltros, paramsRpc, LIMITE_PAGINA } from '@/lib/prospeccao/filtros'
+import { cursorValido, filtrosDoPerfil, limitePagina, normalizarFiltros, paramsRpc, LIMITE_PAGINA } from '@/lib/prospeccao/filtros'
 import { classificarEmail, provedorPretendido } from '@/lib/prospeccao/qualidadeEmail'
 import { consultarSocios, mapearSocios, sugerirDecisor } from '@/lib/prospeccao/socios'
 import { importarProspeccao, MAX_ITENS_IMPORTACAO, resumir, validarItens } from '@/lib/prospeccao/importacaoServidor'
@@ -28,6 +28,15 @@ describe('filtros da busca', () => {
   it('escapa curingas do ILIKE e limita o texto', () => {
     expect(normalizarFiltros({ texto: ' 100%_hotel ' }, PERFIL).texto).toBe('100\\%\\_hotel')
     expect(normalizarFiltros({ texto: 'a'.repeat(200) }, PERFIL).texto).toHaveLength(80)
+  })
+
+  it('limite da página fica entre 1 e LIMITE_PAGINA', () => {
+    expect(limitePagina(undefined)).toBe(LIMITE_PAGINA)
+    expect(limitePagina(12)).toBe(12)
+    expect(limitePagina(10_000)).toBe(LIMITE_PAGINA)
+    expect(limitePagina(0)).toBe(LIMITE_PAGINA)
+    expect(limitePagina(2.5)).toBe(LIMITE_PAGINA)
+    expect(limitePagina('10')).toBe(LIMITE_PAGINA)
   })
 
   it('cursor só aceita CNPJ de 14 dígitos', () => {
@@ -204,6 +213,14 @@ describe('buscarProspeccao', () => {
     const { admin } = adminFake({ prospeccao_buscar: { data: [linha('10000000000001')], error: null } })
     const r = await buscarProspeccao(admin, 'org-a', normalizarFiltros({}, PERFIL), null, { contar: false })
     expect(r.proximoCursor).toBeNull()
+  })
+
+  it('quantidade desejada: pede só o que falta e devolve cursor se a página veio cheia', async () => {
+    const pagina = Array.from({ length: 12 }, (_, i) => linha(String(10000000000000 + i)))
+    const { admin, rpc } = adminFake({ prospeccao_buscar: { data: pagina, error: null } })
+    const r = await buscarProspeccao(admin, 'org-a', normalizarFiltros({}, PERFIL), null, { contar: false, limite: 12 })
+    expect(rpc).toHaveBeenCalledWith('prospeccao_buscar', expect.objectContaining({ p_limite: 12 }))
+    expect(r.proximoCursor).toBe(pagina[11].cnpj)
   })
 })
 
