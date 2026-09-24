@@ -1,0 +1,36 @@
+[
+  {
+    "title": "Prospecção | Primeiro contato",
+    "subject": "Uma oportunidade de tecnologia para a {{nome_empresa}}",
+    "file": "primeiro-contato.html",
+    "type": "email_html",
+    "variables": [
+      "nome_contato",
+      "nome_empresa",
+      "nicho",
+      "oportunidade"
+    ]
+  },
+  {
+    "title": "Prospecção | Follow-up 1",
+    "subject": "Re: Uma oportunidade de tecnologia para a {{nome_empresa}}",
+    "file": "follow-up-1.html",
+    "type": "email_html",
+    "variables": [
+      "nome_contato",
+      "nome_empresa",
+      "oportunidade"
+    ]
+  },
+  {
+    "title": "Prospecção | Follow-up 2",
+    "subject": "Re: Uma oportunidade de tecnologia para a {{nome_empresa}}",
+    "file": "follow-up-2.html",
+    "type": "email_html",
+    "variables": [
+      "nome_contato",
+      "nome_empresa",
+      "oportunidade"
+    ]
+  }
+]
