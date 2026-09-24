@@ -31,9 +31,9 @@ export default function ChartTooltip({ active, payload, label, formatter, labelF
   if (!active || !payload || payload.length === 0) return null
 
   return (
-    <div className="rounded-lg border border-[#2a3147] bg-[#161b28]/95 backdrop-blur-sm px-3.5 py-2.5 shadow-xl shadow-black/40 min-w-[150px]">
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)]/95 backdrop-blur-sm px-3.5 py-2.5 shadow-xl shadow-black/40 min-w-[150px]">
       {label !== undefined && (
-        <div className="text-[11px] font-semibold text-slate-300 mb-1.5 pb-1.5 border-b border-[#2a3147]">
+        <div className="text-[11px] font-semibold text-slate-300 mb-1.5 pb-1.5 border-b border-[var(--border)]">
           {labelFormatter ? labelFormatter(label) : label}
         </div>
       )}

@@ -17,7 +17,7 @@ export default function EmptyState({
 }) {
   return (
     <div className={`flex flex-col items-center justify-center text-center py-10 gap-2 ${className}`}>
-      <div className="w-10 h-10 rounded-full bg-[#232a3d] flex items-center justify-center mb-1">
+      <div className="w-10 h-10 rounded-full bg-[var(--border-subtle)] flex items-center justify-center mb-1">
         <Icon size={18} className="text-slate-500" />
       </div>
       <p className="text-sm font-medium text-slate-400">{title}</p>

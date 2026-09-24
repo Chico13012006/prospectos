@@ -10,10 +10,10 @@ import {
   Radio, Layers, Trophy, Save, Download, FlaskConical,
 } from 'lucide-react';
 import EmptyState from '@/components/charts/EmptyState';
-import AnimatedKpiCard from '@/components/charts/AnimatedKpiCard';
 import ChartContainer from '@/components/charts/ChartContainer';
 import ChartTooltip from '@/components/charts/ChartTooltip';
 import { SdrPill } from '@/components/ui/SdrAvatar';
+import { estilosModulo, IndicadorModulo, PaginaModulo } from '@/components/tema/Modulo';
 import { getEstagioPipelineLabel } from '@/lib/utils';
 import type { EstagioPipeline } from '@/lib/types';
 import { getDadosInteligenciaComercial } from '@/lib/api';
@@ -25,18 +25,11 @@ import {
 
 export default function InteligenciaComercialPage() {
   return (
-    <div className="p-6 space-y-5">
-      <div className="animate-in stagger-1">
-        <h1 className="text-2xl font-bold text-slate-100">Inteligência Comercial</h1>
-        <p className="text-sm text-slate-400 mt-0.5">
-          Análises detalhadas da sua prospecção.
-        </p>
-      </div>
-
-      <div className="animate-in stagger-3">
+    <PaginaModulo grupo="Visão" titulo="Inteligência Comercial" subtitulo="Análises detalhadas da sua prospecção.">
+      <div className="animate-in">
         <Analises />
       </div>
-    </div>
+    </PaginaModulo>
   );
 }
 
@@ -65,7 +58,7 @@ function FiltroSelect({
       onChange={(e) => onChange(e.target.value)}
       disabled={vazio}
       title={vazio ? vazioMsg : undefined}
-      className="text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+      className="text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-card)] text-slate-300 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
     >
       <option value="">{vazio && vazioMsg ? vazioMsg : `Todos — ${label}`}</option>
       {options.map((o) => (
@@ -83,7 +76,7 @@ function BotaoEmBreve({ Icon, children }: { Icon: typeof Save; children: React.R
       type="button"
       disabled
       title="Em breve"
-      className="flex items-center gap-1.5 text-sm text-slate-400 border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] opacity-50 cursor-not-allowed"
+      className="flex items-center gap-1.5 text-sm text-slate-400 border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-card)] opacity-50 cursor-not-allowed"
     >
       <Icon size={14} /> {children}
     </button>
@@ -154,7 +147,7 @@ function Analises() {
         <select
           value={String(filtros.periodoDias ?? 'null')}
           onChange={(e) => set({ periodoDias: e.target.value === 'null' ? null : Number(e.target.value) })}
-          className="text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none"
+          className="text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-card)] text-slate-300 focus:outline-none"
         >
           {PERIODOS.map((p) => (
             <option key={p.label} value={String(p.dias ?? 'null')}>{p.label}</option>
@@ -175,18 +168,25 @@ function Analises() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-        <AnimatedKpiCard label="Leads prospectados" value={kpis.prospectados} icon={Send}
-          color="#6366f1" iconColor="text-indigo-400" iconBg="bg-indigo-500/20" loading={loading} />
-        <AnimatedKpiCard label="Responderam" value={kpis.responderam} icon={MessageSquare}
-          color="#22c55e" iconColor="text-emerald-400" iconBg="bg-emerald-500/20" loading={loading} />
-        <AnimatedKpiCard label="Reuniões agendadas" value={kpis.reunioes} icon={CalendarCheck}
-          color="#f59e0b" iconColor="text-amber-400" iconBg="bg-amber-500/20" loading={loading} />
-        <AnimatedKpiCard label="Conversão geral" value={kpis.conversao} suffix="%" icon={TrendingUp}
-          color="#a855f7" iconColor="text-violet-400" iconBg="bg-violet-500/20" loading={loading} />
-        <AnimatedKpiCard label="Follow-ups realizados" value={kpis.followups} icon={Repeat}
-          color="#0ea5e9" iconColor="text-sky-400" iconBg="bg-sky-500/20" loading={loading} />
-      </div>
+      <section className={`${estilosModulo.kpiGrid} ${estilosModulo.kpiGrid5}`}>
+        <IndicadorModulo tom="violet" icone={Send} rotulo="Leads prospectados"
+          valor={loading ? '—' : kpis.prospectados.toLocaleString('pt-BR')}
+          detalhe={loading ? 'Carregando…' : 'no recorte dos filtros'} />
+        <IndicadorModulo tom="emerald" icone={MessageSquare} rotulo="Responderam"
+          valor={loading ? '—' : kpis.responderam.toLocaleString('pt-BR')}
+          detalhe={loading ? 'Carregando…' : kpis.prospectados
+            ? `${Math.round((kpis.responderam / kpis.prospectados) * 100)}% dos prospectados`
+            : 'sem prospectados no recorte'} />
+        <IndicadorModulo tom="amber" icone={CalendarCheck} rotulo="Reuniões agendadas"
+          valor={loading ? '—' : kpis.reunioes.toLocaleString('pt-BR')}
+          detalhe={loading ? 'Carregando…' : 'leads no estágio de reunião'} />
+        <IndicadorModulo tom="cyan" icone={TrendingUp} rotulo="Conversão geral"
+          valor={loading ? '—' : `${kpis.conversao.toLocaleString('pt-BR')}%`}
+          detalhe={loading ? 'Carregando…' : 'ganhos ÷ prospectados'} />
+        <IndicadorModulo tom="blue" icone={Repeat} rotulo="Follow-ups realizados"
+          valor={loading ? '—' : kpis.followups.toLocaleString('pt-BR')}
+          detalhe={loading ? 'Carregando…' : 'enviados aos leads do recorte'} />
+      </section>
 
       {/* Evolução da prospecção */}
       <ChartContainer
@@ -212,7 +212,7 @@ function Analises() {
                 <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.14} /><stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#2a3147" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#17496e" />
             <XAxis dataKey="dia" tick={{ fontSize: 10 }} interval="preserveStartEnd" minTickGap={24} />
             <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
             <Tooltip content={<ChartTooltip />} />
@@ -238,7 +238,7 @@ function Analises() {
         >
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#2a3147]">
+              <tr className="border-b border-[var(--border)]">
                 {['Canal', 'Prospectados', 'Responderam', 'Taxa'].map((h) => (
                   <th key={h} className={`py-2 px-2 text-xs text-slate-400 font-medium ${h === 'Canal' ? 'text-left' : 'text-right'}`}>{h}</th>
                 ))}
@@ -246,7 +246,7 @@ function Analises() {
             </thead>
             <tbody>
               {canais.map((c) => (
-                <tr key={c.canal} className="border-b border-[#2a3147] last:border-0 hover:bg-[#0f1117] transition-colors">
+                <tr key={c.canal} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg-base)] transition-colors">
                   <td className="py-2.5 px-2">
                     <span className="inline-flex items-center gap-2 capitalize text-slate-200">
                       <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CANAL_CORES[c.canal] ?? '#94a3b8' }} />
@@ -276,7 +276,7 @@ function Analises() {
         >
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={respFollowup} margin={{ left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2a3147" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#17496e" />
               <XAxis dataKey="etapa" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
               <Tooltip cursor={{ fill: 'rgba(99,102,241,0.08)' }}
@@ -315,7 +315,7 @@ function Analises() {
           <div className="space-y-1.5">
             {topLeads.map((l) => (
               <Link key={l.id} href={`/pipeline?lead=${l.id}`}
-                className="flex items-center gap-2 p-2 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors">
+                className="flex items-center gap-2 p-2 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-base)] transition-colors">
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-slate-200 truncate">{l.empresa}</div>
                   <div className="text-xs text-slate-500">{getEstagioPipelineLabel(l.estagio as EstagioPipeline)}</div>
@@ -345,7 +345,7 @@ function Analises() {
       >
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[#2a3147]">
+            <tr className="border-b border-[var(--border)]">
               {['Variante', 'Estágio · Segmento', 'Envios', 'Responderam', 'Taxa'].map((h) => (
                 <th key={h} className={`py-2 px-2 text-xs text-slate-400 font-medium ${h === 'Variante' ? 'text-left' : 'text-right'}`}>{h}</th>
               ))}
@@ -353,7 +353,7 @@ function Analises() {
           </thead>
           <tbody>
             {variantes.map((v) => (
-              <tr key={v.id} className="border-b border-[#2a3147] last:border-0 hover:bg-[#0f1117] transition-colors">
+              <tr key={v.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg-base)] transition-colors">
                 <td className="py-2.5 px-2 text-slate-200">{v.nome}</td>
                 <td className="py-2.5 px-2 text-slate-400 text-xs">{v.tipo} · {v.nicho ?? 'Genérico'}</td>
                 <td className="py-2.5 px-2 text-right text-slate-300">{v.envios.toLocaleString('pt-BR')}</td>
@@ -387,7 +387,7 @@ function SegmentoTabela({ leads }: { leads: LeadIC[] }) {
   return (
     <table className="w-full text-sm">
       <thead>
-        <tr className="border-b border-[#2a3147]">
+        <tr className="border-b border-[var(--border)]">
           {['Segmento', 'Responderam', 'Reuniões'].map((h) => (
             <th key={h} className={`py-2 px-2 text-xs text-slate-400 font-medium ${h === 'Segmento' ? 'text-left' : 'text-right'}`}>{h}</th>
           ))}
@@ -395,7 +395,7 @@ function SegmentoTabela({ leads }: { leads: LeadIC[] }) {
       </thead>
       <tbody>
         {linhas.map((l) => (
-          <tr key={l.segmento} className="border-b border-[#2a3147] last:border-0 hover:bg-[#0f1117] transition-colors">
+          <tr key={l.segmento} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg-base)] transition-colors">
             <td className="py-2.5 px-2 text-slate-200">{l.segmento}</td>
             <td className="py-2.5 px-2 text-right text-slate-300">{l.respostas}</td>
             <td className="py-2.5 px-2 text-right font-semibold text-amber-400">{l.reunioes}</td>

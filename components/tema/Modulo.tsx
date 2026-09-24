@@ -68,7 +68,7 @@ export function AbasModulo<T extends string>({ abas, ativa, onChange, rotulo }: 
   );
 }
 
-const TOM = { cyan: s.kpiCyan, violet: s.kpiViolet, emerald: s.kpiEmerald, amber: s.kpiAmber };
+const TOM = { cyan: s.kpiCyan, violet: s.kpiViolet, emerald: s.kpiEmerald, amber: s.kpiAmber, blue: s.kpiBlue };
 
 export function IndicadorModulo({ icone: Icone, rotulo, valor, detalhe, tom }: {
   icone: LucideIcon; rotulo: string; valor: string; detalhe: string; tom: keyof typeof TOM;

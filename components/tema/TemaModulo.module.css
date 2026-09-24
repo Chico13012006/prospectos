@@ -147,6 +147,9 @@
 .kpiViolet { --kpi: #bd63ff; --kpi-rgb: 189, 99, 255; }
 .kpiEmerald { --kpi: #19e6b4; --kpi-rgb: 25, 230, 180; }
 .kpiAmber { --kpi: #ffc21c; --kpi-rgb: 255, 194, 28; }
+.kpiBlue { --kpi: #60a5fa; --kpi-rgb: 96, 165, 250; }
+
+.kpiGrid5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 
 .kpiTop {
   position: relative;
@@ -234,10 +237,12 @@
 
 @media (max-width: 1280px) {
   .kpiGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpiGrid5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 720px) {
   .tema { padding: 18px; }
   .titleRow { align-items: stretch; flex-direction: column; }
-  .kpiGrid { grid-template-columns: 1fr; }
+  .kpiGrid,
+  .kpiGrid5 { grid-template-columns: 1fr; }
 }

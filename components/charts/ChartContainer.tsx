@@ -10,7 +10,7 @@ import EmptyState from './EmptyState'
 // .animate-in já existente (globals.css) — a `key` força remount na troca de
 // estado para a animação tocar de novo; prefers-reduced-motion é respeitado
 // pela própria classe. Mantém o card visual já usado no resto do app
-// (bg-[#1a1f2e], borda, hover com elevação).
+// (.card, hover com elevação).
 export default function ChartContainer({
   title,
   icon: Icon,
@@ -43,7 +43,7 @@ export default function ChartContainer({
   children: ReactNode
 }) {
   return (
-    <div className={`bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5 card-hover ${className}`}>
+    <div className={`card p-5 card-hover ${className}`}>
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold text-slate-200 flex items-center gap-2">
           {Icon && <Icon size={16} className={iconColor} />}

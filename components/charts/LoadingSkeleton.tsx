@@ -16,7 +16,7 @@ export default function LoadingSkeleton({
   height?: number
   className?: string
 }) {
-  const base = 'skeleton-pulse rounded-lg bg-[#232a3d]'
+  const base = 'skeleton-pulse rounded-lg bg-[var(--border-subtle)]'
 
   if (variant === 'kpi') {
     return (
