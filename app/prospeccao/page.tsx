@@ -3,22 +3,27 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  Building2, Check, ChevronDown, ChevronRight, Database, Download, ListChecks, Mail, MapPin,
-  Radar, RotateCcw, Search, Settings, SlidersHorizontal, Trash2, X,
+  Building2, Check, ChevronDown, ChevronRight, Database, Download, Filter, LayoutGrid, ListChecks, Mail,
+  Plus, Radar, RotateCcw, Search, Settings, SlidersHorizontal, Trash2, X,
 } from 'lucide-react';
 import type { FiltrosBusca } from '@/lib/prospeccao/filtros';
 import type { ResultadoCatalogo, StatusCatalogo } from '@/lib/prospeccao/buscaServidor';
 import { ROTULO_QUALIDADE, type QualidadeEmail } from '@/lib/prospeccao/qualidadeEmail';
 import { formatarCnae, iniciais, nomeLegivel, rotuloPorte, ROTULO_PORTE } from '@/lib/prospeccao/rotulos';
+import { gruposDoPerfil, nomeAtividade } from '@/lib/prospeccao/nichos';
 import { formatarCnpj } from '@/lib/empresas/cnpj';
-import { PORTES_PROSPECCAO, UFS_BRASIL, type PorteProspeccao } from '@/lib/config/workspaceConfig';
+import { PORTES_PROSPECCAO, type PorteProspeccao } from '@/lib/config/workspaceConfig';
 import DetalheEmpresa, { type Decisor } from '@/components/prospeccao/DetalheEmpresa';
 import ImportarProspeccaoModal from '@/components/prospeccao/ImportarProspeccaoModal';
 import CaixaSelecao from '@/components/prospeccao/CaixaSelecao';
+import PerfilBuscaPainel from '@/components/prospeccao/PerfilBuscaPainel';
+import SeletorEstados from '@/components/prospeccao/SeletorEstados';
+import { iconeDoNicho } from '@/components/prospeccao/iconesNicho';
+import s from '@/components/prospeccao/Prospeccao.module.css';
 
 // Prospecção: buscar no catálogo da Receita → analisar → selecionar →
 // importar → iniciar prospecção (wizard de campanha). A busca parte do perfil
-// da organização (Configurações › Perfil de busca).
+// da organização (Configurações › Perfil de busca). Visual alinhado ao Dashboard.
 
 // Qualidade do e-mail como texto colorido discreto (sem caixa), para não
 // competir com o próprio e-mail na linha.
@@ -60,6 +65,12 @@ function mesRfLegivel(mes: string): string {
   return `${MESES[Number(m) - 1] ?? m}/${ano}`;
 }
 
+/** 'Hotéis · 5510-8/01', ou só o código quando a atividade não tem nome. */
+function rotuloAtividade(codigo: string): string {
+  const nome = nomeAtividade(codigo);
+  return nome ? `${nome} · ${formatarCnae(codigo)}` : formatarCnae(codigo);
+}
+
 interface RespostaApi {
   itens: ResultadoCatalogo[];
   proximoCursor: string | null;
@@ -70,14 +81,11 @@ interface RespostaApi {
   temPerfil: boolean;
 }
 
-const CLASSE_CAMPO =
-  'h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-input)] text-sm text-slate-200 hover:border-[var(--border-strong)] focus-ring';
-
 // Rótulo em cima, campo embaixo: cada filtro lê como um item de formulário.
-function Campo({ rotulo, children, className = '' }: { rotulo: string; children: React.ReactNode; className?: string }) {
+function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
-    <label className={`flex flex-col gap-1.5 ${className}`}>
-      <span className="text-xs font-medium text-slate-400">{rotulo}</span>
+    <label className={s.fieldLabel}>
+      <span>{rotulo}</span>
       {children}
     </label>
   );
@@ -93,76 +101,11 @@ function Selecao({
         value={valor}
         onChange={(e) => onChange(e.target.value)}
         aria-label={rotuloAcessivel}
-        className={`${CLASSE_CAMPO} appearance-none pl-3 pr-9 cursor-pointer`}
+        className={`${s.field} appearance-none pl-3 pr-9 cursor-pointer focus-ring`}
       >
         {children}
       </select>
-      <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500" />
-    </div>
-  );
-}
-
-// Seletor de UFs em popover: 27 estados numa grade, sem ocupar a tela.
-function SeletorUf({ selecionadas, onChange }: { selecionadas: string[]; onChange: (ufs: string[]) => void }) {
-  const [aberto, setAberto] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!aberto) return;
-    const fechar = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setAberto(false); };
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAberto(false); };
-    document.addEventListener('mousedown', fechar);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', fechar); document.removeEventListener('keydown', esc); };
-  }, [aberto]);
-
-  const rotulo = selecionadas.length === 0
-    ? 'Todo o Brasil'
-    : selecionadas.length <= 3 ? selecionadas.join(', ') : `${selecionadas.length} estados`;
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setAberto((a) => !a)}
-        aria-expanded={aberto}
-        aria-label="Estados"
-        className={`${CLASSE_CAMPO} flex items-center gap-2 px-3 text-left`}
-      >
-        <MapPin size={14} className="shrink-0 text-slate-500" />
-        <span className="flex-1 truncate">{rotulo}</span>
-        <ChevronDown size={15} className={`shrink-0 text-slate-500 transition-transform ${aberto ? 'rotate-180' : ''}`} />
-      </button>
-      {aberto && (
-        <div className="absolute left-0 top-full z-30 mt-2 w-80 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 shadow-2xl shadow-black/40">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-200">Estados</span>
-            {selecionadas.length > 0 && (
-              <button type="button" onClick={() => onChange([])} className="text-xs text-indigo-300 hover:text-indigo-200 focus-ring rounded">
-                Todo o Brasil
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-6 gap-1.5">
-            {UFS_BRASIL.map((uf) => {
-              const ativo = selecionadas.includes(uf);
-              return (
-                <button
-                  type="button"
-                  key={uf}
-                  onClick={() => onChange(ativo ? selecionadas.filter((u) => u !== uf) : [...selecionadas, uf])}
-                  aria-pressed={ativo}
-                  className={`h-9 rounded-md text-xs font-medium transition-colors focus-ring ${
-                    ativo ? 'bg-[var(--accent)] text-white' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-                  }`}
-                >
-                  {uf}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
     </div>
   );
 }
@@ -174,9 +117,9 @@ function Alternar({ ativo, onChange, children }: { ativo: boolean; onChange: (v:
       role="switch"
       aria-checked={ativo}
       onClick={() => onChange(!ativo)}
-      className="flex items-center gap-2.5 text-sm text-slate-400 hover:text-slate-200 focus-ring rounded-md"
+      className={`flex items-center gap-2.5 text-sm focus-ring rounded-md ${ativo ? 'text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}
     >
-      <span className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${ativo ? 'bg-[var(--accent)]' : 'bg-slate-700'}`}>
+      <span className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${ativo ? 'bg-[var(--accent)] shadow-[0_0_10px_rgba(99,102,241,0.5)]' : 'bg-slate-700'}`}>
         <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${ativo ? 'translate-x-4' : 'translate-x-0.5'}`} />
       </span>
       {children}
@@ -184,16 +127,38 @@ function Alternar({ ativo, onChange, children }: { ativo: boolean; onChange: (v:
   );
 }
 
-function Indicador({ icone: Icone, rotulo, valor, detalhe, destaque = false }: {
-  icone: typeof Building2; rotulo: string; valor: string; detalhe: string; destaque?: boolean;
+const TOM_KPI = { cyan: s.kpiCyan, violet: s.kpiViolet, emerald: s.kpiEmerald, amber: s.kpiAmber };
+
+// Indicador no padrão do Dashboard. `proporcao` (0–1) desenha a barra; sem ela,
+// o card fica só com o número — nada de barra decorativa sem dado por trás.
+function Indicador({ icone: Icone, rotulo, valor, detalhe, tom, proporcao }: {
+  icone: typeof Building2; rotulo: string; valor: string; detalhe: string;
+  tom: keyof typeof TOM_KPI; proporcao?: number | null;
 }) {
   return (
-    <div className={`card p-5 ${destaque ? 'ring-1 ring-inset ring-indigo-500/25' : ''}`}>
-      <div className="flex items-center gap-2 text-sm text-slate-400">
-        <Icone size={15} className={destaque ? 'text-indigo-300' : 'text-slate-500'} /> {rotulo}
+    <article className={`${s.kpiCard} ${TOM_KPI[tom]}`}>
+      <div className={s.kpiTop}>
+        <span className={s.kpiIcon}><Icone size={19} strokeWidth={1.8} aria-hidden="true" /></span>
+        <div className={s.kpiIdentity}>
+          <span className={s.kpiLabel}>{rotulo}</span>
+          <strong>{valor}</strong>
+        </div>
       </div>
-      <div className={`mt-2 font-bold tabular-nums leading-none ${destaque ? 'text-4xl text-slate-50' : 'text-3xl text-slate-100'}`}>{valor}</div>
-      <p className="mt-2 text-xs text-slate-500">{detalhe}</p>
+      {proporcao != null && (
+        <div className={s.kpiMeter} aria-hidden="true">
+          <span style={{ width: `${Math.round(Math.min(1, Math.max(0, proporcao)) * 100)}%` }} />
+        </div>
+      )}
+      <span className={s.kpiSubtitle}>{detalhe}</span>
+    </article>
+  );
+}
+
+function CabecalhoBloco({ icone: Icone, titulo, subtitulo }: { icone: typeof Building2; titulo: string; subtitulo: string }) {
+  return (
+    <div className={s.sectionHeading}>
+      <span className={s.sectionIcon}><Icone size={17} aria-hidden="true" /></span>
+      <div><h2>{titulo}</h2><p>{subtitulo}</p></div>
     </div>
   );
 }
@@ -203,17 +168,17 @@ function LinhasEsqueleto() {
     <>
       {Array.from({ length: 6 }, (_, i) => (
         <tr key={i} className="skeleton-pulse">
-          <td className="px-5 py-5 border-b border-[var(--border-subtle)]"><div className="h-4 w-4 rounded bg-slate-700/60" /></td>
-          <td className="px-3 py-5 border-b border-[var(--border-subtle)]">
+          <td className="px-5 py-3.5"><div className="h-4 w-4 rounded bg-slate-700/60" /></td>
+          <td className="px-3 py-3.5">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-slate-700/60" />
+              <div className="h-8 w-8 rounded-lg bg-slate-700/60" />
               <div className="space-y-2"><div className="h-3 w-48 rounded bg-slate-700/60" /><div className="h-2.5 w-28 rounded bg-slate-700/40" /></div>
             </div>
           </td>
-          <td className="px-4 py-5 border-b border-[var(--border-subtle)]"><div className="h-3 w-28 rounded bg-slate-700/50" /></td>
-          <td className="px-4 py-5 border-b border-[var(--border-subtle)]"><div className="h-3 w-20 rounded bg-slate-700/50" /></td>
-          <td className="px-4 py-5 border-b border-[var(--border-subtle)]"><div className="h-3 w-44 rounded bg-slate-700/50" /></td>
-          <td className="px-5 py-5 border-b border-[var(--border-subtle)]" />
+          <td className="px-4 py-3.5"><div className="h-3 w-28 rounded bg-slate-700/50" /></td>
+          <td className="px-4 py-3.5"><div className="h-3 w-20 rounded bg-slate-700/50" /></td>
+          <td className="px-4 py-3.5"><div className="h-3 w-44 rounded bg-slate-700/50" /></td>
+          <td className="px-5 py-3.5" />
         </tr>
       ))}
     </>
@@ -236,6 +201,9 @@ export default function ProspeccaoPage() {
   const [confirmandoDescarte, setConfirmandoDescarte] = useState(false);
   const [importando, setImportando] = useState(false);
   const [texto, setTexto] = useState('');
+  // '' = todos os nichos do perfil.
+  const [nicho, setNicho] = useState('');
+  const [editandoPerfil, setEditandoPerfil] = useState(false);
   // Só a resposta da busca mais recente pode escrever no estado.
   const buscaAtual = useRef(0);
 
@@ -286,8 +254,30 @@ export default function ProspeccaoPage() {
     buscar(filtros, null);
   }, [filtros, buscar]);
 
+  // Perfil salvo no painel: recomeça do perfil novo (o servidor devolve os
+  // filtros efetivos, e o efeito de filtros não dispara uma 2ª busca).
+  function aoSalvarPerfil() {
+    setEditandoPerfil(false);
+    setNicho('');
+    setTexto('');
+    primeiraExecucao.current = true;
+    buscar(null, null);
+  }
+
   function atualizar(patch: Partial<FiltrosBusca>) {
     setFiltros((f) => (f ? { ...f, ...patch } : f));
+  }
+
+  const grupos = useMemo(() => gruposDoPerfil(perfil?.cnaes ?? []), [perfil]);
+  const grupoAtivo = grupos.find((g) => g.id === nicho) ?? null;
+  // Atividades oferecidas no seletor: as do nicho escolhido, ou todas do perfil.
+  const atividadesBase = grupoAtivo?.cnaes ?? perfil?.cnaes ?? [];
+
+  function escolherNicho(id: string) {
+    if (!perfil) return;
+    setNicho(id);
+    const grupo = grupos.find((g) => g.id === id);
+    atualizar({ cnaes: grupo ? [...grupo.cnaes] : [...perfil.cnaes] });
   }
 
   function alternarSelecao(item: ResultadoCatalogo) {
@@ -302,6 +292,7 @@ export default function ProspeccaoPage() {
 
   const selecionaveis = useMemo(() => itens.filter((i) => !i.ja_na_base), [itens]);
   const todosSelecionados = selecionaveis.length > 0 && selecionaveis.every((i) => selecionados.has(i.cnpj));
+  const comEmail = useMemo(() => itens.filter((i) => !!i.email).length, [itens]);
 
   function alternarTodos() {
     setConfirmandoDescarte(false);
@@ -349,7 +340,7 @@ export default function ProspeccaoPage() {
     contato_cargo: decisores[i.cnpj]?.cargo?.trim() || null,
   }));
 
-  // Quantos filtros diferem do perfil — orienta o "Restaurar perfil".
+  // Quantos filtros diferem do perfil — orienta o "Voltar ao perfil".
   const ajustesAtivos = useMemo(() => {
     if (!filtros || !perfil) return 0;
     const igual = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
@@ -366,10 +357,8 @@ export default function ProspeccaoPage() {
 
   const semPerfil = temPerfil === false;
 
-  // Atividade e Porte são selects: "todos do perfil" ou um valor específico.
-  const valorAtividade = filtros && perfil
-    ? (filtros.cnaes.length === 1 ? filtros.cnaes[0] : filtros.cnaes.length === perfil.cnaes.length ? '' : '__parcial__')
-    : '';
+  // Atividade e Porte são selects: "todas" ou um valor específico.
+  const valorAtividade = filtros && filtros.cnaes.length === 1 && atividadesBase.length > 1 ? filtros.cnaes[0] : '';
   const valorPorte = filtros
     ? (filtros.portes.length === 0 ? '' : filtros.portes.length === 1 ? filtros.portes[0] : '__varios__')
     : '';
@@ -377,295 +366,337 @@ export default function ProspeccaoPage() {
 
   return (
     <div className="h-screen overflow-y-auto">
-      <div className="w-full px-6 py-6 space-y-6 xl:px-10">
+      <div className={s.page}>
         {/* Cabeçalho */}
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--accent-soft)] ring-1 ring-inset ring-indigo-500/30">
-              <Radar size={22} className="text-indigo-300" />
-            </div>
+        <header className={s.pageHeader}>
+          <nav className={s.breadcrumb} aria-label="Navegação estrutural">
+            <span>Execução</span><ChevronRight size={13} aria-hidden="true" /><strong>Prospecção</strong>
+          </nav>
+          <div className={s.titleRow}>
             <div>
-              <h1 className="text-2xl font-bold text-slate-100">Prospecção</h1>
-              <p className="mt-1 text-sm text-slate-400">Encontre empresas novas na Receita Federal e traga para a base as que fazem sentido.</p>
+              <h1>Prospecção</h1>
+              <p>Encontre empresas novas na Receita Federal e traga para a base as que fazem sentido.</p>
+            </div>
+            <div className={s.headerActions}>
+              {catalogo ? (
+                <span
+                  className={s.catalogBadge}
+                  title={catalogo.concluidaEm ? `Carga concluída em ${new Date(catalogo.concluidaEm).toLocaleString('pt-BR')}` : undefined}
+                >
+                  <Database size={13} /> Dados da Receita de {mesRfLegivel(catalogo.mesRf)}
+                </span>
+              ) : temPerfil !== null && (
+                <span className="chip chip-warning"><Database size={11} /> Catálogo sem carga concluída</span>
+              )}
+              <button type="button" onClick={() => setEditandoPerfil(true)} className={`${s.outlineButton} focus-ring`}>
+                <Settings size={15} /> Perfil de busca
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            {catalogo ? (
-              <span
-                className="flex items-center gap-1.5 text-xs text-slate-500"
-                title={catalogo.concluidaEm ? `Carga concluída em ${new Date(catalogo.concluidaEm).toLocaleString('pt-BR')}` : undefined}
-              >
-                <Database size={13} /> Dados da Receita de {mesRfLegivel(catalogo.mesRf)}
-              </span>
-            ) : temPerfil !== null && (
-              <span className="chip chip-warning"><Database size={11} /> Catálogo sem carga concluída</span>
-            )}
-            <Link href="/configuracoes?tab=prospeccao" className="flex h-9 items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-sm text-slate-300 hover:bg-white/5 focus-ring">
-              <Settings size={14} /> Perfil de busca
-            </Link>
-          </div>
+
+          {/* Nichos do perfil */}
+          {!semPerfil && perfil && grupos.length > 0 && (
+            <div className={s.nichoRow}>
+              <div className={s.nichoTabs} role="group" aria-label="Nicho">
+                <button type="button" onClick={() => escolherNicho('')} aria-pressed={nicho === ''} className={`${nicho === '' ? s.nichoAtivo : ''} focus-ring`}>
+                  <LayoutGrid size={15} aria-hidden="true" /> Todos os nichos
+                </button>
+                {grupos.map((g) => {
+                  const Icone = iconeDoNicho(g.id);
+                  return (
+                    <button key={g.id} type="button" onClick={() => escolherNicho(g.id)} aria-pressed={nicho === g.id} className={`${nicho === g.id ? s.nichoAtivo : ''} focus-ring`}>
+                      <Icone size={15} aria-hidden="true" /> {g.nome}
+                    </button>
+                  );
+                })}
+              </div>
+              <button type="button" onClick={() => setEditandoPerfil(true)} className={`${s.addNicho} focus-ring rounded`}>
+                <Plus size={13} /> Adicionar nicho
+              </button>
+            </div>
+          )}
         </header>
 
-        {semPerfil ? (
-          <div className="card p-14 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent-soft)]">
-              <SlidersHorizontal size={24} className="text-indigo-300" />
-            </div>
-            <h2 className="mt-5 text-lg font-semibold text-slate-100">Defina o perfil de busca</h2>
-            <p className="mx-auto mt-2 max-w-md text-sm text-slate-400">
-              Escolha as atividades (CNAE), estados e porte das empresas que você quer prospectar. A busca começa por ele.
-            </p>
-            <Link href="/configuracoes?tab=prospeccao" className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[var(--accent)] px-5 py-2.5 text-sm font-medium text-white hover:bg-[var(--accent-hover)] focus-ring">
-              <Settings size={15} /> Configurar perfil de busca
-            </Link>
-          </div>
-        ) : (
-          <>
-            {/* Filtros */}
-            {filtros && perfil && (
-              <section className="card p-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-slate-200">Filtros</h2>
-                  {ajustesAtivos > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => { setTexto(''); setFiltros({ ...perfil }); }}
-                      className="flex items-center gap-1.5 text-xs text-indigo-300 hover:text-indigo-200 focus-ring rounded"
-                    >
-                      <RotateCcw size={12} /> Voltar ao perfil
-                    </button>
-                  )}
-                </div>
-
-                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr]">
-                  <Campo rotulo="Buscar">
-                    <div className="relative">
-                      <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                      <input
-                        value={texto}
-                        onChange={(e) => setTexto(e.target.value)}
-                        placeholder="Nome da empresa ou CNPJ"
-                        className={`${CLASSE_CAMPO} pl-9 pr-9`}
-                      />
-                      {texto && (
-                        <button type="button" onClick={() => setTexto('')} aria-label="Limpar busca" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-200">
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </Campo>
-
-                  <Campo rotulo="Atividade (CNAE)">
-                    <Selecao
-                      rotuloAcessivel="Atividade"
-                      valor={valorAtividade}
-                      onChange={(v) => atualizar({ cnaes: v === '' ? [...perfil.cnaes] : [v] })}
-                    >
-                      <option value="">Todas do perfil ({perfil.cnaes.length})</option>
-                      {valorAtividade === '__parcial__' && <option value="__parcial__" disabled>{filtros.cnaes.length} selecionadas</option>}
-                      {perfil.cnaes.map((c) => <option key={c} value={c}>{formatarCnae(c)}</option>)}
-                    </Selecao>
-                  </Campo>
-
-                  <Campo rotulo="Estado">
-                    <SeletorUf selecionadas={filtros.ufs} onChange={(ufs) => atualizar({ ufs })} />
-                  </Campo>
-
-                  <Campo rotulo="Porte">
-                    <Selecao
-                      rotuloAcessivel="Porte"
-                      valor={valorPorte}
-                      onChange={(v) => atualizar({ portes: v === '' ? [] : [v as PorteProspeccao] })}
-                    >
-                      <option value="">Todos os portes</option>
-                      {valorPorte === '__varios__' && <option value="__varios__" disabled>{filtros.portes.length} portes (perfil)</option>}
-                      {PORTES_PROSPECCAO.map((p) => <option key={p} value={p}>{ROTULO_PORTE[p]}</option>)}
-                    </Selecao>
-                  </Campo>
-                </div>
-
-                <div className="mt-5 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-[var(--border-subtle)] pt-5">
-                  <Alternar ativo={filtros.soComEmail} onChange={(v) => atualizar({ soComEmail: v })}>Só com e-mail</Alternar>
-                  <Alternar ativo={filtros.excluirMei} onChange={(v) => atualizar({ excluirMei: v })}>Excluir MEI</Alternar>
-                  <Alternar ativo={filtros.incluirCnaesSecundarios} onChange={(v) => atualizar({ incluirCnaesSecundarios: v })}>Incluir atividade secundária</Alternar>
-                </div>
-              </section>
-            )}
-
-            {/* Resumo */}
-            <section className="grid gap-4 sm:grid-cols-3">
-              <Indicador
-                destaque
-                icone={Building2}
-                rotulo="Empresas encontradas"
-                valor={total === null ? '—' : total.toLocaleString('pt-BR')}
-                detalhe={carregando && carregados === 0 ? 'Buscando…' : 'no catálogo, com os filtros atuais'}
-              />
-              <Indicador
-                icone={ListChecks}
-                rotulo="Na lista"
-                valor={carregados.toLocaleString('pt-BR')}
-                detalhe={cursor ? 'use “Carregar mais” no fim da lista' : 'todas as encontradas estão na lista'}
-              />
-              <Indicador
-                icone={Check}
-                rotulo="Selecionadas"
-                valor={selecionados.size.toLocaleString('pt-BR')}
-                detalhe={selecionados.size ? 'prontas para importar' : 'marque as empresas que interessam'}
-              />
-            </section>
-
-            {erro && (
-              <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{erro}</p>
-            )}
-
-            {/* Resultados */}
-            <section className="card">
-              <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
-                <h2 className="text-sm font-semibold text-slate-200">Resultados</h2>
-                <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
-                  <CaixaSelecao marcado={todosSelecionados} onChange={alternarTodos} />
-                  Selecionar todas da lista
-                </label>
+        <div className={s.content}>
+          {semPerfil ? (
+            <section className={`${s.panel} ${s.emptyHero}`}>
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-500/15 text-sky-300 shadow-[0_0_24px_rgba(14,165,233,0.25)]">
+                <SlidersHorizontal size={24} />
               </div>
-              <table className="w-full table-fixed text-sm border-separate border-spacing-0">
-                <thead>
-                  <tr className="text-left text-xs font-medium text-slate-500">
-                    <th className="w-14 px-5 py-3 border-b border-[var(--border-subtle)]"><span className="sr-only">Selecionar</span></th>
-                    <th className="w-[34%] px-3 py-3 border-b border-[var(--border-subtle)] font-medium">Empresa</th>
-                    <th className="w-[18%] px-4 py-3 border-b border-[var(--border-subtle)] font-medium">Cidade</th>
-                    <th className="w-[14%] px-4 py-3 border-b border-[var(--border-subtle)] font-medium">Porte</th>
-                    <th className="px-4 py-3 border-b border-[var(--border-subtle)] font-medium">E-mail</th>
-                    <th className="w-36 px-5 py-3 border-b border-[var(--border-subtle)]"><span className="sr-only">Situação</span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {carregando && carregados === 0 ? (
-                    <LinhasEsqueleto />
-                  ) : carregados === 0 ? (
+              <h2 className="mt-5 text-lg font-semibold text-slate-100">Defina o perfil de busca</h2>
+              <p className="mx-auto mt-2 max-w-md text-sm text-slate-400">
+                Escolha os nichos, estados e porte das empresas que você quer prospectar. A busca começa por ele.
+              </p>
+              <button type="button" onClick={() => setEditandoPerfil(true)} className={`${s.primaryButton} mt-6 focus-ring`}>
+                <Settings size={15} /> Configurar perfil de busca
+              </button>
+            </section>
+          ) : (
+            <>
+              {/* Filtros */}
+              {filtros && perfil && (
+                <section className={`${s.panel} ${s.panelBody}`}>
+                  <div className={s.panelHeader}>
+                    <CabecalhoBloco icone={Filter} titulo="Filtros" subtitulo="Partem do perfil de busca; ajuste à vontade nesta pesquisa." />
+                    {ajustesAtivos > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => { setTexto(''); setNicho(''); setFiltros({ ...perfil }); }}
+                        className={`${s.linkAction} focus-ring rounded`}
+                      >
+                        <RotateCcw size={12} /> Voltar ao perfil
+                      </button>
+                    )}
+                  </div>
+
+                  <div className={s.filterGrid}>
+                    <Campo rotulo="Buscar">
+                      <div className="relative">
+                        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-sky-300" />
+                        <input
+                          value={texto}
+                          onChange={(e) => setTexto(e.target.value)}
+                          placeholder="Nome da empresa ou CNPJ"
+                          className={`${s.field} pl-9 pr-9 focus-ring`}
+                        />
+                        {texto && (
+                          <button type="button" onClick={() => setTexto('')} aria-label="Limpar busca" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-100">
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </Campo>
+
+                    <Campo rotulo="Atividade">
+                      <Selecao
+                        rotuloAcessivel="Atividade"
+                        valor={valorAtividade}
+                        onChange={(v) => atualizar({ cnaes: v === '' ? [...atividadesBase] : [v] })}
+                      >
+                        <option value="">
+                          {grupoAtivo ? `Todas de ${grupoAtivo.nome} (${atividadesBase.length})` : `Todas do perfil (${atividadesBase.length})`}
+                        </option>
+                        {atividadesBase.map((c) => <option key={c} value={c}>{rotuloAtividade(c)}</option>)}
+                      </Selecao>
+                    </Campo>
+
+                    <Campo rotulo="Estado">
+                      <SeletorEstados selecionadas={filtros.ufs} onChange={(ufs) => atualizar({ ufs })} />
+                    </Campo>
+
+                    <Campo rotulo="Porte">
+                      <Selecao
+                        rotuloAcessivel="Porte"
+                        valor={valorPorte}
+                        onChange={(v) => atualizar({ portes: v === '' ? [] : [v as PorteProspeccao] })}
+                      >
+                        <option value="">Todos os portes</option>
+                        {valorPorte === '__varios__' && <option value="__varios__" disabled>{filtros.portes.length} portes (perfil)</option>}
+                        {PORTES_PROSPECCAO.map((p) => <option key={p} value={p}>{ROTULO_PORTE[p]}</option>)}
+                      </Selecao>
+                    </Campo>
+                  </div>
+
+                  <div className={s.toggleRow}>
+                    <Alternar ativo={filtros.soComEmail} onChange={(v) => atualizar({ soComEmail: v })}>Só com e-mail</Alternar>
+                    <Alternar ativo={filtros.excluirMei} onChange={(v) => atualizar({ excluirMei: v })}>Excluir MEI</Alternar>
+                    <Alternar ativo={filtros.incluirCnaesSecundarios} onChange={(v) => atualizar({ incluirCnaesSecundarios: v })}>Incluir atividade secundária</Alternar>
+                  </div>
+                </section>
+              )}
+
+              {/* Resumo */}
+              <section className={s.kpiGrid}>
+                <Indicador
+                  tom="cyan"
+                  icone={Building2}
+                  rotulo="Empresas encontradas"
+                  valor={total === null ? '—' : total.toLocaleString('pt-BR')}
+                  detalhe={carregando && carregados === 0 ? 'Buscando…' : 'no catálogo, com os filtros atuais'}
+                />
+                <Indicador
+                  tom="violet"
+                  icone={ListChecks}
+                  rotulo="Na lista"
+                  valor={carregados.toLocaleString('pt-BR')}
+                  proporcao={total ? carregados / total : null}
+                  detalhe={cursor ? 'use “Carregar mais” no fim da lista' : 'todas as encontradas estão na lista'}
+                />
+                <Indicador
+                  tom="emerald"
+                  icone={Mail}
+                  rotulo="Com e-mail na lista"
+                  valor={comEmail.toLocaleString('pt-BR')}
+                  proporcao={carregados ? comEmail / carregados : null}
+                  detalhe={carregados ? `${Math.round((comEmail / carregados) * 100)}% da lista tem e-mail da Receita` : 'nenhuma empresa na lista'}
+                />
+                <Indicador
+                  tom="amber"
+                  icone={Check}
+                  rotulo="Selecionadas"
+                  valor={selecionados.size.toLocaleString('pt-BR')}
+                  proporcao={selecionaveis.length ? Math.min(1, selecionados.size / selecionaveis.length) : null}
+                  detalhe={selecionados.size ? 'prontas para importar' : 'marque as empresas que interessam'}
+                />
+              </section>
+
+              {erro && (
+                <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{erro}</p>
+              )}
+
+              {/* Resultados */}
+              <section className={`${s.panel} overflow-hidden`}>
+                <div className={`${s.panelHeader} ${s.panelHeaderBar}`}>
+                  <CabecalhoBloco
+                    icone={Radar}
+                    titulo="Resultados"
+                    subtitulo={grupoAtivo ? `Empresas de ${grupoAtivo.nome} no catálogo da Receita.` : 'Empresas do catálogo da Receita para o seu perfil.'}
+                  />
+                  <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                    <CaixaSelecao marcado={todosSelecionados} onChange={alternarTodos} />
+                    Selecionar todas da lista
+                  </label>
+                </div>
+                <table className={s.table}>
+                  <thead>
                     <tr>
-                      <td colSpan={6} className="py-24 text-center">
-                        <Building2 size={30} className="mx-auto text-slate-600" />
-                        <p className="mt-4 text-sm font-medium text-slate-300">Nenhuma empresa com esses filtros</p>
-                        <p className="mt-1 text-sm text-slate-500">Tente ampliar os estados ou o porte.</p>
-                      </td>
+                      <th className="w-14"><span className="sr-only">Selecionar</span></th>
+                      <th className="w-[34%]">Empresa</th>
+                      <th className="w-[18%]">Cidade</th>
+                      <th className="w-[14%]">Porte</th>
+                      <th>E-mail</th>
+                      <th className="w-36"><span className="sr-only">Situação</span></th>
                     </tr>
-                  ) : (
-                    itens.map((i) => {
-                      const expandido = aberto === i.cnpj;
-                      const selecionado = selecionados.has(i.cnpj);
-                      const decisor = decisores[i.cnpj];
-                      const nome = nomeLegivel(i.nome_fantasia ?? i.razao_social) || formatarCnpj(i.cnpj);
-                      const celula = expandido ? '' : 'border-b border-[var(--border-subtle)]';
-                      return (
-                        <Fragment key={i.cnpj}>
-                          <tr
-                            onClick={() => setAberto(expandido ? null : i.cnpj)}
-                            className={`group cursor-pointer transition-colors ${
-                              selecionado ? 'bg-[var(--accent-soft)]' : expandido ? 'bg-[var(--bg-card-hover)]' : 'hover:bg-[var(--bg-card-hover)]'
-                            }`}
-                          >
-                            <td className={`w-14 px-5 py-4 ${celula} ${selecionado ? 'shadow-[inset_3px_0_0_var(--accent)]' : ''}`} onClick={(e) => e.stopPropagation()}>
-                              <CaixaSelecao
-                                desabilitado={i.ja_na_base}
-                                marcado={selecionado}
-                                onChange={() => alternarSelecao(i)}
-                                rotulo={i.ja_na_base ? `${nome} já está na base` : `Selecionar ${nome}`}
-                              />
-                            </td>
-                            <td className={`px-3 py-4 ${celula}`}>
-                              <div className="flex items-center gap-3.5 min-w-0">
-                                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${corAvatar(i.cnpj)}`}>
-                                  {iniciais(nome)}
+                  </thead>
+                  <tbody>
+                    {carregando && carregados === 0 ? (
+                      <LinhasEsqueleto />
+                    ) : carregados === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-24 text-center">
+                          <Building2 size={30} className="mx-auto text-slate-600" />
+                          <p className="mt-4 text-sm font-medium text-slate-300">Nenhuma empresa com esses filtros</p>
+                          <p className="mt-1 text-sm text-slate-500">Tente ampliar os estados, o porte ou o nicho.</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      itens.map((i) => {
+                        const expandido = aberto === i.cnpj;
+                        const selecionado = selecionados.has(i.cnpj);
+                        const decisor = decisores[i.cnpj];
+                        const nome = nomeLegivel(i.nome_fantasia ?? i.razao_social) || formatarCnpj(i.cnpj);
+                        const atividade = nomeAtividade(i.cnae_principal);
+                        return (
+                          <Fragment key={i.cnpj}>
+                            <tr
+                              onClick={() => setAberto(expandido ? null : i.cnpj)}
+                              className={`group cursor-pointer ${selecionado ? s.rowSelected : expandido ? s.rowOpen : ''}`}
+                            >
+                              <td className={`w-14 px-5 py-2.5 ${selecionado ? 'shadow-[inset_3px_0_0_var(--accent)]' : ''}`} onClick={(e) => e.stopPropagation()}>
+                                <CaixaSelecao
+                                  desabilitado={i.ja_na_base}
+                                  marcado={selecionado}
+                                  onChange={() => alternarSelecao(i)}
+                                  rotulo={i.ja_na_base ? `${nome} já está na base` : `Selecionar ${nome}`}
+                                />
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-semibold ${corAvatar(i.cnpj)}`}>
+                                    {iniciais(nome)}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex min-w-0 items-center gap-1.5">
+                                      <span className="min-w-0 font-medium text-slate-100 truncate">{nome}</span>
+                                      <ChevronRight size={14} className={`shrink-0 text-slate-600 transition-transform group-hover:text-slate-400 ${expandido ? 'rotate-90 text-slate-300' : ''}`} />
+                                    </div>
+                                    <div className="mt-1 flex min-w-0 items-center gap-2">
+                                      <span className="shrink-0 font-mono text-xs text-slate-500">{formatarCnpj(i.cnpj)}</span>
+                                      <span className={s.activityTag} title={formatarCnae(i.cnae_principal)}>{atividade ?? formatarCnae(i.cnae_principal)}</span>
+                                    </div>
+                                    {decisor?.nome && (
+                                      <div className="mt-1 flex items-center gap-1 text-xs text-indigo-300"><Check size={11} /> {decisor.nome}</div>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="min-w-0">
-                                  <div className="flex min-w-0 items-center gap-1.5">
-                                    <span className="min-w-0 font-medium text-slate-100 truncate">{nome}</span>
-                                    <ChevronRight size={14} className={`shrink-0 text-slate-600 transition-transform group-hover:text-slate-400 ${expandido ? 'rotate-90 text-slate-300' : ''}`} />
-                                  </div>
-                                  <div className="mt-0.5 font-mono text-xs text-slate-500">{formatarCnpj(i.cnpj)}</div>
-                                  {decisor?.nome && (
-                                    <div className="mt-1 flex items-center gap-1 text-xs text-indigo-300"><Check size={11} /> {decisor.nome}</div>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td className={`px-4 py-4 ${celula}`}>
-                              <div className="truncate text-slate-200">{nomeLegivel(i.municipio) || '—'}</div>
-                              <div className="mt-0.5 text-xs text-slate-500">{i.uf ?? ''}</div>
-                            </td>
-                            <td className={`px-4 py-4 ${celula} whitespace-nowrap text-slate-300`}>
-                              {rotuloPorte(i.porte)}
-                              {i.mei && <span className="chip chip-warning ml-2">MEI</span>}
-                            </td>
-                            <td className={`px-4 py-4 ${celula}`}>
-                              {i.email ? (
-                                <>
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <Mail size={13} className="shrink-0 text-slate-500" />
-                                    <span className="min-w-0 truncate text-slate-200" title={i.email}>{i.email}</span>
-                                  </div>
-                                  <div className={`mt-1 flex items-center gap-1.5 pl-5 text-xs ${COR_QUALIDADE[i.qualidade_email]}`}>
-                                    <span className={`h-1.5 w-1.5 rounded-full ${PONTO_QUALIDADE[i.qualidade_email]}`} />
-                                    {ROTULO_QUALIDADE[i.qualidade_email]}
-                                  </div>
-                                </>
-                              ) : (
-                                <span className="text-sm text-slate-500">Sem e-mail</span>
-                              )}
-                            </td>
-                            <td className={`w-36 px-5 py-4 ${celula} text-right whitespace-nowrap`} onClick={(e) => e.stopPropagation()}>
-                              {i.ja_na_base && (
-                                i.lead_id
-                                  ? <Link href={`/leads/${i.lead_id}`} className="chip chip-success hover:brightness-125"><Check size={11} /> Já na base</Link>
-                                  : <span className="chip chip-success"><Check size={11} /> Já na base</span>
-                              )}
-                            </td>
-                          </tr>
-                          {expandido && (
-                            <tr>
-                              <td colSpan={6} className="border-b border-[var(--border)] p-0">
-                                <DetalheEmpresa empresa={i} decisor={decisor ?? null} onDecisor={(d) => setDecisores((m) => ({ ...m, [i.cnpj]: d }))} />
+                              </td>
+                              <td className="px-4 py-2.5">
+                                <div className="truncate text-slate-200">{nomeLegivel(i.municipio) || '—'}</div>
+                                <div className="mt-0.5 text-xs text-slate-500">{i.uf ?? ''}</div>
+                              </td>
+                              <td className="px-4 py-2.5 whitespace-nowrap text-slate-300">
+                                {rotuloPorte(i.porte)}
+                                {i.mei && <span className="chip chip-warning ml-2">MEI</span>}
+                              </td>
+                              <td className="px-4 py-2.5">
+                                {i.email ? (
+                                  <>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <Mail size={13} className="shrink-0 text-slate-500" />
+                                      <span className="min-w-0 truncate text-slate-200" title={i.email}>{i.email}</span>
+                                    </div>
+                                    <div className={`mt-1 flex items-center gap-1.5 pl-5 text-xs ${COR_QUALIDADE[i.qualidade_email]}`}>
+                                      <span className={`h-1.5 w-1.5 rounded-full ${PONTO_QUALIDADE[i.qualidade_email]}`} />
+                                      {ROTULO_QUALIDADE[i.qualidade_email]}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <span className="text-sm text-slate-500">Sem e-mail</span>
+                                )}
+                              </td>
+                              <td className="w-36 px-5 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                {i.ja_na_base && (
+                                  i.lead_id
+                                    ? <Link href={`/leads/${i.lead_id}`} className="chip chip-success hover:brightness-125"><Check size={11} /> Já na base</Link>
+                                    : <span className="chip chip-success"><Check size={11} /> Já na base</span>
+                                )}
                               </td>
                             </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-              {cursor && (
-                <div className="flex justify-center border-t border-[var(--border-subtle)] py-5">
-                  <button
-                    type="button"
-                    onClick={() => buscar(filtros, cursor)}
-                    disabled={carregando}
-                    className="rounded-lg border border-[var(--border)] px-5 py-2.5 text-sm text-slate-300 hover:bg-white/5 disabled:opacity-50 focus-ring"
-                  >
-                    {carregando ? 'Carregando…' : 'Carregar mais empresas'}
-                  </button>
-                </div>
-              )}
-            </section>
+                            {expandido && (
+                              <tr>
+                                <td colSpan={6} className="p-0">
+                                  <DetalheEmpresa empresa={i} decisor={decisor ?? null} onDecisor={(d) => setDecisores((m) => ({ ...m, [i.cnpj]: d }))} />
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+                {cursor && (
+                  <div className={s.loadMore}>
+                    <button
+                      type="button"
+                      onClick={() => buscar(filtros, cursor)}
+                      disabled={carregando}
+                      className={`${s.outlineButton} focus-ring`}
+                    >
+                      {carregando ? 'Carregando…' : 'Carregar mais empresas'}
+                    </button>
+                  </div>
+                )}
+              </section>
 
-            {/* Espaço para a barra flutuante não cobrir o fim da lista. */}
-            {selecionados.size > 0 && <div className="h-16" />}
-          </>
-        )}
+              {/* Espaço para a barra flutuante não cobrir o fim da lista. */}
+              {selecionados.size > 0 && <div className="h-16" />}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Barra de ações da seleção — left-60 = largura do menu lateral. */}
       {selecionados.size > 0 && (
         <div className="pointer-events-none fixed left-60 right-0 bottom-6 z-40 flex justify-center">
-          <div className="pointer-events-auto flex items-center gap-4 rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] py-2.5 pl-5 pr-2.5 shadow-2xl shadow-black/50 animate-in">
+          <div className={`${s.selectionBar} pointer-events-auto animate-in`}>
             <span className="text-sm text-slate-200">
               <span className="font-semibold tabular-nums">{selecionados.size}</span> selecionada{selecionados.size === 1 ? '' : 's'}
             </span>
             <button type="button" onClick={() => { setSelecionados(new Map()); setConfirmandoDescarte(false); }} className="text-sm text-slate-400 hover:text-slate-200 focus-ring rounded">
               Limpar
             </button>
-            <div className="h-6 w-px bg-[var(--border)]" />
+            <div className="h-6 w-px bg-[#17496e]" />
             {confirmandoDescarte ? (
               <button type="button" onClick={descartar} className="flex h-10 items-center gap-2 rounded-lg bg-red-500/15 px-4 text-sm font-medium text-red-300 ring-1 ring-inset ring-red-500/40 hover:bg-red-500/25 focus-ring">
                 <Trash2 size={15} /> Confirmar descarte
@@ -675,11 +706,19 @@ export default function ProspeccaoPage() {
                 <Trash2 size={15} /> Descartar
               </button>
             )}
-            <button type="button" onClick={() => setImportando(true)} className="flex h-10 items-center gap-2 rounded-lg bg-[var(--accent)] px-5 text-sm font-semibold text-white hover:bg-[var(--accent-hover)] focus-ring">
+            <button type="button" onClick={() => setImportando(true)} className={`${s.primaryButton} focus-ring`}>
               <Download size={15} /> Importar {selecionados.size}
             </button>
           </div>
         </div>
+      )}
+
+      {editandoPerfil && (
+        <PerfilBuscaPainel
+          catalogoCnaes={catalogo?.cnaes ?? null}
+          onFechar={() => setEditandoPerfil(false)}
+          onSalvo={aoSalvarPerfil}
+        />
       )}
 
       {importando && (
