@@ -1,28 +1,43 @@
 // Opt-out de follow-up por lead (sprint item 2.4).
 //
-// Token por lead SEM coluna: HMAC-SHA256(INTERNAL_SECRET, leadId) em base64url.
+// Token por lead SEM coluna: HMAC-SHA256(segredo, leadId) em base64url.
 // É determinístico (recomputável na validação), específico do lead e NÃO
 // adivinhável/sequencial — quem recebe o e-mail só consegue cancelar o próprio
 // contato, e ninguém enumera leads por id (sem o segredo, o token não fecha).
+//
+// Segredo PRÓPRIO (OPTOUT_SECRET), separado do INTERNAL_SECRET: os links vivem
+// em e-mails já enviados, então rotacionar o segredo interno não pode quebrar o
+// descadastro. OPTOUT_SECRET_LEGADO só VALIDA (links antigos); nunca assina.
+// Sem OPTOUT_SECRET, cai no INTERNAL_SECRET — comportamento anterior.
 import crypto from 'node:crypto'
 
-function segredo(): string {
-  const s = process.env.INTERNAL_SECRET
-  if (!s) throw new Error('INTERNAL_SECRET não configurado (necessário p/ opt-out)')
+function segredoAssinatura(): string {
+  const s = process.env.OPTOUT_SECRET || process.env.INTERNAL_SECRET
+  if (!s) throw new Error('OPTOUT_SECRET/INTERNAL_SECRET não configurado (necessário p/ opt-out)')
   return s
 }
 
+function segredosValidacao(): string[] {
+  if (!process.env.OPTOUT_SECRET) return [segredoAssinatura()]
+  return [process.env.OPTOUT_SECRET, process.env.OPTOUT_SECRET_LEGADO].filter((s): s is string => !!s)
+}
+
+function hmac(segredo: string, leadId: string): string {
+  return crypto.createHmac('sha256', segredo).update(leadId).digest('base64url')
+}
+
 export function gerarTokenOptout(leadId: string): string {
-  return crypto.createHmac('sha256', segredo()).update(leadId).digest('base64url')
+  return hmac(segredoAssinatura(), leadId)
 }
 
 export function validarTokenOptout(leadId: string, token: string): boolean {
   if (!leadId || !token) return false
-  const esperado = gerarTokenOptout(leadId)
-  const a = Buffer.from(esperado)
   const b = Buffer.from(token)
   // Comparação em tempo constante (evita timing attack no token).
-  return a.length === b.length && crypto.timingSafeEqual(a, b)
+  return segredosValidacao().some((s) => {
+    const a = Buffer.from(hmac(s, leadId))
+    return a.length === b.length && crypto.timingSafeEqual(a, b)
+  })
 }
 
 // URL pública do rodapé (page de confirmação). Sem NEXT_PUBLIC_SITE_URL o link

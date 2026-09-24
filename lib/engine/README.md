@@ -8,7 +8,7 @@ leads explicitamente liberados (`owner='engine'`).
 
 | # | Fluxo | Arquivo | Endpoint |
 |---|-------|---------|----------|
-| 1 | Executar ação (1º contato / próxima ação) | `flows/executarAcao.ts` | `POST /api/engine/executar-acao` |
+| 1 | Executar ação (1º contato / próxima ação) | `flows/executarAcao.ts` | `POST /api/engine/executar-acao` (interno); na UI, `POST /api/leads/[id]/executar-acao` (sessão) |
 | 2 | Detectar resposta (caixa Gmail) | `flows/detectarResposta.ts` | `POST /api/engine/detectar-resposta` |
 | 3 | Direcionar ao closer | `flows/direcionarCloser.ts` | (enfileirado pelo fluxo 2) |
 | 4 | Follow-up (cron, dias úteis) | `flows/followUp.ts` | `GET/POST /api/engine/follow-up` |
@@ -57,6 +57,11 @@ MAX_FOLLOWUPS=3             # máximo de follow-ups por lead
 CLOSER_EMAIL=               # fallback p/ closer (se o lead não tiver responsável)
 
 # Já existentes (reusados): SUPABASE_SERVICE_ROLE_KEY, INTERNAL_SECRET
+# Link de descadastro: OPTOUT_SECRET assina; OPTOUT_SECRET_LEGADO só valida links
+# antigos (ex.: o INTERNAL_SECRET anterior a uma rotação). Sem OPTOUT_SECRET, usa
+# o INTERNAL_SECRET.
+OPTOUT_SECRET=
+OPTOUT_SECRET_LEGADO=
 # Vercel Cron: CRON_SECRET (enviado automaticamente no Authorization)
 # Gmail real (só quando MODO_ENSAIO=false):
 GMAIL_CLIENT_ID=
@@ -67,7 +72,9 @@ GMAIL_REMETENTE="Francisco | iNOVACODE <francisco@inovacode.com.br>"
 
 Os endpoints aceitam `x-internal-secret: <INTERNAL_SECRET>` ou
 `Authorization: Bearer <INTERNAL_SECRET>`. Os agendamentos do Vercel usam
-`Authorization: Bearer <CRON_SECRET>` automaticamente.
+`Authorization: Bearer <CRON_SECRET>` automaticamente. O segredo nunca vai para o
+navegador: a ficha do lead usa `/api/leads/[id]/executar-acao`, autenticada pela
+sessão (`conversations.send` + escopo do lead + organização).
 
 ## Setup
 
