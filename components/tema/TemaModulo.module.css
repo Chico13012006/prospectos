@@ -1,0 +1,243 @@
+/* Tema dos módulos (Comercial, Equipe, Automação) — mesma linguagem visual da
+   Prospecção e do Dashboard. O wrapper `.cores` redefine os tokens de cor do
+   globals.css: todo painel que pinta com var(--bg-card), var(--border)… herda a
+   paleta azul-marinho sem precisar ser reescrito. */
+
+.cores {
+  --bg-base: #041326;
+  --bg-card: #06213d;
+  --bg-card-hover: #0a2b4d;
+  --bg-elevated: #0b2644;
+  --bg-subtle: #041a31;
+  --bg-input: #052543;
+  --border: #155987;
+  --border-strong: #2286cf;
+  --border-subtle: #17496e;
+
+  min-height: 100%;
+  color: #f8fafc;
+  background:
+    radial-gradient(circle at 42% -12%, rgba(37, 99, 235, 0.12), transparent 35%),
+    radial-gradient(circle at 100% 100%, rgba(6, 182, 212, 0.055), transparent 32%);
+}
+
+/* Página de módulo: cores + espaçamento. Subpáginas com cabeçalho próprio
+   (ex.: campanhas) usam só `.cores`. */
+.tema { padding: 20px 24px 24px; }
+
+/* Cartões dos painéis: gradiente e brilho interno, como os do Dashboard. */
+.cores :global(.card) {
+  background: linear-gradient(145deg, rgba(4, 32, 59, 0.96), rgba(4, 21, 40, 0.98));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.04), 0 12px 30px rgba(0, 0, 0, 0.09);
+}
+
+.cores :global(input:not([type='checkbox']):not([type='radio'])),
+.cores :global(select),
+.cores :global(textarea) {
+  background-color: var(--bg-input);
+  color: #dce8f7;
+}
+.cores :global(option) { background: #0b1729; color: #e5edf8; }
+
+.content { display: grid; gap: 14px; margin-top: 14px; }
+
+/* Cabeçalho */
+.pageHeader { display: grid; gap: 12px; }
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #93a4c0;
+  font-size: 12px;
+}
+.breadcrumb strong { color: #e8eef9; font-weight: 500; }
+
+.titleRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+.titleRow h1 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 1.5rem;
+  font-weight: 720;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+.titleRow p { margin-top: 4px; color: #c3cee0; font-size: 13px; }
+
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+/* Abas segmentadas (como os nichos da Prospecção) */
+.tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  width: fit-content;
+  min-height: 38px;
+  padding: 3px;
+  border: 1px solid #145b94;
+  border-radius: 10px;
+  background: rgba(3, 30, 57, 0.74);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+
+.tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #bdc9db;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+.tabs button:hover { color: #f8fafc; background: rgba(18, 67, 108, 0.35); }
+
+.tabs .tabAtiva,
+.tabs .tabAtiva:hover {
+  border-color: #6979ff;
+  background: linear-gradient(135deg, #4d49e6, #2634b9);
+  color: #fff;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2), 0 0 19px rgba(79, 70, 229, 0.28);
+}
+
+/* Indicadores */
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.kpiCard {
+  --kpi: #22d3ee;
+  --kpi-rgb: 34, 211, 238;
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  padding: 12px 14px 11px;
+  border: 1px solid rgba(var(--kpi-rgb), 0.9);
+  border-radius: 11px;
+  background:
+    radial-gradient(circle at 8% 25%, rgba(var(--kpi-rgb), 0.12), transparent 35%),
+    linear-gradient(145deg, rgba(5, 30, 56, 0.97), rgba(5, 17, 34, 0.98));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.055), 0 0 21px rgba(var(--kpi-rgb), 0.1);
+}
+
+.kpiCard::after {
+  position: absolute;
+  inset: auto -36px -48px auto;
+  width: 130px;
+  height: 100px;
+  border-radius: 50%;
+  background: rgba(var(--kpi-rgb), 0.075);
+  filter: blur(20px);
+  content: '';
+}
+
+.kpiCyan { --kpi: #22d3ee; --kpi-rgb: 34, 211, 238; }
+.kpiViolet { --kpi: #bd63ff; --kpi-rgb: 189, 99, 255; }
+.kpiEmerald { --kpi: #19e6b4; --kpi-rgb: 25, 230, 180; }
+.kpiAmber { --kpi: #ffc21c; --kpi-rgb: 255, 194, 28; }
+
+.kpiTop {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 13px;
+}
+
+.kpiIcon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--kpi);
+  color: #04111f;
+  box-shadow: 0 0 19px rgba(var(--kpi-rgb), 0.46);
+}
+
+.kpiIdentity { display: grid; min-width: 0; gap: 4px; }
+
+.kpiLabel {
+  overflow: hidden;
+  color: #f5f8fd;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kpiIdentity strong {
+  color: #fff;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.kpiSubtitle {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin-top: 8px;
+  color: #bbc7d8;
+  font-size: 11px;
+}
+
+/* Botões */
+.primaryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid #6979ff;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #4d49e6, #2634b9);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 650;
+  box-shadow: 0 0 19px rgba(79, 70, 229, 0.35);
+  transition: filter 150ms ease;
+}
+.primaryButton:hover:not(:disabled) { filter: brightness(1.12); }
+.primaryButton:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Painel com cabeçalho de ícone (seções) */
+.sectionHeading { display: flex; min-width: 0; align-items: flex-start; gap: 10px; }
+
+.sectionIcon {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 7px;
+  background: rgba(14, 165, 233, 0.13);
+  color: #21c7ff;
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.18), 0 0 12px rgba(14, 165, 233, 0.12);
+}
+
+.sectionHeading h2 { margin: 0; color: #f8fafc; font-size: 15px; font-weight: 700; line-height: 1.2; }
+.sectionHeading p { margin-top: 3px; color: #9dacbf; font-size: 11px; line-height: 1.35; }
+
+@media (max-width: 1280px) {
+  .kpiGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .tema { padding: 18px; }
+  .titleRow { align-items: stretch; flex-direction: column; }
+  .kpiGrid { grid-template-columns: 1fr; }
+}

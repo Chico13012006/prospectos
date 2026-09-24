@@ -186,7 +186,7 @@ export default function WorkflowsPanel() {
 
       {criando && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => !salvando && setCriando(false)}>
-          <div className="bg-[#1a1f2e] rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-[var(--bg-card)] rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <h3 className="font-bold text-lg text-slate-100">Novo workflow</h3>
               <button onClick={() => !salvando && setCriando(false)} className="text-slate-500 hover:text-slate-300"><X size={20} /></button>
@@ -198,10 +198,10 @@ export default function WorkflowsPanel() {
               onChange={e => setNovoNome(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') criar(); }}
               placeholder="Ex.: Reengajar leads que não responderam"
-              className="w-full bg-[#0f1117] border border-[#2a3147] rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500/50"
+              className="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500/50"
             />
             <div className="flex justify-end gap-2 mt-5">
-              <button onClick={() => setCriando(false)} disabled={salvando} className="text-sm px-4 py-2 rounded-lg text-slate-300 hover:bg-[#0f1117]">Cancelar</button>
+              <button onClick={() => setCriando(false)} disabled={salvando} className="text-sm px-4 py-2 rounded-lg text-slate-300 hover:bg-[var(--bg-base)]">Cancelar</button>
               <button
                 onClick={criar}
                 disabled={!novoNome.trim() || salvando}

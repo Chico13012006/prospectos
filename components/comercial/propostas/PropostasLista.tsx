@@ -110,7 +110,7 @@ export default function PropostasLista({ leadId, busca = '', mostrarEmpresa = fa
           type="button"
           onClick={() => carregar(propostas.length)}
           disabled={carregandoMais}
-          className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-slate-300 py-2 rounded-lg border border-[#2a3147] hover:bg-[#252b3b] disabled:opacity-40 transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-slate-300 py-2 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-input)] disabled:opacity-40 transition-colors"
         >
           {carregandoMais && <Loader2 size={12} className="animate-spin" />} Carregar mais
         </button>

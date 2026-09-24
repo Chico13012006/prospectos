@@ -18,9 +18,9 @@ import {
 // os dias de envio continuam os publicados; o conteúdo é lido na hora de cada
 // envio, então o que for salvo aqui vale para os próximos e-mails.
 
-const input = 'w-full rounded-lg border border-[#2a3147] bg-[#0f1117] px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none';
+const input = 'w-full rounded-lg border border-[var(--border)] bg-[var(--bg-base)] px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none';
 const label = 'mb-1.5 block text-xs font-medium text-slate-400';
-const card = 'rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-5';
+const card = 'rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5';
 
 interface MensagemRascunho extends MensagemEditada { diasApos?: number }
 interface AvisoRascunho { emailAssunto: string; emailCorpo: string; emailHtml?: string }
@@ -137,7 +137,7 @@ export default function CampanhaMensagensEditor({ id }: { id: string }) {
     return (
       <div className="mx-auto max-w-2xl p-6">
         <Link href={`/automacao/campanhas/${campanha.id}`} className="text-sm text-indigo-300 hover:text-indigo-200">← Voltar para a campanha</Link>
-        <div className="mt-5 rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-6">
+        <div className="mt-5 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-6">
           <h1 className="text-lg font-bold text-slate-100">Mensagens não editáveis</h1>
           <p className="mt-2 text-sm leading-relaxed text-slate-400">{bloqueio}</p>
           {campanha.status === 'rascunho' && (
@@ -266,7 +266,7 @@ export default function CampanhaMensagensEditor({ id }: { id: string }) {
         </div>
       )}
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#2a3147] bg-[#141926]/95 px-4 py-3 backdrop-blur">
+      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)]/95 px-4 py-3 backdrop-blur">
         <Link href={`/automacao/campanhas/${campanha.id}`} className="text-sm text-slate-400 hover:text-slate-200">← Voltar para a campanha</Link>
         <div className="flex items-center gap-3">
           {salvoEm && (

@@ -64,10 +64,10 @@ export default function ModeloEmailPicker({
   }
 
   const rotuloCampo = 'block text-xs font-medium text-slate-400 mb-1.5'
-  const entrada = 'w-full rounded-lg border border-[#30384e] bg-[#11151f] px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none'
+  const entrada = 'w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none'
 
   return (
-    <div className="rounded-xl border border-[#30384e] bg-[#0d111b] p-4">
+    <div className="rounded-xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
@@ -80,7 +80,7 @@ export default function ModeloEmailPicker({
         </div>
         {selecionado && (
           <button type="button" onClick={onLimpar}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#30384e] px-3 py-2 text-xs text-slate-400 hover:text-red-300">
+            className="inline-flex items-center gap-2 rounded-lg border border-[var(--border-strong)] px-3 py-2 text-xs text-slate-400 hover:text-red-300">
             <Trash2 size={14} /> Descartar modelo
           </button>
         )}
@@ -94,7 +94,7 @@ export default function ModeloEmailPicker({
               key={modelo.id}
               type="button"
               onClick={() => escolher(modelo.id)}
-              className={`rounded-xl border p-3 text-left transition-colors ${ativo ? 'border-indigo-400 bg-indigo-500/10' : 'border-[#30384e] bg-[#111621] hover:border-[#46506d]'}`}
+              className={`rounded-xl border p-3 text-left transition-colors ${ativo ? 'border-indigo-400 bg-indigo-500/10' : 'border-[var(--border-strong)] bg-[var(--bg-subtle)] hover:border-[var(--border-strong)]'}`}
             >
               <span className="flex items-center gap-2">
                 <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: modelo.cor }} />

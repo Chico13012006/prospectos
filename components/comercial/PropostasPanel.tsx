@@ -26,7 +26,7 @@ export default function PropostasPanel() {
             Baixe o PDF de novo ou envie ao cliente por e-mail ou WhatsApp.
           </p>
         </div>
-        <div className="flex items-center gap-1.5 border border-[#2a3147] rounded-lg px-3 py-2 bg-[#0f1117] w-full sm:w-72">
+        <div className="flex items-center gap-1.5 border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-base)] w-full sm:w-72">
           <Search size={14} className="text-slate-500" />
           <input
             value={texto}

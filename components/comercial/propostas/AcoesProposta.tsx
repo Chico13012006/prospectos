@@ -61,10 +61,10 @@ export default function AcoesProposta({ proposta, leadSel, onLeadSel, bloqueio }
   }
 
   return (
-    <div className="border-t border-[#2a3147] pt-4 space-y-3">
+    <div className="border-t border-[var(--border)] pt-4 space-y-3">
       <SeletorLead leadSel={leadSel} onLeadSel={(l) => { onLeadSel(l); setErro(null); }} />
 
-      <div className="grid grid-cols-2 rounded-lg border border-[#2a3147] bg-[#0f1117] p-0.5">
+      <div className="grid grid-cols-2 rounded-lg border border-[var(--border)] bg-[var(--bg-base)] p-0.5">
         {([
           { id: 'salvar', label: 'Salvar', Icone: Save },
           { id: 'enviar', label: 'Enviar ao cliente', Icone: Send },
@@ -174,7 +174,7 @@ function SeletorLead({ leadSel, onLeadSel }: {
     <div className="space-y-1">
       <label className="text-sm text-slate-400">Lead da proposta</label>
       <div className="relative">
-        <div className="flex items-center gap-1.5 border border-[#2a3147] rounded-lg px-3 py-2 bg-[#0f1117]">
+        <div className="flex items-center gap-1.5 border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-base)]">
           {buscando
             ? <Loader2 size={14} className="text-slate-500 animate-spin" />
             : <Search size={14} className="text-slate-500" />}
@@ -188,7 +188,7 @@ function SeletorLead({ leadSel, onLeadSel }: {
           />
         </div>
         {aberto && (opcoes.length > 0 || erro || semResultado) && (
-          <div className="absolute z-10 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-[#2a3147] bg-[#161b28] shadow-xl">
+          <div className="absolute z-10 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] shadow-xl">
             {erro ? (
               <p className="px-3 py-2 text-xs text-rose-400">Não foi possível buscar leads.</p>
             ) : semResultado ? (
@@ -199,7 +199,7 @@ function SeletorLead({ leadSel, onLeadSel }: {
                 type="button"
                 // onMouseDown dispara antes do blur do input: a seleção não se perde.
                 onMouseDown={(e) => { e.preventDefault(); onLeadSel(l); setAberto(false); setBusca(''); }}
-                className="w-full text-left px-3 py-2 hover:bg-[#0f1117] text-sm text-slate-200 border-b border-[#2a3147] last:border-0"
+                className="w-full text-left px-3 py-2 hover:bg-[var(--bg-base)] text-sm text-slate-200 border-b border-[var(--border)] last:border-0"
               >
                 <div className="truncate">{l.empresa}</div>
                 <div className="text-xs text-slate-500 truncate">{l.contato_nome}</div>

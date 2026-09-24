@@ -97,13 +97,13 @@ export default function HtmlEmailEditor({
   }
 
   return (
-    <div className="rounded-xl border border-[#30384e] bg-[#0d111b] p-4">
+    <div className="rounded-xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-sm font-medium text-slate-200">{titulo}</div>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">{descricao}</p>
         </div>
-        {html && <button type="button" onClick={remover} className="inline-flex items-center gap-2 rounded-lg border border-[#30384e] px-3 py-2 text-xs text-slate-400 hover:text-red-300"><Trash2 size={14} /> Remover HTML</button>}
+        {html && <button type="button" onClick={remover} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border-strong)] px-3 py-2 text-xs text-slate-400 hover:text-red-300"><Trash2 size={14} /> Remover HTML</button>}
       </div>
 
       <input
@@ -121,7 +121,7 @@ export default function HtmlEmailEditor({
           onDragOver={(e) => e.preventDefault()}
           onDragLeave={() => setArrastando(false)}
           onDrop={soltar}
-          className={`rounded-xl border border-dashed p-4 transition-colors ${arrastando ? 'border-indigo-400 bg-indigo-500/15' : 'border-[#3a435b] bg-[#111621]'}`}
+          className={`rounded-xl border border-dashed p-4 transition-colors ${arrastando ? 'border-indigo-400 bg-indigo-500/15' : 'border-[var(--border-strong)] bg-[var(--bg-subtle)]'}`}
         >
           <div className="flex items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-300"><Upload size={18} /></span>
@@ -138,7 +138,7 @@ export default function HtmlEmailEditor({
         <button
           type="button"
           onClick={() => setAba('colar')}
-          className={`rounded-xl border p-4 text-left transition-colors ${aba === 'colar' ? 'border-indigo-500/60 bg-indigo-500/10' : 'border-[#30384e] bg-[#111621] hover:border-[#46506d]'}`}
+          className={`rounded-xl border p-4 text-left transition-colors ${aba === 'colar' ? 'border-indigo-500/60 bg-indigo-500/10' : 'border-[var(--border-strong)] bg-[var(--bg-subtle)] hover:border-[var(--border-strong)]'}`}
         >
           <span className="flex items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-300"><ClipboardPaste size={18} /></span>
@@ -159,11 +159,11 @@ export default function HtmlEmailEditor({
       )}
 
       {aba === 'colar' && (
-        <div className="mt-4 rounded-xl border border-[#30384e] bg-[#080b12] p-3">
+        <div className="mt-4 rounded-xl border border-[var(--border-strong)] bg-[var(--bg-base)] p-3">
           <label className="text-xs font-medium text-slate-300">Cole o código completo abaixo</label>
           <textarea
             autoFocus
-            className="mt-2 min-h-56 w-full resize-y rounded-lg border border-[#30384e] bg-[#05070c] p-4 font-mono text-xs leading-5 text-slate-300 focus:border-indigo-500 focus:outline-none"
+            className="mt-2 min-h-56 w-full resize-y rounded-lg border border-[var(--border-strong)] bg-[var(--bg-base)] p-4 font-mono text-xs leading-5 text-slate-300 focus:border-indigo-500 focus:outline-none"
             value={codigoColado}
             onChange={(e) => setCodigoColado(e.target.value)}
             placeholder={'<html>\n  <body>\n    <p>Olá, {nome}.</p>\n  </body>\n</html>'}
@@ -190,14 +190,14 @@ export default function HtmlEmailEditor({
           <button
             type="button"
             onClick={() => setAba(aba === 'codigo' ? 'visual' : 'codigo')}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${aba === 'codigo' ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-200' : 'border-[#30384e] text-slate-400 hover:text-slate-200'}`}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${aba === 'codigo' ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-200' : 'border-[var(--border-strong)] text-slate-400 hover:text-slate-200'}`}
           >
             <Code2 size={14} /> {aba === 'codigo' ? 'Fechar editor' : 'Editar código'}
           </button>
           <button
             type="button"
             onClick={() => setAba('colar')}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#30384e] px-3 py-2 text-xs text-slate-400 hover:text-slate-200"
+            className="inline-flex items-center gap-2 rounded-lg border border-[var(--border-strong)] px-3 py-2 text-xs text-slate-400 hover:text-slate-200"
           >
             <ClipboardPaste size={14} /> Colar outro
           </button>
@@ -207,7 +207,7 @@ export default function HtmlEmailEditor({
         </div>
         {aba === 'codigo' && (
           <textarea
-            className="mt-3 min-h-80 w-full resize-y rounded-xl border border-[#30384e] bg-[#080b12] p-4 font-mono text-xs leading-5 text-slate-300 focus:border-indigo-500 focus:outline-none"
+            className="mt-3 min-h-80 w-full resize-y rounded-xl border border-[var(--border-strong)] bg-[var(--bg-base)] p-4 font-mono text-xs leading-5 text-slate-300 focus:border-indigo-500 focus:outline-none"
             value={html}
             onChange={(e) => {
               if (new TextEncoder().encode(e.target.value).byteLength > LIMITE_HTML_CAMPANHA) {

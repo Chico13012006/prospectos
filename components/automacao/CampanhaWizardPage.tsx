@@ -121,9 +121,9 @@ const DIAS = [
 ]
 const EMPRESAS_POR_PAGINA = 10
 
-const input = 'w-full rounded-lg border border-[#2a3147] bg-[#0f1117] px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none'
+const input = 'w-full rounded-lg border border-[var(--border)] bg-[var(--bg-base)] px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none'
 const label = 'mb-1.5 block text-xs font-medium text-slate-400'
-const card = 'rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-5'
+const card = 'rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5'
 
 function textoOuNaoConfigurado(valor: string | null | undefined) {
   return valor?.trim() || 'Não configurado'
@@ -653,7 +653,7 @@ export default function CampanhaWizardPage({
           <h1 className="text-2xl font-semibold text-slate-100">{campanhaId ? 'Editar campanha' : 'Nova campanha'}</h1>
           <p className="mt-1 text-sm text-slate-500">Configure público, mensagem e próximos passos usando somente dados existentes.</p>
         </div>
-        <button type="button" onClick={() => void salvarRascunho()} disabled={!!salvando} className="inline-flex items-center gap-2 rounded-lg border border-[#30384e] px-4 py-2 text-sm text-slate-300 hover:bg-white/5 disabled:opacity-50">
+        <button type="button" onClick={() => void salvarRascunho()} disabled={!!salvando} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border-strong)] px-4 py-2 text-sm text-slate-300 hover:bg-white/5 disabled:opacity-50">
           {salvando === 'rascunho' ? <Loader2 size={15} className="animate-spin" /> : salvo ? <Check size={15} /> : <Save size={15} />}
           {salvo ? 'Salvo' : 'Salvar rascunho'}
         </button>
@@ -664,8 +664,8 @@ export default function CampanhaWizardPage({
           const { titulo, label: texto, Icon } = disparoUnico && indice === 2
             ? { titulo: 'Disparo', label: 'Envio único', Icon: Send }
             : passo
-          return <button key={titulo} type="button" onClick={() => irParaEtapa(indice)} className={`flex min-w-0 items-center gap-2 rounded-xl border p-3 text-left transition-colors ${etapa === indice ? 'border-indigo-500/70 bg-indigo-500/10 text-indigo-200' : indice < etapa ? 'border-emerald-500/25 bg-emerald-500/5 text-slate-300' : 'border-[#2a3147] bg-[#151924] text-slate-500'}`}>
-            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${indice < etapa ? 'bg-emerald-500 text-white' : etapa === indice ? 'bg-indigo-500 text-white' : 'bg-[#252b3c]'}`}>
+          return <button key={titulo} type="button" onClick={() => irParaEtapa(indice)} className={`flex min-w-0 items-center gap-2 rounded-xl border p-3 text-left transition-colors ${etapa === indice ? 'border-indigo-500/70 bg-indigo-500/10 text-indigo-200' : indice < etapa ? 'border-emerald-500/25 bg-emerald-500/5 text-slate-300' : 'border-[var(--border)] bg-[var(--bg-subtle)] text-slate-500'}`}>
+            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${indice < etapa ? 'bg-emerald-500 text-white' : etapa === indice ? 'bg-indigo-500 text-white' : 'bg-[var(--bg-input)]'}`}>
               {indice < etapa ? <Check size={14} /> : indice + 1}
             </span>
             <span className="min-w-0">
@@ -700,7 +700,7 @@ export default function CampanhaWizardPage({
               {tiposCampanhaDisponiveis(temTiposAvancados).map((item) => {
                 const Icone = ICONES_OBJETIVO[item.id]
                 return (
-                  <button key={item.id} type="button" onClick={() => alterarTipo(item.id)} className={`group flex min-h-24 items-start gap-3 rounded-xl border p-4 text-left transition-all ${tipo === item.id ? 'border-indigo-400 bg-gradient-to-br from-indigo-500/20 to-violet-500/10 shadow-[0_0_28px_rgba(99,102,241,.12)]' : 'border-[#2a3147] bg-[#11151f] hover:border-[#46506d] hover:bg-[#151a27]'}`}>
+                  <button key={item.id} type="button" onClick={() => alterarTipo(item.id)} className={`group flex min-h-24 items-start gap-3 rounded-xl border p-4 text-left transition-all ${tipo === item.id ? 'border-indigo-400 bg-gradient-to-br from-indigo-500/20 to-violet-500/10 shadow-[0_0_28px_rgba(99,102,241,.12)]' : 'border-[var(--border)] bg-[var(--bg-subtle)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-subtle)]'}`}>
                     <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tipo === item.id ? 'bg-indigo-500 text-white' : 'bg-indigo-500/10 text-indigo-300'}`}><Icone size={19} /></span>
                     <span>
                       <span className="block text-sm font-semibold text-slate-100">{item.label}</span>
@@ -727,7 +727,7 @@ export default function CampanhaWizardPage({
             {/* Escolha explícita, em cartão: a diferença entre carteira e pessoa
                 única muda para quem vai CADA resposta, então não cabe escondida
                 num select de uma coluna. */}
-            <div className="mt-5 rounded-xl border border-[#2a3147] bg-[#11151f] p-4">
+            <div className="mt-5 rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] p-4">
               <h3 className="text-sm font-semibold text-slate-100">Quem recebe os retornos?</h3>
               <p className="mt-1 text-xs text-slate-500">Quando o contato responder, o aviso da oportunidade vai para quem você escolher aqui.</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -751,7 +751,7 @@ export default function CampanhaWizardPage({
                       key={opcao.id}
                       type="button"
                       onClick={() => setPublico((atual) => ({ ...atual, retornoPara: opcao.id }))}
-                      className={`flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all ${ativa ? 'border-indigo-400 bg-gradient-to-br from-indigo-500/20 to-violet-500/10' : 'border-[#2a3147] bg-[#151a27] hover:border-[#46506d]'}`}
+                      className={`flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all ${ativa ? 'border-indigo-400 bg-gradient-to-br from-indigo-500/20 to-violet-500/10' : 'border-[var(--border)] bg-[var(--bg-subtle)] hover:border-[var(--border-strong)]'}`}
                     >
                       <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${ativa ? 'bg-indigo-500 text-white' : 'bg-indigo-500/10 text-indigo-300'}`}>
                         <opcao.Icone size={17} />
@@ -787,13 +787,13 @@ export default function CampanhaWizardPage({
             <p className="mb-4 text-sm text-slate-500">A contagem é recalculada no servidor e respeita bloqueios, duplicidade e automações ativas.</p>
             <div className="mb-4 grid grid-cols-2 gap-2">
               {(['filtros', 'manual'] as const).map((modo) => (
-                <button key={modo} type="button" onClick={() => atualizarSelecao({ modo })} className={`rounded-lg border px-3 py-2 text-sm ${publico.selecao?.modo === modo ? 'border-indigo-500 bg-indigo-500/10 text-indigo-200' : 'border-[#2a3147] text-slate-400'}`}>
+                <button key={modo} type="button" onClick={() => atualizarSelecao({ modo })} className={`rounded-lg border px-3 py-2 text-sm ${publico.selecao?.modo === modo ? 'border-indigo-500 bg-indigo-500/10 text-indigo-200' : 'border-[var(--border)] text-slate-400'}`}>
                   {modo === 'filtros' ? 'Usar filtros' : 'Seleção manual'}
                 </button>
               ))}
             </div>
             {publico.selecao?.modo === 'manual' ? (
-              <div className="rounded-lg border border-[#2a3147] bg-[#11151f] p-4">
+              <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-4">
                 <p className="text-sm text-slate-300">{publico.selecao.leadIds?.length ?? 0} contato(s) selecionado(s) na base.</p>
                 <p className="mt-1 text-xs text-slate-500">Para alterar a seleção, volte à Base de Leads e selecione novamente os contatos.</p>
               </div>
@@ -816,11 +816,11 @@ export default function CampanhaWizardPage({
                 </div>
                 {regraPublico.permitirEscolhaStatus && <div>
                   <label className={label}>Status da prospecção (multisseleção)</label>
-                  <div className="grid gap-2 rounded-lg border border-[#2a3147] bg-[#11151f] p-3 sm:grid-cols-2">
+                  <div className="grid gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-3 sm:grid-cols-2">
                     {GRUPOS_STATUS_PUBLICO.map((grupo) => {
                       const atuais = publico.selecao?.estagios ?? []
                       const ativo = grupo.estagios.every((estagio) => atuais.includes(estagio))
-                      return <label key={grupo.id} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2.5 text-sm ${ativo ? 'border-indigo-500/70 bg-indigo-500/10 text-indigo-100' : 'border-[#30384e] text-slate-400'}`}>
+                      return <label key={grupo.id} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2.5 text-sm ${ativo ? 'border-indigo-500/70 bg-indigo-500/10 text-indigo-100' : 'border-[var(--border-strong)] text-slate-400'}`}>
                         <input type="checkbox" className="mt-0.5 accent-indigo-500" checked={ativo} onChange={() => {
                         const estagiosDoGrupo = new Set<string>(grupo.estagios)
                         const semGrupo = atuais.filter((estagio) => !estagiosDoGrupo.has(estagio))
@@ -831,7 +831,7 @@ export default function CampanhaWizardPage({
                       </label>
                     })}
                   </div>
-                  <div className="mt-2 rounded-lg border border-[#2a3147] bg-[#151924] px-3 py-2 text-xs leading-5 text-slate-500">
+                  <div className="mt-2 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] px-3 py-2 text-xs leading-5 text-slate-500">
                     <span className="font-medium text-slate-400">Regra auditável:</span>{' '}
                     {GRUPOS_STATUS_PUBLICO.filter((grupo) => grupo.estagios.every((estagio) => (publico.selecao?.estagios ?? []).includes(estagio))).map((grupo) => grupo.label).join(', ')}.
                     <span className="mt-1 block text-[11px] text-slate-600">Estágios persistidos: {(publico.selecao?.estagios ?? []).join(', ')}</span>
@@ -844,14 +844,14 @@ export default function CampanhaWizardPage({
               </div>
             )}
 
-            <div className="mt-5 border-t border-[#2a3147] pt-4">
+            <div className="mt-5 border-t border-[var(--border)] pt-4">
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Prévia real</span>
                 {carregandoPrevia && <Loader2 size={14} className="animate-spin text-indigo-400" />}
               </div>
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
                 {contagens.map(([rotulo, valor]) => (
-                  <div key={rotulo} className="rounded-xl border border-[#272e42] bg-[#11151f] p-3">
+                  <div key={rotulo} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3">
                     <div className="text-xl font-semibold text-slate-100">{valor ?? '—'}</div>
                     <div className="text-[11px] text-slate-500">{rotulo}</div>
                   </div>
@@ -869,7 +869,7 @@ export default function CampanhaWizardPage({
                 </div>
               )}
               {previa && (
-                <div className="mt-4 rounded-xl border border-[#2a3147] bg-[#11151f] p-4">
+                <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] p-4">
                   <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2 text-sm font-semibold text-slate-200"><Building2 size={16} className="text-indigo-400" /> Empresas encontradas</div>
@@ -885,14 +885,14 @@ export default function CampanhaWizardPage({
                           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
                           <input className={`${input} pl-9`} value={buscaEmpresa} onChange={(e) => { setBuscaEmpresa(e.target.value); setPaginaEmpresas(1) }} placeholder="Pesquisar por empresa ou nicho" />
                         </div>
-                        <button type="button" onClick={limparSelecaoEmpresas} className="rounded-lg border border-[#30384e] px-3 py-2 text-xs text-slate-400 hover:border-red-500/30 hover:text-red-300">Limpar seleção</button>
+                        <button type="button" onClick={limparSelecaoEmpresas} className="rounded-lg border border-[var(--border-strong)] px-3 py-2 text-xs text-slate-400 hover:border-red-500/30 hover:text-red-300">Limpar seleção</button>
                       </div>
-                      <div className="max-h-80 overflow-auto rounded-xl border border-[#272e42]">
+                      <div className="max-h-80 overflow-auto rounded-xl border border-[var(--border-subtle)]">
                         <table className="w-full min-w-[680px] border-collapse text-left">
-                          <thead className="sticky top-0 z-10 bg-[#171c29] text-[11px] uppercase tracking-wide text-slate-500">
+                          <thead className="sticky top-0 z-10 bg-[var(--bg-subtle)] text-[11px] uppercase tracking-wide text-slate-500">
                             <tr><th className="w-12 px-4 py-3">Incluir</th><th className="px-4 py-3">Empresa</th><th className="px-4 py-3">Nicho</th><th className="px-4 py-3 text-right">Contatos</th><th className="px-4 py-3 text-right">Elegíveis</th></tr>
                           </thead>
-                          <tbody className="divide-y divide-[#272e42]">
+                          <tbody className="divide-y divide-[var(--border-subtle)]">
                             {empresasDaPagina.map((empresa) => {
                               const selecionada = !(publico.selecao?.excluirEmpresas ?? []).includes(empresa.chave)
                               return (
@@ -913,9 +913,9 @@ export default function CampanhaWizardPage({
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
                           <span>Mostrando {(paginaEmpresasSegura - 1) * EMPRESAS_POR_PAGINA + 1}–{Math.min(paginaEmpresasSegura * EMPRESAS_POR_PAGINA, empresasFiltradas.length)} de {empresasFiltradas.length} empresas</span>
                           <div className="flex items-center gap-2">
-                            <button type="button" onClick={() => setPaginaEmpresas((atual) => Math.max(1, atual - 1))} disabled={paginaEmpresasSegura === 1} className="rounded-lg border border-[#30384e] px-3 py-1.5 text-slate-400 disabled:opacity-30">Anterior</button>
+                            <button type="button" onClick={() => setPaginaEmpresas((atual) => Math.max(1, atual - 1))} disabled={paginaEmpresasSegura === 1} className="rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-slate-400 disabled:opacity-30">Anterior</button>
                             <span className="min-w-20 text-center">Página {paginaEmpresasSegura} de {totalPaginasEmpresas}</span>
-                            <button type="button" onClick={() => setPaginaEmpresas((atual) => Math.min(totalPaginasEmpresas, atual + 1))} disabled={paginaEmpresasSegura === totalPaginasEmpresas} className="rounded-lg border border-[#30384e] px-3 py-1.5 text-slate-400 disabled:opacity-30">Próxima</button>
+                            <button type="button" onClick={() => setPaginaEmpresas((atual) => Math.min(totalPaginasEmpresas, atual + 1))} disabled={paginaEmpresasSegura === totalPaginasEmpresas} className="rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-slate-400 disabled:opacity-30">Próxima</button>
                           </div>
                         </div>
                       )}
@@ -935,7 +935,7 @@ export default function CampanhaWizardPage({
           <section className={card}>
             <h2 className="mb-1 font-semibold text-slate-100">Editor da mensagem</h2>
             <p className="mb-5 text-sm text-slate-500">Escolha um template real, edite o texto ou importe um HTML exclusivo desta campanha.</p>
-            <div className="mb-4 rounded-lg border border-[#2a3147] bg-[#11151f] p-3">
+            <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-3">
               <span className="text-xs text-slate-500">Remetente configurado no workspace</span>
               <div className="mt-1 flex items-center gap-2 text-sm text-slate-200"><Mail size={15} className="text-indigo-400" /> {textoOuNaoConfigurado(publico.operacao?.remetenteEmail)}</div>
               {publico.operacao?.remetenteConta && <div className="mt-1 text-xs text-slate-600">Conta: {publico.operacao.remetenteConta}</div>}
@@ -997,7 +997,7 @@ export default function CampanhaWizardPage({
               </div>
               <FileText size={18} className="text-indigo-400" />
             </div>
-            <div className="rounded-xl border border-[#30384e] bg-[#0d111b] p-4">
+            <div className="rounded-xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] p-4">
               <div className="text-xs text-slate-400">
                 <div><span className="text-slate-500">De:</span> {textoOuNaoConfigurado(publico.operacao?.remetenteEmail)}</div>
                 <div className="mt-1"><span className="text-slate-500">Assunto:</span> {textoOuNaoConfigurado(mensagemInicial.assunto)}</div>
@@ -1030,7 +1030,7 @@ export default function CampanhaWizardPage({
                 : !responsavel
                   ? 'Defina o responsável pelos retornos.'
                   : 'Envia somente para a própria conta remetente.'}
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-indigo-500/40 px-4 py-2.5 text-sm text-indigo-300 hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:border-[#30384e] disabled:text-slate-600"
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-indigo-500/40 px-4 py-2.5 text-sm text-indigo-300 hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:text-slate-600"
             >
               {estadoTesteEmail === 'enviando' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
               Enviar teste para {textoOuNaoConfigurado(publico.operacao?.remetenteEmail)}
@@ -1082,10 +1082,10 @@ export default function CampanhaWizardPage({
               </div>
               <button type="button" onClick={adicionarFollowup} disabled={followups.length >= 4} className="rounded-lg border border-indigo-500/40 px-3 py-2 text-xs text-indigo-300 hover:bg-indigo-500/10 disabled:opacity-40">Adicionar follow-up</button>
             </div>
-            {!followups.length && <div className="rounded-lg border border-dashed border-[#30384e] p-6 text-center text-sm text-slate-500">Nenhum follow-up configurado. A campanha terá somente a mensagem inicial.</div>}
+            {!followups.length && <div className="rounded-lg border border-dashed border-[var(--border-strong)] p-6 text-center text-sm text-slate-500">Nenhum follow-up configurado. A campanha terá somente a mensagem inicial.</div>}
             <div className="space-y-4">
               {followups.map((followup, indice) => (
-                <div key={indice} className="rounded-xl border border-[#30384e] bg-[#11151f] p-4">
+                <div key={indice} className="rounded-xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] p-4">
                   <div className="mb-4 flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm font-medium text-slate-200"><Clock3 size={15} className="text-indigo-400" /> Follow-up {indice + 1}</div>
                     <button type="button" onClick={() => removerFollowup(indice)} className="rounded p-1.5 text-slate-500 hover:bg-red-500/10 hover:text-red-300" aria-label={`Remover follow-up ${indice + 1}`}><Trash2 size={15} /></button>
@@ -1138,7 +1138,7 @@ export default function CampanhaWizardPage({
               <div className="mb-4 flex flex-wrap gap-2">
                 {DIAS.map((dia) => {
                   const ativo = publico.agenda?.diasSemana?.includes(dia.id) ?? false
-                  return <button key={dia.id} type="button" onClick={() => atualizarAgenda({ diasSemana: ativo ? publico.agenda?.diasSemana?.filter((id) => id !== dia.id) : [...(publico.agenda?.diasSemana ?? []), dia.id] })} className={`rounded-lg border px-3 py-2 text-xs ${ativo ? 'border-indigo-500 bg-indigo-500/10 text-indigo-200' : 'border-[#30384e] text-slate-500'}`}>{dia.label}</button>
+                  return <button key={dia.id} type="button" onClick={() => atualizarAgenda({ diasSemana: ativo ? publico.agenda?.diasSemana?.filter((id) => id !== dia.id) : [...(publico.agenda?.diasSemana ?? []), dia.id] })} className={`rounded-lg border px-3 py-2 text-xs ${ativo ? 'border-indigo-500 bg-indigo-500/10 text-indigo-200' : 'border-[var(--border-strong)] text-slate-500'}`}>{dia.label}</button>
                 })}
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -1163,7 +1163,7 @@ export default function CampanhaWizardPage({
                   <li className="flex gap-2"><Check size={15} className="mt-1 shrink-0 text-emerald-400" /> Registrar a resposta no histórico</li>
                 </ul>
               </div>
-              <div className="rounded-xl border border-[#30384e] bg-[#11151f] p-4">
+              <div className="rounded-xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] p-4">
                 <div className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">Responsável pelo retorno</div>
                 <div className="text-sm font-medium text-slate-200">
                   {retornoPorCarteira ? 'Responsável de cada lead' : nomeMembro(responsavel)}
@@ -1186,7 +1186,7 @@ export default function CampanhaWizardPage({
                 <p className="mt-3 text-xs leading-5 text-slate-500">O modelo sugerido identifica o objetivo da campanha; assunto e conteúdo podem ser alterados abaixo.</p>
               </div>
             </div>
-            <div className="mt-4 rounded-xl border border-[#30384e] bg-[#11151f] p-4">
+            <div className="mt-4 rounded-xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] p-4">
               <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-medium text-slate-200">Modelo do e-mail de resposta</h3>
@@ -1195,7 +1195,7 @@ export default function CampanhaWizardPage({
                 <button type="button" onClick={() => {
                   const modelo = modeloEmailRespostaCampanha(tipo)
                   atualizarResposta({ emailAssunto: modelo.assunto, emailCorpo: modelo.corpo })
-                }} className="rounded-lg border border-[#30384e] px-3 py-2 text-xs text-slate-400 hover:text-slate-200">Restaurar modelo sugerido</button>
+                }} className="rounded-lg border border-[var(--border-strong)] px-3 py-2 text-xs text-slate-400 hover:text-slate-200">Restaurar modelo sugerido</button>
               </div>
               <div>
                 <label className={label}>Assunto enviado ao responsável</label>
@@ -1221,9 +1221,9 @@ export default function CampanhaWizardPage({
               </div>
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              <div className="rounded-lg border border-[#2a3147] p-3 text-sm text-slate-500">Tarefa automática: <span className="text-slate-400">Não configurado</span></div>
-              <div className="rounded-lg border border-[#2a3147] p-3 text-sm text-slate-500">Notificação a administradores: <span className="text-slate-400">Não configurado</span></div>
-              <div className="rounded-lg border border-[#2a3147] p-3 text-sm text-slate-500">Sugestão de resposta: <span className="text-slate-400">Não configurado</span></div>
+              <div className="rounded-lg border border-[var(--border)] p-3 text-sm text-slate-500">Tarefa automática: <span className="text-slate-400">Não configurado</span></div>
+              <div className="rounded-lg border border-[var(--border)] p-3 text-sm text-slate-500">Notificação a administradores: <span className="text-slate-400">Não configurado</span></div>
+              <div className="rounded-lg border border-[var(--border)] p-3 text-sm text-slate-500">Sugestão de resposta: <span className="text-slate-400">Não configurado</span></div>
             </div>
           </section>
         </div>
@@ -1259,7 +1259,7 @@ export default function CampanhaWizardPage({
                 ['Status', campanha?.status ?? 'rascunho'],
                 ['Próxima ação', disparoUnico ? 'Disparar comunicação' : tipo === 'prospeccao' ? 'Iniciar prospecção' : 'Iniciar campanha'],
               ].map(([titulo, valor]) => (
-                <div key={titulo} className="rounded-lg border border-[#2a3147] bg-[#11151f] p-3">
+                <div key={titulo} className="rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-3">
                   <div className="text-[11px] font-medium uppercase tracking-wide text-slate-600">{titulo}</div>
                   <div className="mt-1 text-sm text-slate-300">{valor}</div>
                 </div>
@@ -1281,14 +1281,14 @@ export default function CampanhaWizardPage({
                 ['E-mails sem validade', previa?.emailsAusentesOuInvalidos],
                 ['Bloqueados', previa?.bloqueados],
               ].map(([rotulo, valor]) => (
-                <div key={rotulo} className="rounded-xl border border-[#2a3147] bg-[#11151f] p-4">
+                <div key={rotulo} className="rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] p-4">
                   <div className="text-2xl font-semibold text-slate-100">{valor ?? '—'}</div>
                   <div className="mt-1 text-xs leading-5 text-slate-500">{rotulo}</div>
                 </div>
               ))}
             </div>
             {!!previa?.empresas.length && (
-              <div className="mt-4 rounded-xl border border-[#2a3147] bg-[#11151f] p-4">
+              <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] p-4">
                 <div className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">Empresas incluídas</div>
                 <div className="flex flex-wrap gap-2">
                   {previa.empresas.filter((empresa) => empresa.selecionada).slice(0, 8).map((empresa) => (
@@ -1313,21 +1313,21 @@ export default function CampanhaWizardPage({
             <button type="button" onClick={solicitarInicioReal} disabled={!!salvando || carregandoPrevia || carregandoOpcoes || !envioRealDisponivel} title={!envioRealDisponivel ? 'Envio real indisponível: revise MODO_ENSAIO e a conta Gmail no Vercel.' : undefined} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
               {salvando === 'iniciar' ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} {disparoUnico ? 'Disparar comunicação' : tipo === 'prospeccao' ? 'Iniciar prospecção' : 'Iniciar campanha'}
             </button>
-            <button type="button" onClick={solicitarAtivacao} disabled={!!salvando || carregandoPrevia || carregandoOpcoes} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#30384e] px-4 py-2.5 text-sm text-slate-400 hover:border-indigo-500/50 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" onClick={solicitarAtivacao} disabled={!!salvando || carregandoPrevia || carregandoOpcoes} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--border-strong)] px-4 py-2.5 text-sm text-slate-400 hover:border-indigo-500/50 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50">
               {salvando === 'ativar' && <Loader2 size={15} className="animate-spin" />} Publicar somente em modo ensaio
             </button>
           </section>
         </div>
       )}
 
-      <div className="mt-6 flex items-center justify-between border-t border-[#242a3a] pt-5">
-        <button type="button" onClick={() => irParaEtapa(etapa - 1)} disabled={etapa === 0} className="inline-flex items-center gap-2 rounded-lg border border-[#30384e] px-4 py-2 text-sm text-slate-400 hover:text-slate-200 disabled:opacity-30"><ArrowLeft size={15} /> Voltar</button>
+      <div className="mt-6 flex items-center justify-between border-t border-[var(--border-subtle)] pt-5">
+        <button type="button" onClick={() => irParaEtapa(etapa - 1)} disabled={etapa === 0} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border-strong)] px-4 py-2 text-sm text-slate-400 hover:text-slate-200 disabled:opacity-30"><ArrowLeft size={15} /> Voltar</button>
         {etapa < PASSOS.length - 1 && <button type="button" onClick={() => irParaEtapa(etapa + 1)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">Continuar <ArrowRight size={15} /></button>}
       </div>
 
       {confirmando && previa && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="confirmar-campanha">
-          <div className="w-full max-w-md rounded-xl border border-[#30384e] bg-[#1a1f2e] p-6 shadow-2xl">
+          <div className="w-full max-w-md rounded-xl border border-[var(--border-strong)] bg-[var(--bg-card)] p-6 shadow-2xl">
             <div className="mb-3 flex items-center gap-2 text-amber-300">
               <AlertTriangle size={20} />
               <h2 id="confirmar-campanha" className="font-semibold">
@@ -1344,7 +1344,7 @@ export default function CampanhaWizardPage({
             </p>
             <input autoFocus inputMode="numeric" className={`${input} mt-4`} value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} placeholder={String(previa.elegiveis)} />
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setConfirmando(false)} className="rounded-lg border border-[#30384e] px-4 py-2 text-sm text-slate-400">Cancelar</button>
+              <button type="button" onClick={() => setConfirmando(false)} className="rounded-lg border border-[var(--border-strong)] px-4 py-2 text-sm text-slate-400">Cancelar</button>
               <button
                 type="button"
                 onClick={() => modoConfirmacao === 'real' ? void iniciarReal(previa.elegiveis) : void ativar(previa.elegiveis)}
@@ -1361,7 +1361,7 @@ export default function CampanhaWizardPage({
 
       {estadoTesteEmail === 'confirmando' && testeEmailDisponivel && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="confirmar-teste-email">
-          <div className="w-full max-w-md rounded-xl border border-[#30384e] bg-[#1a1f2e] p-6 shadow-2xl">
+          <div className="w-full max-w-md rounded-xl border border-[var(--border-strong)] bg-[var(--bg-card)] p-6 shadow-2xl">
             <div className="mb-3 flex items-center gap-2 text-indigo-300">
               <Mail size={20} />
               <h2 id="confirmar-teste-email" className="font-semibold">Enviar um teste agora?</h2>
@@ -1373,7 +1373,7 @@ export default function CampanhaWizardPage({
               Este teste não salva a campanha, não inscreve leads e não inicia a cadência.
             </div>
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setEstadoTesteEmail('ocioso')} className="rounded-lg border border-[#30384e] px-4 py-2 text-sm text-slate-400">Cancelar</button>
+              <button type="button" onClick={() => setEstadoTesteEmail('ocioso')} className="rounded-lg border border-[var(--border-strong)] px-4 py-2 text-sm text-slate-400">Cancelar</button>
               <button type="button" onClick={() => void enviarTesteEmail()} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">
                 <Send size={14} /> Enviar teste
               </button>

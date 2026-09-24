@@ -34,7 +34,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   if (campanha.status !== 'rascunho') return (
     <div className="mx-auto max-w-2xl p-6">
       <Link href="/automacao?tab=campanhas" className="text-sm text-indigo-300 hover:text-indigo-200">← Campanhas</Link>
-      <div className="mt-5 rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-6">
+      <div className="mt-5 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-6">
         <h1 className="text-lg font-bold text-slate-100">Campanha já publicada</h1>
         <p className="mt-2 text-sm leading-relaxed text-slate-400">
           Público, quantidade de mensagens e a versão publicada não são reabertos para não alterar execuções em andamento. Em campanhas ativas ou pausadas, o conteúdo das mensagens e os dias de execução continuam editáveis.
@@ -50,7 +50,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
           )}
           <Link
             href={`/automacao/campanhas/${campanha.id}`}
-            className="inline-flex rounded-lg border border-[#2a3147] px-4 py-2.5 text-sm font-semibold text-slate-200 hover:bg-[#0f1117]"
+            className="inline-flex rounded-lg border border-[var(--border)] px-4 py-2.5 text-sm font-semibold text-slate-200 hover:bg-[var(--bg-base)]"
           >
             Abrir campanha e editar agenda
           </Link>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { UserPlus, Users, Shield, Briefcase, BarChart2, Search, CheckCircle, Clock, Pencil, MoreVertical, Trash2, X } from 'lucide-react';
+import { estilosModulo, IndicadorModulo, PaginaModulo } from '@/components/tema/Modulo';
 
 interface Membro {
   id: string;
@@ -243,59 +244,38 @@ export default function EquipePage() {
   });
 
   return (
-    <div className="p-6 md:p-8 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-500/10 rounded-lg flex items-center justify-center">
-            <Users size={20} className="text-indigo-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-100">Equipe</h1>
-            <p className="text-sm text-slate-400 mt-0.5">Gerencie sua equipe, nichos e permissões de acesso.</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
+    <PaginaModulo
+      grupo="Administração"
+      titulo="Equipe"
+      subtitulo="Gerencie sua equipe, nichos e permissões de acesso."
+      acoes={
+        <>
           <div className="relative">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-sky-300" />
             <input
               value={busca} onChange={e => setBusca(e.target.value)}
               placeholder="Buscar membro"
-              className="pl-9 pr-4 py-2 border border-[#2a3147] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-52"
+              aria-label="Buscar membro"
+              className="h-9 pl-9 pr-4 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-52"
             />
           </div>
-          <button
-            onClick={() => setMostrarConvite(!mostrarConvite)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-          >
+          <button onClick={() => setMostrarConvite(!mostrarConvite)} className={`${estilosModulo.primaryButton} focus-ring`}>
             <UserPlus size={16} />
             Convidar membro
           </button>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-        {[
-          { label: 'Administradores', value: admins.length, sub: 'Acesso total à plataforma', icon: <Shield size={20} className="text-indigo-400" />, bg: 'bg-indigo-500/10' },
-          { label: 'Usuários', value: usuarios.length, sub: 'Acesso ao nicho definido', icon: <Users size={20} className="text-green-400" />, bg: 'bg-green-500/10' },
-          { label: 'Nichos ativos', value: nichosAtivos, sub: 'Segmentos de atuação', icon: <Briefcase size={20} className="text-orange-400" />, bg: 'bg-orange-500/10' },
-          { label: 'Leads distribuídos', value: totalLeads.toLocaleString('pt-BR'), sub: 'Entre toda a equipe', icon: <BarChart2 size={20} className="text-purple-400" />, bg: 'bg-purple-500/10' },
-        ].map(s => (
-          <div key={s.label} className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-6 shadow-none hover:shadow-none transition-shadow">
-            <div className={`w-10 h-10 rounded-lg ${s.bg} flex items-center justify-center mb-4`}>
-              {s.icon}
-            </div>
-            <p className="text-3xl font-bold text-slate-100">{s.value}</p>
-            <p className="text-sm font-medium text-slate-300 mt-1">{s.label}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{s.sub}</p>
-          </div>
-        ))}
-      </div>
+        </>
+      }
+    >
+      <section className={estilosModulo.kpiGrid}>
+        <IndicadorModulo tom="violet" icone={Shield} rotulo="Administradores" valor={String(admins.length)} detalhe="Acesso total à plataforma" />
+        <IndicadorModulo tom="emerald" icone={Users} rotulo="Usuários" valor={String(usuarios.length)} detalhe="Acesso ao nicho definido" />
+        <IndicadorModulo tom="amber" icone={Briefcase} rotulo="Nichos ativos" valor={String(nichosAtivos)} detalhe="Segmentos de atuação" />
+        <IndicadorModulo tom="cyan" icone={BarChart2} rotulo="Leads distribuídos" valor={totalLeads.toLocaleString('pt-BR')} detalhe="Entre toda a equipe" />
+      </section>
 
       {/* Formulário de convite (colapsável) */}
       {mostrarConvite && (
-        <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] p-5">
+        <div className="card p-5">
           <h2 className="text-base font-semibold text-slate-100 mb-1 flex items-center gap-2">
             <UserPlus size={17} />
             Convidar novo membro
@@ -306,17 +286,17 @@ export default function EquipePage() {
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">E-mail</label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="email@empresa.com"
-                  className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Nome (opcional)</label>
                 <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome completo"
-                  className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Tipo de acesso</label>
                 <select value={role} onChange={e => setRole(e.target.value as 'admin' | 'usuario')}
-                  className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#1a1f2e]">
+                  className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[var(--bg-card)]">
                   <option value="usuario">Usuário — Acesso limitado ao nicho</option>
                   <option value="admin">Administrador — Acesso total</option>
                 </select>
@@ -324,7 +304,7 @@ export default function EquipePage() {
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Nicho / Segmento</label>
                 <select value={nicho} onChange={e => setNicho(e.target.value)}
-                  className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#1a1f2e]">
+                  className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[var(--bg-card)]">
                   <option value="">Selecione o nicho</option>
                   {NICHOS.map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
@@ -354,14 +334,14 @@ export default function EquipePage() {
       )}
 
       {/* Tabela de membros */}
-      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#2a3147] flex items-center justify-between">
+      <div className="card overflow-hidden">
+        <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between">
           <div>
             <h2 className="text-base font-semibold text-slate-100">Membros da equipe</h2>
             <p className="text-xs text-slate-400">Visualize e gerencie todos os membros da sua equipe.</p>
           </div>
           <select value={filtroNicho} onChange={e => setFiltroNicho(e.target.value)}
-            className="border border-[#2a3147] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#1a1f2e]">
+            className="border border-[var(--border)] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[var(--bg-card)]">
             <option>Todos os nichos</option>
             {NICHOS.filter(n => n !== 'Todos os nichos').map(n => <option key={n}>{n}</option>)}
           </select>
@@ -371,7 +351,7 @@ export default function EquipePage() {
           <div className="p-10 text-center text-slate-500 text-sm">Carregando...</div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-[#0f1117] border-b border-[#2a3147]">
+            <thead className="bg-[var(--bg-base)] border-b border-[var(--border)]">
               <tr>
                 <th className="text-left px-5 py-3 text-xs font-medium text-slate-400 uppercase tracking-wide">Pessoa</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-slate-400 uppercase tracking-wide">Função na plataforma</th>
@@ -382,13 +362,13 @@ export default function EquipePage() {
                 <th className="px-5 py-3 text-xs font-medium text-slate-400 uppercase tracking-wide">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#2a3147]">
+            <tbody className="divide-y divide-[var(--border)]">
               {membrosFiltrados.map(m => {
                 const barraLargura = maxLeads > 0 ? Math.round((m.total_leads / maxLeads) * 100) : 0;
                 const corBarra = BARRA_CORES[m.nicho || ''] || 'bg-indigo-500';
-                const corNicho = NICHO_CORES[m.nicho || ''] || 'bg-[#252b3b] text-slate-300';
+                const corNicho = NICHO_CORES[m.nicho || ''] || 'bg-[var(--bg-input)] text-slate-300';
                 return (
-                  <tr key={m.id} className="hover:bg-[#0f1117] transition-colors">
+                  <tr key={m.id} className="hover:bg-[var(--bg-base)] transition-colors">
                     {/* Pessoa */}
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
@@ -441,7 +421,7 @@ export default function EquipePage() {
                         <span className="font-semibold text-slate-200 w-10 text-right">{m.total_leads}</span>
                         <span className="text-xs text-slate-500">leads</span>
                       </div>
-                      <div className="mt-1 w-24 h-1.5 bg-[#252b3b] rounded-full overflow-hidden">
+                      <div className="mt-1 w-24 h-1.5 bg-[var(--bg-input)] rounded-full overflow-hidden">
                         <div className={`h-full rounded-full ${corBarra}`} style={{ width: `${barraLargura}%` }} />
                       </div>
                     </td>
@@ -472,7 +452,7 @@ export default function EquipePage() {
                         <button
                           onClick={() => abrirEdicao(m)}
                           title="Editar membro"
-                          className="p-1.5 hover:bg-[#252b3b] rounded-lg transition-colors text-slate-500 hover:text-slate-300"
+                          className="p-1.5 hover:bg-[var(--bg-input)] rounded-lg transition-colors text-slate-500 hover:text-slate-300"
                         >
                           <Pencil size={14} />
                         </button>
@@ -480,18 +460,18 @@ export default function EquipePage() {
                           <button
                             onClick={(e) => { e.stopPropagation(); setMenuAberto(menuAberto === m.id ? null : m.id); }}
                             title="Mais ações"
-                            className="p-1.5 hover:bg-[#252b3b] rounded-lg transition-colors text-slate-500 hover:text-slate-300"
+                            className="p-1.5 hover:bg-[var(--bg-input)] rounded-lg transition-colors text-slate-500 hover:text-slate-300"
                           >
                             <MoreVertical size={14} />
                           </button>
                           {menuAberto === m.id && (
                             <div
                               onClick={(e) => e.stopPropagation()}
-                              className="absolute right-0 top-full mt-1 w-44 bg-[#1a1f2e] border border-[#2a3147] rounded-lg shadow-lg py-1 z-20"
+                              className="absolute right-0 top-full mt-1 w-44 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg shadow-lg py-1 z-20"
                             >
                               <button
                                 onClick={() => abrirEdicao(m)}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:bg-[#252b3b] transition-colors"
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:bg-[var(--bg-input)] transition-colors"
                               >
                                 <Pencil size={14} />
                                 Editar
@@ -519,7 +499,7 @@ export default function EquipePage() {
           <div className="p-8 text-center text-slate-500 text-sm">Nenhum membro encontrado.</div>
         )}
 
-        <div className="px-5 py-3 border-t border-[#2a3147] bg-[#0f1117]">
+        <div className="px-5 py-3 border-t border-[var(--border)] bg-[var(--bg-base)]">
           <p className="text-xs text-slate-500">Use a caneta ou o menu de cada membro para editar informações, alterar nicho ou permissões de acesso.</p>
         </div>
       </div>
@@ -527,12 +507,12 @@ export default function EquipePage() {
       {/* Modal de edição */}
       {editando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => !salvandoEdicao && setEditando(null)}>
-          <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a3147]">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
               <h3 className="text-base font-semibold text-slate-100 flex items-center gap-2">
                 <Pencil size={16} /> Editar membro
               </h3>
-              <button onClick={() => setEditando(null)} className="p-1 text-slate-500 hover:text-slate-300 rounded-lg hover:bg-[#252b3b] transition-colors">
+              <button onClick={() => setEditando(null)} className="p-1 text-slate-500 hover:text-slate-300 rounded-lg hover:bg-[var(--bg-input)] transition-colors">
                 <X size={18} />
               </button>
             </div>
@@ -544,12 +524,12 @@ export default function EquipePage() {
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Nome</label>
                 <input value={editNome} onChange={e => setEditNome(e.target.value)} placeholder="Nome completo"
-                  className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#0f1117]" />
+                  className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[var(--bg-base)]" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Tipo de acesso</label>
                 <select value={editRole} onChange={e => setEditRole(e.target.value as 'admin' | 'usuario')}
-                  className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#0f1117]">
+                  className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[var(--bg-base)]">
                   <option value="usuario">Usuário — Acesso limitado ao nicho</option>
                   <option value="admin">Administrador — Acesso total</option>
                 </select>
@@ -557,7 +537,7 @@ export default function EquipePage() {
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Nicho / Segmento</label>
                 <select value={editNicho} onChange={e => setEditNicho(e.target.value)}
-                  className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#0f1117]">
+                  className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[var(--bg-base)]">
                   <option value="">Não definido</option>
                   {NICHOS.filter(n => n !== 'Todos os nichos').map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
@@ -565,7 +545,7 @@ export default function EquipePage() {
               {erroEdicao && <p className="text-sm text-red-500">✗ {erroEdicao}</p>}
               <div className="flex items-center justify-end gap-2 pt-1">
                 <button type="button" onClick={() => setEditando(null)} disabled={salvandoEdicao}
-                  className="px-4 py-2 rounded-lg text-sm text-slate-300 hover:bg-[#252b3b] transition-colors disabled:opacity-50">
+                  className="px-4 py-2 rounded-lg text-sm text-slate-300 hover:bg-[var(--bg-input)] transition-colors disabled:opacity-50">
                   Cancelar
                 </button>
                 <button type="submit" disabled={salvandoEdicao}
@@ -581,7 +561,7 @@ export default function EquipePage() {
       {/* Modal de confirmação de remoção */}
       {removendo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => !removendoLoading && setRemovendo(null)}>
-          <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="p-5">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0">
@@ -597,7 +577,7 @@ export default function EquipePage() {
               {erroRemocao && <p className="text-sm text-red-500 mt-3">✗ {erroRemocao}</p>}
               <div className="flex items-center justify-end gap-2 mt-5">
                 <button onClick={() => setRemovendo(null)} disabled={removendoLoading}
-                  className="px-4 py-2 rounded-lg text-sm text-slate-300 hover:bg-[#252b3b] transition-colors disabled:opacity-50">
+                  className="px-4 py-2 rounded-lg text-sm text-slate-300 hover:bg-[var(--bg-input)] transition-colors disabled:opacity-50">
                   Cancelar
                 </button>
                 <button onClick={confirmarRemocao} disabled={removendoLoading}
@@ -609,6 +589,6 @@ export default function EquipePage() {
           </div>
         </div>
       )}
-    </div>
+    </PaginaModulo>
   );
 }

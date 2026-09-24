@@ -109,8 +109,8 @@ export default function ExecucoesPanel() {
   return (
     <div className="space-y-6">
       {/* Execuções de workflow — dado real de workflow_execucoes */}
-      <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-[#2a3147] flex items-center gap-2 text-slate-200 font-semibold text-sm">
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-[var(--border)] flex items-center gap-2 text-slate-200 font-semibold text-sm">
           <Activity size={15} className="text-indigo-400" /> Execuções de workflow
           {!carregandoExec && <span className="text-xs font-normal text-slate-500">· {execucoes.length}</span>}
         </div>
@@ -119,9 +119,9 @@ export default function ExecucoesPanel() {
         ) : execucoes.length === 0 ? (
           <div className="p-8 text-center text-slate-500 text-sm">Nenhuma execução de workflow ainda.</div>
         ) : (
-          <ul className="divide-y divide-[#2a3147] max-h-[40vh] overflow-auto">
+          <ul className="divide-y divide-[var(--border)] max-h-[40vh] overflow-auto">
             {execucoes.map((e) => (
-              <li key={e.id} className="px-5 py-3 flex items-start gap-3 hover:bg-[#0f1117] transition-colors">
+              <li key={e.id} className="px-5 py-3 flex items-start gap-3 hover:bg-[var(--bg-base)] transition-colors">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Link href={`/workflows/${e.workflow_id}`} className="font-medium text-slate-100 hover:text-indigo-300 inline-flex items-center gap-1">
@@ -144,8 +144,8 @@ export default function ExecucoesPanel() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Tarefas geradas por execuções */}
-      <div className="lg:col-span-2 bg-[#1a1f2e] border border-[#2a3147] rounded-xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-[#2a3147] flex items-center gap-2">
+      <div className="lg:col-span-2 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-[var(--border)] flex items-center gap-2">
           <ListTodo size={15} className="text-indigo-400" />
           <span className="text-sm font-semibold text-slate-200 mr-2">Tarefas</span>
           <div className="flex items-center gap-1">
@@ -162,17 +162,17 @@ export default function ExecucoesPanel() {
         ) : tarefas.length === 0 ? (
           <div className="p-10 text-center text-slate-500 text-sm">Nenhuma tarefa.</div>
         ) : (
-          <ul className="divide-y divide-[#2a3147]">
+          <ul className="divide-y divide-[var(--border)]">
             {tarefas.map((t) => {
               const emp = nomeEmpresa(t);
               const vencida = t.prazo_em && new Date(t.prazo_em) < new Date() && t.status !== 'concluida';
               return (
-                <li key={t.id} className="px-5 py-3 flex items-start gap-3 hover:bg-[#0f1117] transition-colors">
+                <li key={t.id} className="px-5 py-3 flex items-start gap-3 hover:bg-[var(--bg-base)] transition-colors">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-slate-100">{t.titulo}</span>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${COR_PRIORIDADE[t.prioridade] ?? COR_PRIORIDADE.baixa}`}>{t.prioridade}</span>
-                      {t.origem && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#252b3b] text-slate-400">{t.origem}</span>}
+                      {t.origem && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--bg-input)] text-slate-400">{t.origem}</span>}
                       {t.status === 'concluida' && <span className="text-[10px] text-green-400 inline-flex items-center gap-1"><CheckCircle2 size={11} /> concluída</span>}
                     </div>
                     <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
@@ -195,14 +195,14 @@ export default function ExecucoesPanel() {
       </div>
 
       {/* Notificações */}
-      <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-[#2a3147] flex items-center gap-2 text-slate-200 font-semibold text-sm">
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-[var(--border)] flex items-center gap-2 text-slate-200 font-semibold text-sm">
           <Bell size={15} className="text-indigo-400" /> Notificações
         </div>
         {notificacoes.length === 0 ? (
           <div className="p-8 text-center text-slate-500 text-sm">Sem notificações.</div>
         ) : (
-          <ul className="divide-y divide-[#2a3147] max-h-[70vh] overflow-auto">
+          <ul className="divide-y divide-[var(--border)] max-h-[70vh] overflow-auto">
             {notificacoes.map((n) => (
               <li key={n.id} className="px-5 py-3">
                 <div className="text-sm text-slate-200">{n.titulo ?? 'Notificação'}</div>

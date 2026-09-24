@@ -13,7 +13,7 @@ import { CANAIS_NOVO_TEMPLATE, rotuloCanal } from '@/lib/templates/biblioteca'
 import { VARIAVEIS_TEMPLATE, previaTemplate } from '@/lib/templates/previa'
 import type { CanalTemplate, FormatoTemplate, TemplateBiblioteca } from '@/lib/templates/tipos'
 
-const campo = 'w-full rounded-lg border border-[#2a3147] bg-[#0f1117] px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none'
+const campo = 'w-full rounded-lg border border-[var(--border)] bg-[var(--bg-base)] px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none'
 const rotulo = 'text-xs font-medium text-slate-400 block mb-1'
 
 export default function TemplateEditorModal({
@@ -82,7 +82,7 @@ export default function TemplateEditorModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onFechar}>
-      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[#2a3147] bg-[#12161f] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--bg-subtle)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <h3 className="text-lg font-bold text-slate-100">{edicao ? 'Editar template' : 'Novo template'}</h3>
@@ -92,7 +92,7 @@ export default function TemplateEditorModal({
                 : 'A chave é como workflows e campanhas vão pedir este template. Ela não muda depois.'}
             </p>
           </div>
-          <button type="button" onClick={onFechar} aria-label="Fechar" className="rounded-lg border border-[#30384e] p-1.5 text-slate-400 hover:text-slate-200"><X size={16} /></button>
+          <button type="button" onClick={onFechar} aria-label="Fechar" className="rounded-lg border border-[var(--border-strong)] p-1.5 text-slate-400 hover:text-slate-200"><X size={16} /></button>
         </div>
 
         <div className="space-y-3">
@@ -186,7 +186,7 @@ export default function TemplateEditorModal({
           )}
 
           {!ehEmail && (
-            <div className="rounded-xl border border-[#2a3147] bg-[#0f1117] p-3">
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-base)] p-3">
               <div className="mb-2 text-xs font-medium text-slate-400">Prévia com dados de exemplo</div>
               <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-slate-200">{previa.texto || '—'}</pre>
             </div>
@@ -202,11 +202,11 @@ export default function TemplateEditorModal({
           <div className="flex flex-wrap justify-end gap-2 pt-1">
             {ehEmail && (
               <button type="button" onClick={() => setPreviaAberta(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#2a3147] px-4 py-2 text-sm text-slate-300 hover:bg-[#252b3b]">
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-slate-300 hover:bg-[var(--bg-input)]">
                 <Eye size={14} /> Ver prévia
               </button>
             )}
-            <button type="button" onClick={onFechar} className="rounded-lg border border-[#2a3147] px-4 py-2 text-sm font-medium text-slate-300 hover:bg-[#252b3b]">Cancelar</button>
+            <button type="button" onClick={onFechar} className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm font-medium text-slate-300 hover:bg-[var(--bg-input)]">Cancelar</button>
             <button type="button" onClick={() => void salvar()} disabled={salvando}
               className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
               {salvando ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}

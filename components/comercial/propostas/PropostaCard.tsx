@@ -40,7 +40,7 @@ export default function PropostaCard({ proposta, mostrarEmpresa = false, onAtual
   }
 
   return (
-    <div className="rounded-lg border border-[#2a3147] bg-[#0f1117] p-3 space-y-2">
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-base)] p-3 space-y-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           {mostrarEmpresa && (
@@ -51,7 +51,7 @@ export default function PropostaCard({ proposta, mostrarEmpresa = false, onAtual
               {proposta.modelo === 'compra' ? 'Compra' : 'Comodato'}
             </span>
             <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${
-              enviada ? 'bg-emerald-500/15 text-emerald-300' : 'bg-[#252b3b] text-slate-300'
+              enviada ? 'bg-emerald-500/15 text-emerald-300' : 'bg-[var(--bg-input)] text-slate-300'
             }`}>
               {enviada ? 'Enviada' : 'Salva'}
             </span>
@@ -83,7 +83,7 @@ export default function PropostaCard({ proposta, mostrarEmpresa = false, onAtual
           type="button"
           onClick={baixar}
           disabled={baixando}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-300 px-2.5 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#252b3b] disabled:opacity-40 transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-300 px-2.5 py-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-input)] disabled:opacity-40 transition-colors"
         >
           {baixando ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />} Baixar PDF
         </button>
@@ -104,7 +104,7 @@ export default function PropostaCard({ proposta, mostrarEmpresa = false, onAtual
       {erroPdf && <p className="text-xs text-rose-400">{erroPdf}</p>}
 
       {enviarAberto && lead && (
-        <div className="pt-2 border-t border-[#2a3147]">
+        <div className="pt-2 border-t border-[var(--border)]">
           <EnviarPropostaForm
             lead={lead}
             obterPropostaId={async () => proposta.id}

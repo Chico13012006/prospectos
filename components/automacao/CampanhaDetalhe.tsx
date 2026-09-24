@@ -65,7 +65,7 @@ const ACOES: Record<string, { para: string; label: string; Icon: typeof Play }[]
   concluida: [],
 };
 
-const card = 'bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-5';
+const card = 'bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5';
 
 export default function CampanhaDetalhe({ id }: { id: string }) {
   const [c, setC] = useState<Campanha | null>(null);
@@ -301,7 +301,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
       {/* Modal de confirmação dry_run → real */}
       {modalDryRun && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#1a1f2e] border border-red-500/30 rounded-2xl p-7 w-full max-w-md shadow-2xl space-y-5">
+          <div className="bg-[var(--bg-card)] border border-red-500/30 rounded-2xl p-7 w-full max-w-md shadow-2xl space-y-5">
             <div className="flex items-center gap-2 text-red-400">
               <AlertTriangle size={20} />
               <h2 className="text-lg font-bold">Ativar envio real</h2>
@@ -315,13 +315,13 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
               value={confirmacaoTexto}
               onChange={(e) => setConfirmacaoTexto(e.target.value)}
               placeholder="CONFIRMAR"
-              className="w-full bg-[#0f1117] border border-[#2a3147] rounded-lg px-3 py-2.5 text-slate-100 text-sm placeholder-slate-600 focus:outline-none focus:border-red-500/60"
+              className="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-slate-100 text-sm placeholder-slate-600 focus:outline-none focus:border-red-500/60"
               autoFocus
             />
             <div className="flex gap-3 pt-1">
               <button
                 onClick={() => { setModalDryRun(false); setConfirmacaoTexto(''); }}
-                className="flex-1 text-sm px-4 py-2.5 rounded-lg border border-[#2a3147] text-slate-300 hover:bg-[#0f1117] transition-colors"
+                className="flex-1 text-sm px-4 py-2.5 rounded-lg border border-[var(--border)] text-slate-300 hover:bg-[var(--bg-base)] transition-colors"
               >
                 Cancelar
               </button>
@@ -341,7 +341,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
       {/* Edição restrita de campanha ativa: somente os próximos dias de execução. */}
       {modalAgenda && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg space-y-5 rounded-2xl border border-indigo-500/30 bg-[#1a1f2e] p-7 shadow-2xl">
+          <div className="w-full max-w-lg space-y-5 rounded-2xl border border-indigo-500/30 bg-[var(--bg-card)] p-7 shadow-2xl">
             <div className="flex items-start gap-3">
               <span className="rounded-lg bg-indigo-500/15 p-2 text-indigo-300"><CalendarDays size={20} /></span>
               <div>
@@ -363,7 +363,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
                       type="button"
                       onClick={() => alternarDiaAgenda(dia.id)}
                       aria-pressed={selecionado}
-                      className={`rounded-lg border px-2 py-2.5 text-xs font-semibold transition-colors ${selecionado ? 'border-indigo-500 bg-indigo-500/15 text-indigo-200' : 'border-[#30384e] text-slate-500 hover:text-slate-300'}`}
+                      className={`rounded-lg border px-2 py-2.5 text-xs font-semibold transition-colors ${selecionado ? 'border-indigo-500 bg-indigo-500/15 text-indigo-200' : 'border-[var(--border-strong)] text-slate-500 hover:text-slate-300'}`}
                     >
                       {dia.label}
                     </button>
@@ -386,7 +386,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
                 type="button"
                 onClick={() => setModalAgenda(false)}
                 disabled={salvandoAgenda}
-                className="flex-1 rounded-lg border border-[#2a3147] px-4 py-2.5 text-sm text-slate-300 transition-colors hover:bg-[#0f1117] disabled:opacity-40"
+                className="flex-1 rounded-lg border border-[var(--border)] px-4 py-2.5 text-sm text-slate-300 transition-colors hover:bg-[var(--bg-base)] disabled:opacity-40"
               >
                 Cancelar
               </button>
@@ -438,7 +438,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
           {(ACOES[c.status] ?? []).map(({ para, label, Icon }) => (
             <button key={para} onClick={() => transicionar(para)} disabled={agindo || (para === 'concluida' && temFalhaOperacional)}
               title={para === 'concluida' && temFalhaOperacional ? 'Resolva as execuções canceladas ou com erro antes de concluir.' : undefined}
-              className="text-sm px-3 py-2 rounded-lg border border-[#2a3147] text-slate-200 hover:bg-[#0f1117] disabled:opacity-40 inline-flex items-center gap-1">
+              className="text-sm px-3 py-2 rounded-lg border border-[var(--border)] text-slate-200 hover:bg-[var(--bg-base)] disabled:opacity-40 inline-flex items-center gap-1">
               <Icon size={14} /> {label}
             </button>
           ))}
@@ -452,7 +452,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
       </div>
 
       {/* Abas */}
-      <div className="flex items-center gap-1 border-b border-[#2a3147] overflow-x-auto">
+      <div className="flex items-center gap-1 border-b border-[var(--border)] overflow-x-auto">
         {ABAS.map(({ id: aid, label, Icon }) => (
           <button key={aid} onClick={() => setAba(aid)}
             className={`px-4 py-2 text-sm font-semibold inline-flex items-center gap-2 border-b-2 -mb-px transition-colors whitespace-nowrap ${aba === aid ? 'border-indigo-400 text-indigo-300' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
@@ -471,7 +471,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">Leitura da configuração real atualmente vinculada à campanha.</p>
               </div>
-              <span className="text-[10px] uppercase tracking-wide text-slate-500 border border-[#2a3147] rounded-full px-2 py-1">Somente leitura</span>
+              <span className="text-[10px] uppercase tracking-wide text-slate-500 border border-[var(--border)] rounded-full px-2 py-1">Somente leitura</span>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-2 text-sm">
               <Linha k="Público" v={publicoOperacional} />
@@ -528,7 +528,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
             <Linha k="Remover duplicados" v={emp.removerDuplicados ? 'Sim' : 'Não'} />
             <Linha k="Exigir site ativo" v={emp.exigirSite ? 'Sim' : 'Não'} />
           </div>
-          <div className="flex items-start gap-2 text-xs text-slate-500 mt-4 bg-[#0f1117] border border-[#2a3147] rounded-lg p-3">
+          <div className="flex items-start gap-2 text-xs text-slate-500 mt-4 bg-[var(--bg-base)] border border-[var(--border)] rounded-lg p-3">
             <Info size={13} className="text-indigo-400 shrink-0 mt-0.5" />
             <span>O público efetivo é recalculado no servidor ao ativar e exclui contatos bloqueados, duplicados ou incompatíveis com outra automação.</span>
           </div>
@@ -560,11 +560,11 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
                   <li key={passo.ordem}>
                     {espera && (
                       <div className="flex items-center gap-1.5 text-[11px] text-slate-500 pl-4 py-1.5">
-                        <span className="w-px h-4 bg-[#2a3147] mr-1.5" />
+                        <span className="w-px h-4 bg-[var(--border)] mr-1.5" />
                         <Clock size={11} /> {espera}
                       </div>
                     )}
-                    <div className="flex items-start gap-3 p-3 rounded-lg border border-[#2a3147] bg-[#0f1117]">
+                    <div className="flex items-start gap-3 p-3 rounded-lg border border-[var(--border)] bg-[var(--bg-base)]">
                       <span className="shrink-0 text-[10px] font-semibold text-indigo-300 bg-indigo-500/15 border border-indigo-500/25 rounded px-2 py-1 tabular-nums">
                         {rotuloDoDia(passo.dia)}
                       </span>
@@ -582,7 +582,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
               })}
             </ol>
           ) : (
-            <div className="text-sm text-slate-500 bg-[#0f1117] border border-[#2a3147] rounded-lg p-4">
+            <div className="text-sm text-slate-500 bg-[var(--bg-base)] border border-[var(--border)] rounded-lg p-4">
               {disparoUnico ? 'Nenhuma mensagem materializada para este disparo.' : 'Nenhuma cadência vinculada. Edite a campanha e configure as mensagens na etapa Cadência.'}
             </div>
           )}
@@ -646,7 +646,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
                       {linhaDoTempo.totais.enviados} de {linhaDoTempo.totais.publico}
                     </span>
                   </div>
-                  <div className="h-2 rounded-full bg-[#0f1117] border border-[#2a3147] overflow-hidden">
+                  <div className="h-2 rounded-full bg-[var(--bg-base)] border border-[var(--border)] overflow-hidden">
                     <div
                       className="h-full bg-indigo-500/70"
                       style={{ width: `${Math.round((linhaDoTempo.totais.enviados / linhaDoTempo.totais.publico) * 100)}%` }}
@@ -655,8 +655,8 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
                 </div>
               )}
 
-              <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl overflow-hidden">
-                <div className="px-5 py-3 border-b border-[#2a3147]">
+              <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
+                <div className="px-5 py-3 border-b border-[var(--border)]">
                   <h3 className="font-semibold text-slate-200 text-sm">Quem recebeu</h3>
                   <p className="text-xs text-slate-500 mt-0.5">
                     Um bloco por destinatário, na ordem de inscrição, com o que o sistema registrou.
@@ -666,7 +666,7 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
                   {linhaDoTempo.destinatarios.map((d) => {
                     const situacao = situacaoDoDestinatario(d);
                     return (
-                      <li key={d.execucaoId} className="px-5 py-3.5 border-b border-[#2a3147] last:border-0">
+                      <li key={d.execucaoId} className="px-5 py-3.5 border-b border-[var(--border)] last:border-0">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="text-sm font-medium text-slate-100 truncate">{d.empresa}</div>
@@ -720,11 +720,11 @@ export default function CampanhaDetalhe({ id }: { id: string }) {
 }
 
 function Linha({ k, v }: { k: string; v: string }) {
-  return <div className="flex items-start gap-3 border-b border-[#2a3147] pb-2"><span className="text-slate-500 w-40 shrink-0">{k}</span><span className="text-slate-200">{v}</span></div>;
+  return <div className="flex items-start gap-3 border-b border-[var(--border)] pb-2"><span className="text-slate-500 w-40 shrink-0">{k}</span><span className="text-slate-200">{v}</span></div>;
 }
 function Placar({ label, valor, cor, rodape }: { label: string; valor: number; cor?: string; rodape?: string }) {
   return (
-    <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl px-5 py-4">
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl px-5 py-4">
       <div className="text-xs text-slate-500">{label}</div>
       <div className={`text-2xl font-bold mt-1 tabular-nums ${cor ?? 'text-slate-100'}`}>{valor}</div>
       {rodape && <div className="text-[10px] text-slate-600 mt-0.5">{rodape}</div>}

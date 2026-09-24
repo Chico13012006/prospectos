@@ -38,7 +38,7 @@ function ModelosWorkflow() {
 
   if (negado) {
     return (
-      <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-10 text-center text-slate-400 text-sm">
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-10 text-center text-slate-400 text-sm">
         Sem permissão para ver modelos de workflow (requer <code className="text-indigo-300">workflows.view</code>).
       </div>
     );
@@ -51,7 +51,7 @@ function ModelosWorkflow() {
       {modelos.map((m) => {
         const etapas = Array.isArray(m.definicao?.blocos) ? m.definicao!.blocos!.length : 0;
         return (
-          <div key={m.chave} className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-4 flex flex-col">
+          <div key={m.chave} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-4 flex flex-col">
             <div className="flex items-start gap-3">
               <span className="flex items-center justify-center w-9 h-9 rounded-lg shrink-0 bg-indigo-500/10 text-indigo-300">
                 <WorkflowIcon size={17} />

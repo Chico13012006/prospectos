@@ -64,16 +64,16 @@ export default function CopilotoPanel() {
             </div>
           ) : (
             <div className="relative">
-              <div className="flex items-center gap-1.5 border border-[#2a3147] rounded-lg px-3 py-2 bg-[#0f1117]">
+              <div className="flex items-center gap-1.5 border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-base)]">
                 <Search size={14} className="text-slate-500" />
                 <input value={busca} onChange={(e) => setBusca(e.target.value)} onFocus={() => setAberto(true)}
                   placeholder="Buscar empresa ou contato..." className="flex-1 bg-transparent text-sm text-slate-100 focus:outline-none" />
               </div>
               {aberto && filtrados.length > 0 && (
-                <div className="absolute z-10 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-[#2a3147] bg-[#161b28] shadow-xl">
+                <div className="absolute z-10 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] shadow-xl">
                   {filtrados.map((l) => (
                     <button key={l.id} onClick={() => { setLeadSel(l); setAberto(false); setBusca(''); }}
-                      className="w-full text-left px-3 py-2 hover:bg-[#0f1117] text-sm text-slate-200 border-b border-[#2a3147] last:border-0">
+                      className="w-full text-left px-3 py-2 hover:bg-[var(--bg-base)] text-sm text-slate-200 border-b border-[var(--border)] last:border-0">
                       <div className="truncate">{l.empresa}</div>
                       <div className="text-xs text-slate-500 truncate">{l.contato_nome}</div>
                     </button>
@@ -91,7 +91,7 @@ export default function CopilotoPanel() {
             onChange={(e) => setTranscricao(e.target.value)}
             rows={14}
             placeholder="Cole aqui o texto da transcrição do Google Meet..."
-            className="w-full text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#0f1117] text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y"
+            className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-base)] text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y"
           />
           <div className="text-xs text-slate-600 mt-1">{transcricao.length.toLocaleString('pt-BR')} caracteres</div>
         </div>
@@ -112,7 +112,7 @@ export default function CopilotoPanel() {
       <div>
         {!analise ? (
           <div className="card p-5 h-full flex flex-col items-center justify-center text-center gap-2 min-h-[300px]">
-            <div className="w-10 h-10 rounded-full bg-[#232a3d] flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-[var(--border-subtle)] flex items-center justify-center">
               <Sparkles size={18} className="text-slate-500" />
             </div>
             <p className="text-sm text-slate-400">A análise aparece aqui</p>
@@ -295,7 +295,7 @@ function Resultado({ analise, lead, transcricao }: {
 
       <Bloco Icon={Mail} titulo="Rascunho de e-mail de agradecimento" cor="text-indigo-400">
         <div className="text-xs text-slate-500 mb-1">Assunto: <span className="text-slate-300">{analise.emailAssunto || '—'}</span></div>
-        <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap bg-[#0f1117] rounded-lg p-3 border border-[#2a3147]">{analise.emailCorpo || '—'}</p>
+        <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap bg-[var(--bg-base)] rounded-lg p-3 border border-[var(--border)]">{analise.emailCorpo || '—'}</p>
         <button onClick={copiarEmail} className="mt-2 inline-flex items-center gap-1 text-xs text-indigo-400 hover:underline">
           {emailCopiado ? <><Check size={11} /> Copiado</> : <><Copy size={11} /> Copiar e-mail</>}
         </button>

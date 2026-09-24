@@ -60,17 +60,17 @@ export default function PreviaEmailModal({
       aria-label={titulo}
     >
       <div
-        className="flex h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-[#2a3147] bg-[#12161f] shadow-2xl"
+        className="flex h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-subtle)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-[#2a3147] px-5 py-3">
+        <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-5 py-3">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-slate-100">{titulo}</h2>
             <p className="mt-0.5 text-xs text-slate-500">Exatamente o conteúdo sanitizado que sai para o destinatário.</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {temCodigo && (
-              <div className="flex rounded-lg border border-[#30384e] bg-[#151924] p-1">
+              <div className="flex rounded-lg border border-[var(--border-strong)] bg-[var(--bg-subtle)] p-1">
                 <button type="button" onClick={() => onAba('visual')}
                   className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs ${abaAtual === 'visual' ? 'bg-indigo-500/20 text-indigo-200' : 'text-slate-500 hover:text-slate-300'}`}>
                   <Eye size={13} /> Visual
@@ -82,14 +82,14 @@ export default function PreviaEmailModal({
               </div>
             )}
             <button type="button" onClick={onFechar} aria-label="Fechar prévia"
-              className="rounded-lg border border-[#30384e] p-1.5 text-slate-400 hover:text-slate-200">
+              className="rounded-lg border border-[var(--border-strong)] p-1.5 text-slate-400 hover:text-slate-200">
               <X size={16} />
             </button>
           </div>
         </div>
 
         {(de || assunto) && (
-          <div className="border-b border-[#2a3147] bg-[#0d111b] px-5 py-2.5 text-xs text-slate-400">
+          <div className="border-b border-[var(--border)] bg-[var(--bg-subtle)] px-5 py-2.5 text-xs text-slate-400">
             {de && <div><span className="text-slate-500">De:</span> {de}</div>}
             {assunto && <div className="mt-0.5"><span className="text-slate-500">Assunto:</span> {assunto}</div>}
           </div>
@@ -105,7 +105,7 @@ export default function PreviaEmailModal({
               className="h-full w-full border-0 bg-white"
             />
           ) : (
-            <pre className="h-full overflow-auto bg-[#080b12] p-4 font-mono text-xs leading-5 text-slate-300">
+            <pre className="h-full overflow-auto bg-[var(--bg-base)] p-4 font-mono text-xs leading-5 text-slate-300">
               {codigo}
             </pre>
           )}

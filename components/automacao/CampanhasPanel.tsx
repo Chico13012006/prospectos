@@ -9,6 +9,7 @@ import {
   CalendarDays, AlertTriangle, Trash2, Loader2,
 } from 'lucide-react';
 import ImportarLeadsModal from '@/components/leads/ImportarLeadsModal';
+import { estilosModulo, IndicadorModulo } from '@/components/tema/Modulo';
 import { type Campanha, STATUS_BADGE, STATUS_LABEL, resumoPublico } from './tiposCampanha';
 import { campanhaEhDisparoUnico } from '@/lib/campanhas/configuracaoGuiada';
 import {
@@ -131,7 +132,7 @@ export default function CampanhasPanel() {
 
   if (negado) {
     return (
-      <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-10 text-center text-slate-400 text-sm">
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-10 text-center text-slate-400 text-sm">
         Você não tem permissão para ver campanhas (requer <code className="text-indigo-300">campaigns.view</code>).
       </div>
     );
@@ -145,7 +146,7 @@ export default function CampanhasPanel() {
       {apagando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm" onClick={() => { if (!excluindo) setApagando(null); }}>
           <div role="dialog" aria-modal="true" aria-labelledby="apagar-campanha-titulo" onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md space-y-4 rounded-2xl border border-red-500/30 bg-[#1a1f2e] p-6 shadow-2xl">
+            className="w-full max-w-md space-y-4 rounded-2xl border border-red-500/30 bg-[var(--bg-card)] p-6 shadow-2xl">
             <div className="flex items-center gap-2 text-red-400">
               <Trash2 size={18} />
               <h2 id="apagar-campanha-titulo" className="text-lg font-bold">Apagar campanha</h2>
@@ -165,7 +166,7 @@ export default function CampanhasPanel() {
               </label>
               <input id="confirmar-exclusao" type="text" value={confirmacaoExclusao} onChange={(e) => setConfirmacaoExclusao(e.target.value)}
                 placeholder="APAGAR" autoFocus disabled={excluindo}
-                className="w-full rounded-lg border border-[#2a3147] bg-[#0f1117] px-3 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:border-red-500/60 focus:outline-none" />
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-base)] px-3 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:border-red-500/60 focus:outline-none" />
             </div>
             {erroExclusao && (
               <div className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-xs text-red-300">
@@ -174,7 +175,7 @@ export default function CampanhasPanel() {
             )}
             <div className="flex gap-3 pt-1">
               <button type="button" onClick={() => setApagando(null)} disabled={excluindo}
-                className="flex-1 rounded-lg border border-[#2a3147] px-4 py-2.5 text-sm text-slate-300 transition-colors hover:bg-[#0f1117] disabled:opacity-40">
+                className="flex-1 rounded-lg border border-[var(--border)] px-4 py-2.5 text-sm text-slate-300 transition-colors hover:bg-[var(--bg-base)] disabled:opacity-40">
                 Cancelar
               </button>
               <button type="button" onClick={confirmarExclusao} disabled={confirmacaoExclusao !== 'APAGAR' || excluindo}
@@ -191,7 +192,7 @@ export default function CampanhasPanel() {
         <p className="text-sm text-slate-400">Ativações sobre um público, executadas pelo motor de Workflows.</p>
         <div className="flex items-center gap-2">
           <button onClick={() => setImportar(true)}
-            className="text-sm px-3 py-2 rounded-lg border border-[#2a3147] text-slate-200 hover:bg-[#0f1117] inline-flex items-center gap-1.5">
+            className="text-sm px-3 py-2 rounded-lg border border-[var(--border)] text-slate-200 hover:bg-[var(--bg-base)] inline-flex items-center gap-1.5">
             <FileSpreadsheet size={14} /> Importar leads
           </button>
           <Link href="/automacao/campanhas/nova"
@@ -202,17 +203,23 @@ export default function CampanhasPanel() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi Icon={Megaphone} cor="text-indigo-400" label="Campanhas ativas" valor={String(ativasTotal)} />
-        <Kpi Icon={Users} cor="text-sky-400" label="Contatos em cadência" valor={emCadencia != null ? String(emCadencia) : undefined} naoCalc={emCadencia == null} />
-        <Kpi Icon={MessageSquare} cor="text-green-400" label="Respostas" naoCalc />
-        <Kpi Icon={Coins} cor="text-amber-400" label="Conversões" naoCalc />
-      </div>
+      <section className={estilosModulo.kpiGrid}>
+        <IndicadorModulo tom="violet" icone={Megaphone} rotulo="Campanhas ativas" valor={String(ativasTotal)} detalhe="com status ativa" />
+        <IndicadorModulo
+          tom="cyan"
+          icone={Users}
+          rotulo="Contatos em cadência"
+          valor={emCadencia != null ? String(emCadencia) : '—'}
+          detalhe={emCadencia != null ? 'execuções ativas de campanhas' : 'não calculável'}
+        />
+        <IndicadorModulo tom="emerald" icone={MessageSquare} rotulo="Respostas" valor="—" detalhe="não calculável" />
+        <IndicadorModulo tom="amber" icone={Coins} rotulo="Conversões" valor="—" detalhe="não calculável" />
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
         {/* Campanhas: filtros + tabela */}
-        <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-[#2a3147] flex items-center gap-2 flex-wrap">
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-[var(--border)] flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold text-slate-200 mr-1">Campanhas</span>
             <div className="flex items-center gap-1">
               {FILTROS.map((f) => (
@@ -225,14 +232,14 @@ export default function CampanhasPanel() {
             <div className="ml-auto relative">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
               <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar campanha…"
-                className="w-48 bg-[#0f1117] border border-[#2a3147] rounded-lg pl-7 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500" />
+                className="w-48 bg-[var(--bg-base)] border border-[var(--border)] rounded-lg pl-7 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500" />
             </div>
           </div>
 
           {/* Cabeçalho da tabela SEMPRE visível (mesmo vazio) */}
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#2a3147] text-[11px] uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-slate-500">
                 <th className="text-left font-medium px-5 py-2.5">Campanha</th>
                 <th className="text-left font-medium px-2 py-2.5">Público</th>
                 <th className="text-right font-medium px-2 py-2.5" title="Mensagens que saíram de fato (cada passo da cadência conta; ensaio não conta)">Enviadas</th>
@@ -263,7 +270,7 @@ export default function CampanhasPanel() {
                 });
                 return (
                 <tr key={c.id} onClick={() => router.push(`/automacao/campanhas/${c.id}`)}
-                  className={`border-b last:border-0 hover:bg-[#0f1117] transition-colors cursor-pointer ${falha ? 'border-red-500/25 bg-red-500/[0.04]' : 'border-[#2a3147]'}`}>
+                  className={`border-b last:border-0 hover:bg-[var(--bg-base)] transition-colors cursor-pointer ${falha ? 'border-red-500/25 bg-red-500/[0.04]' : 'border-[var(--border)]'}`}>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2 font-medium text-slate-100">
                       {falha && <AlertTriangle size={14} className="shrink-0 text-red-400" />}
@@ -295,7 +302,7 @@ export default function CampanhasPanel() {
                     <div className="flex items-center justify-end gap-1.5">
                       {c.status === 'rascunho' && (
                         <Link href={`/automacao/campanhas/${c.id}/editar`} onClick={(e) => e.stopPropagation()}
-                          className="text-xs px-2 py-1.5 rounded-lg bg-[#252b3b] text-slate-200 hover:bg-[#2f3750] inline-flex items-center gap-1">
+                          className="text-xs px-2 py-1.5 rounded-lg bg-[var(--bg-input)] text-slate-200 hover:bg-[var(--bg-card-hover)] inline-flex items-center gap-1">
                           <PencilLine size={12} /> Editar
                         </Link>
                       )}
@@ -307,7 +314,7 @@ export default function CampanhasPanel() {
                       )}
                       {(ACOES[c.status] ?? []).map(({ para, label, Icon }) => (
                         <button key={para} onClick={(e) => transicionar(c.id, para, e)}
-                          className="text-xs px-2 py-1.5 rounded-lg bg-[#252b3b] text-slate-200 hover:bg-[#2f3750] inline-flex items-center gap-1">
+                          className="text-xs px-2 py-1.5 rounded-lg bg-[var(--bg-input)] text-slate-200 hover:bg-[var(--bg-card-hover)] inline-flex items-center gap-1">
                           <Icon size={12} /> {label}
                         </button>
                       ))}
@@ -318,7 +325,7 @@ export default function CampanhasPanel() {
                         return (
                           <span title={bloqueio ?? 'Apagar registro da campanha'} onClick={(e) => e.stopPropagation()}>
                             <button type="button" onClick={(e) => abrirExclusao(c, e)} disabled={!!bloqueio} aria-label={`Apagar ${c.nome}`}
-                              className="text-xs px-2 py-1.5 rounded-lg bg-[#252b3b] text-slate-400 hover:bg-red-500/15 hover:text-red-300 inline-flex items-center disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-[#252b3b] disabled:hover:text-slate-400">
+                              className="text-xs px-2 py-1.5 rounded-lg bg-[var(--bg-input)] text-slate-400 hover:bg-red-500/15 hover:text-red-300 inline-flex items-center disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-[var(--bg-input)] disabled:hover:text-slate-400">
                               <Trash2 size={12} />
                             </button>
                           </span>
@@ -335,7 +342,7 @@ export default function CampanhasPanel() {
         </div>
 
         {/* Próximas ações */}
-        <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-5 self-start">
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5 self-start">
           <h3 className="font-semibold text-slate-200 text-sm mb-3 flex items-center gap-2"><Activity size={15} className="text-indigo-400" /> Próximas ações</h3>
           {proximas.length === 0 ? (
             <p className="text-xs text-slate-500">Nenhuma ação pendente nas campanhas carregadas.</p>
@@ -353,26 +360,16 @@ export default function CampanhasPanel() {
       </div>
 
       {/* Desempenho recente */}
-      <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-5">
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5">
         <h3 className="font-semibold text-slate-200 text-sm mb-1">Desempenho recente</h3>
         <p className="text-xs text-slate-500 mb-4">Respostas e oportunidades atribuídas às campanhas ao longo do tempo.</p>
-        <div className="h-40 rounded-lg bg-[#0f1117] border border-dashed border-[#2a3147] flex items-center justify-center">
+        <div className="h-40 rounded-lg bg-[var(--bg-base)] border border-dashed border-[var(--border)] flex items-center justify-center">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <Info size={14} className="text-slate-600" />
             Sem desempenho atribuído ainda — requer vínculo campanha↔resultados (fora do escopo desta fase).
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Kpi({ Icon, cor, label, valor, naoCalc }: { Icon: typeof Megaphone; cor: string; label: string; valor?: string; naoCalc?: boolean }) {
-  return (
-    <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl px-5 py-4">
-      <div className="flex items-center gap-2 text-xs text-slate-500"><Icon size={15} className={cor} /> {label}</div>
-      <div className={`text-2xl font-bold mt-1 ${naoCalc ? 'text-slate-500' : 'text-slate-100'}`}>{naoCalc ? '—' : valor}</div>
-      {naoCalc && <div className="text-[10px] text-slate-600 mt-0.5">não calculável</div>}
     </div>
   );
 }

@@ -99,7 +99,7 @@ export default function EnviarPropostaForm({ lead, obterPropostaId, onEnviada, o
               className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40 ${
                 canal === c
                   ? 'border-indigo-500 bg-indigo-500/15 text-indigo-200'
-                  : 'border-[#2a3147] text-slate-400 hover:text-slate-200'
+                  : 'border-[var(--border)] text-slate-400 hover:text-slate-200'
               }`}
             >
               <Icone size={13} /> {c === 'email' ? 'E-mail' : 'WhatsApp'}
@@ -125,7 +125,7 @@ export default function EnviarPropostaForm({ lead, obterPropostaId, onEnviada, o
           onChange={(e) => { setAssunto(e.target.value); setConfirmando(false); }}
           disabled={!disponivel.email || enviando}
           placeholder="Assunto"
-          className="w-full text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#0f1117] text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+          className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-base)] text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
         />
       )}
       <textarea
@@ -137,7 +137,7 @@ export default function EnviarPropostaForm({ lead, obterPropostaId, onEnviada, o
         }}
         disabled={!disponivel[canal] || enviando}
         rows={canal === 'email' ? 5 : 3}
-        className="w-full text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#0f1117] text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y disabled:opacity-50"
+        className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-base)] text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y disabled:opacity-50"
       />
       <div className="flex items-start justify-between gap-2 text-[11px] text-slate-500">
         <span>
@@ -170,7 +170,7 @@ export default function EnviarPropostaForm({ lead, obterPropostaId, onEnviada, o
               type="button"
               onClick={() => setConfirmando(false)}
               disabled={enviando}
-              className="text-sm text-slate-300 px-3 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#252b3b] disabled:opacity-40 transition-colors"
+              className="text-sm text-slate-300 px-3 py-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-input)] disabled:opacity-40 transition-colors"
             >
               Voltar
             </button>
@@ -190,7 +190,7 @@ export default function EnviarPropostaForm({ lead, obterPropostaId, onEnviada, o
             <button
               type="button"
               onClick={onCancelar}
-              className="text-sm text-slate-300 px-3 py-2 rounded-lg border border-[#2a3147] hover:bg-[#252b3b] transition-colors"
+              className="text-sm text-slate-300 px-3 py-2 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-input)] transition-colors"
             >
               Fechar
             </button>

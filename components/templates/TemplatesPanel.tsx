@@ -185,7 +185,7 @@ export default function TemplatesPanel() {
                     <td className="px-3 py-3 text-slate-300">{rotuloCanal(template.canal)}</td>
                     <td className="px-3 py-3 text-slate-300">{rotuloFormato(template.formato)}</td>
                     <td className="px-3 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${template.ativo ? 'bg-emerald-500/15 text-emerald-300' : 'bg-[#252b3b] text-slate-400'}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${template.ativo ? 'bg-emerald-500/15 text-emerald-300' : 'bg-[var(--bg-input)] text-slate-400'}`}>
                         {rotuloStatus(template.ativo)}
                       </span>
                     </td>

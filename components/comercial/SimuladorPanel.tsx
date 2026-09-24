@@ -105,7 +105,7 @@ export default function SimuladorPanel() {
             className={`flex flex-col items-start px-4 py-2 rounded-lg border text-left transition-colors ${
               modelo === m.id
                 ? 'border-indigo-500 bg-indigo-500/15 text-indigo-200'
-                : 'border-[#2a3147] bg-[#1a1f2e] text-slate-400 hover:text-slate-200'
+                : 'border-[var(--border)] bg-[var(--bg-card)] text-slate-400 hover:text-slate-200'
             }`}
           >
             <span className="text-sm font-semibold">{m.label}</span>
@@ -124,7 +124,7 @@ export default function SimuladorPanel() {
               const q = qtds[p.id];
               return (
                 <div key={p.id} className={`flex items-center gap-3 p-2.5 rounded-lg border transition-colors ${
-                  q > 0 ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-[#2a3147]'
+                  q > 0 ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-[var(--border)]'
                 }`}>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-slate-200">{p.nome}</div>
@@ -134,16 +134,16 @@ export default function SimuladorPanel() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button onClick={() => setQtd(p.id, q - 1)} disabled={q === 0}
-                      className="w-7 h-7 rounded-md border border-[#2a3147] flex items-center justify-center text-slate-300 hover:bg-[#0f1117] disabled:opacity-40">
+                      className="w-7 h-7 rounded-md border border-[var(--border)] flex items-center justify-center text-slate-300 hover:bg-[var(--bg-base)] disabled:opacity-40">
                       <Minus size={13} />
                     </button>
                     <input
                       type="number" min={0} value={q}
                       onChange={(e) => setQtd(p.id, Math.floor(Number(e.target.value) || 0))}
-                      className="w-12 text-center text-sm bg-transparent border border-[#2a3147] rounded-md py-1 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-12 text-center text-sm bg-transparent border border-[var(--border)] rounded-md py-1 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                     <button onClick={() => setQtd(p.id, q + 1)}
-                      className="w-7 h-7 rounded-md border border-[#2a3147] flex items-center justify-center text-slate-300 hover:bg-[#0f1117]">
+                      className="w-7 h-7 rounded-md border border-[var(--border)] flex items-center justify-center text-slate-300 hover:bg-[var(--bg-base)]">
                       <Plus size={13} />
                     </button>
                   </div>
@@ -155,7 +155,7 @@ export default function SimuladorPanel() {
             })}
           </div>
 
-          <div className="flex items-start gap-2 text-xs text-slate-500 mt-4 pt-4 border-t border-[#2a3147]">
+          <div className="flex items-start gap-2 text-xs text-slate-500 mt-4 pt-4 border-t border-[var(--border)]">
             <Info size={14} className="text-slate-400 shrink-0 mt-0.5" />
             <p>
               O desconto é apenas <b>calculado e exibido</b> — não há trava de aprovação nesta versão.
@@ -278,7 +278,7 @@ function EditorDesconto({ label, sufixo = '', referencia, final, onChange }: {
   const desconto = percentualDesconto(referencia, final);
   const aplicarPct = (pct: number) => onChange(valorComDesconto(referencia, pct));
   return (
-    <div className="rounded-lg border border-[#2a3147] bg-[#0f1117] p-3 space-y-2">
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-base)] p-3 space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-slate-300">{label}</span>
         <span className="text-[11px] text-slate-500">tabela {formatarBRL(referencia)}{sufixo}</span>
@@ -286,7 +286,7 @@ function EditorDesconto({ label, sufixo = '', referencia, final, onChange }: {
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="text-[10px] text-slate-500 block mb-0.5">Valor final</label>
-          <div className="flex items-center gap-1 border border-[#2a3147] rounded-md px-2 py-1.5 bg-[#1a1f2e] focus-within:ring-1 focus-within:ring-indigo-500">
+          <div className="flex items-center gap-1 border border-[var(--border)] rounded-md px-2 py-1.5 bg-[var(--bg-card)] focus-within:ring-1 focus-within:ring-indigo-500">
             <span className="text-slate-500 text-xs">R$</span>
             <input
               type="number" min={0} value={final}
@@ -298,7 +298,7 @@ function EditorDesconto({ label, sufixo = '', referencia, final, onChange }: {
         </div>
         <div>
           <label className="text-[10px] text-slate-500 block mb-0.5">Desconto</label>
-          <div className="flex items-center gap-1 border border-[#2a3147] rounded-md px-2 py-1.5 bg-[#1a1f2e] focus-within:ring-1 focus-within:ring-indigo-500">
+          <div className="flex items-center gap-1 border border-[var(--border)] rounded-md px-2 py-1.5 bg-[var(--bg-card)] focus-within:ring-1 focus-within:ring-indigo-500">
             <input
               type="number" min={0} max={100} step={0.5} value={desconto}
               onChange={(e) => aplicarPct(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
@@ -311,7 +311,7 @@ function EditorDesconto({ label, sufixo = '', referencia, final, onChange }: {
       <div className="flex items-center gap-1.5">
         {[5, 10, 15].map((p) => (
           <button key={p} type="button" onClick={() => aplicarPct(p)}
-            className="text-[11px] px-2 py-0.5 rounded-md border border-[#2a3147] text-slate-300 hover:bg-[#1a1f2e] transition-colors">
+            className="text-[11px] px-2 py-0.5 rounded-md border border-[var(--border)] text-slate-300 hover:bg-[var(--bg-card)] transition-colors">
             {p}%
           </button>
         ))}
