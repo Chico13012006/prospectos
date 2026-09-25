@@ -123,10 +123,10 @@ export default function ObjetivosOperacaoPanel() {
     }
   }
 
-  const input = 'w-full rounded-lg border border-[#2a3147] bg-[#0f1117] px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-500 disabled:opacity-50'
+  const input = 'w-full rounded-lg border border-[var(--border)] bg-[var(--bg-base)] px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-500 disabled:opacity-50'
 
   if (carregando) {
-    return <div className="h-56 animate-pulse rounded-xl border border-[#2a3147] bg-[#1a1f2e]" />
+    return <div className="h-56 animate-pulse rounded-xl border border-[var(--border)] bg-[var(--bg-card)]" />
   }
 
   return (
@@ -174,10 +174,10 @@ export default function ObjetivosOperacaoPanel() {
             const ativo = estado.ativos.includes(id)
             const principal = estado.principal === id
             return (
-              <div key={id} className={`rounded-xl border p-4 transition-colors ${ativo ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-[#2a3147] bg-[#1a1f2e]'}`}>
+              <div key={id} className={`rounded-xl border p-4 transition-colors ${ativo ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-[var(--border)] bg-[var(--bg-card)]'}`}>
                 <button type="button" disabled={!podeEditar} onClick={() => alternarObjetivo(id)} className="w-full text-left disabled:cursor-default">
                   <div className="flex items-start justify-between gap-3">
-                    <span className={`rounded-lg bg-[#0f1117] p-2 ${cor}`}><Icon size={18} /></span>
+                    <span className={`rounded-lg bg-[var(--bg-base)] p-2 ${cor}`}><Icon size={18} /></span>
                     <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${ativo ? 'border-indigo-400 bg-indigo-500 text-white' : 'border-slate-600'}`}>
                       {ativo && <Check size={12} />}
                     </span>
@@ -186,7 +186,7 @@ export default function ObjetivosOperacaoPanel() {
                   <p className="mt-1 text-sm text-slate-500">{descricao}</p>
                 </button>
                 {ativo && (
-                  <label className="mt-3 flex cursor-pointer items-center gap-2 border-t border-[#2a3147] pt-3 text-xs text-slate-400">
+                  <label className="mt-3 flex cursor-pointer items-center gap-2 border-t border-[var(--border)] pt-3 text-xs text-slate-400">
                     <input type="radio" name="objetivo-principal" checked={principal} disabled={!podeEditar}
                       onChange={() => setEstado((atual) => ({ ...atual, principal: id }))} />
                     Objetivo principal
@@ -196,8 +196,8 @@ export default function ObjetivosOperacaoPanel() {
             )
           })}
 
-          <div className="rounded-xl border border-dashed border-[#2a3147] bg-[#1a1f2e]/60 p-4 opacity-70">
-            <span className="inline-flex rounded-lg bg-[#0f1117] p-2 text-emerald-400"><CircleDollarSign size={18} /></span>
+          <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-card)]/60 p-4 opacity-70">
+            <span className="inline-flex rounded-lg bg-[var(--bg-base)] p-2 text-emerald-400"><CircleDollarSign size={18} /></span>
             <h3 className="mt-3 font-semibold text-slate-300">Cobranças e pagamentos</h3>
             <p className="mt-1 text-sm text-slate-500">Será habilitado quando houver contas a receber e baixa de pagamento reais.</p>
             <span className="mt-3 inline-block text-xs font-medium text-slate-500">Ainda não disponível</span>
@@ -206,7 +206,7 @@ export default function ObjetivosOperacaoPanel() {
       </section>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <section className="rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-5">
+        <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5">
           <h2 className="font-semibold text-slate-100">Parâmetros operacionais</h2>
           <p className="mt-1 text-sm text-slate-500">Definem quando o cliente entra na fila de ação.</p>
           <label className="mt-4 block text-sm text-slate-300">
@@ -219,7 +219,7 @@ export default function ObjetivosOperacaoPanel() {
           </label>
         </section>
 
-        <section className="rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-5">
+        <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="flex items-center gap-2 font-semibold text-slate-100"><FileBarChart size={16} className="text-cyan-400" /> Relatório semanal</h2>
@@ -231,7 +231,7 @@ export default function ObjetivosOperacaoPanel() {
         </section>
       </div>
 
-      <section className="rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-5">
+      <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5">
         <h2 className="font-semibold text-slate-100">Metas mensais</h2>
         <p className="mt-1 text-sm text-slate-500">Campos vazios não geram progresso artificial no painel.</p>
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">

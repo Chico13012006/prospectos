@@ -73,10 +73,10 @@ export default function EmailProspeccaoPanel() {
   }
 
   const conectado = status?.conectado === true;
-  const input = 'flex-1 bg-[#0f1117] border border-[#2a3147] rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 disabled:opacity-50';
+  const input = 'flex-1 bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 disabled:opacity-50';
 
   return (
-    <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-6 space-y-4 max-w-2xl">
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6 space-y-4 max-w-2xl">
       <div>
         <div className="font-semibold text-slate-100 inline-flex items-center gap-2">
           <Mail size={16} className="text-indigo-300" /> E-mail de prospecção
@@ -95,7 +95,7 @@ export default function EmailProspeccaoPanel() {
       {status === null ? (
         <div className="text-sm text-slate-500 inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Carregando…</div>
       ) : (
-        <div className="rounded-lg border border-[#2a3147] p-4 space-y-2">
+        <div className="rounded-lg border border-[var(--border)] p-4 space-y-2">
           <div className="flex items-center gap-2">
             {conectado ? (
               <span className="text-xs px-2 py-0.5 rounded-full border border-green-500/40 bg-green-500/15 text-green-300 inline-flex items-center gap-1">
@@ -154,7 +154,7 @@ export default function EmailProspeccaoPanel() {
               </button>
               {contaKeySalva && (
                 <button onClick={() => { setContaKey(contaKeySalva); setEditando(false); setErro(null); }} disabled={salvando}
-                  className="px-3 py-2 rounded-lg border border-[#2a3147] text-slate-400 text-sm hover:text-slate-200 shrink-0">
+                  className="px-3 py-2 rounded-lg border border-[var(--border)] text-slate-400 text-sm hover:text-slate-200 shrink-0">
                   Cancelar
                 </button>
               )}
@@ -166,7 +166,7 @@ export default function EmailProspeccaoPanel() {
           </div>
         ) : (
           <button onClick={() => setEditando(true)}
-            className="text-xs px-3 py-1.5 rounded-lg border border-[#2a3147] text-slate-400 hover:text-slate-200 hover:border-indigo-500/50">
+            className="text-xs px-3 py-1.5 rounded-lg border border-[var(--border)] text-slate-400 hover:text-slate-200 hover:border-indigo-500/50">
             Trocar conta
           </button>
         )

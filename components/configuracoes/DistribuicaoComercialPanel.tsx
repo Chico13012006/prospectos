@@ -126,7 +126,7 @@ export default function DistribuicaoComercialPanel() {
   const ativos = (participantes ?? []).filter((p) => p.participa).length;
 
   return (
-    <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-6 space-y-4 max-w-2xl">
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6 space-y-4 max-w-2xl">
       <div>
         <div className="font-semibold text-slate-100 inline-flex items-center gap-2">
           <Users size={16} className="text-indigo-300" /> Distribuição comercial
@@ -137,7 +137,7 @@ export default function DistribuicaoComercialPanel() {
         </p>
       </div>
 
-      <div className="rounded-lg border border-[#2a3147] bg-[#0f1117] p-4">
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-base)] p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-200">Rodízio automático</div>
@@ -156,7 +156,7 @@ export default function DistribuicaoComercialPanel() {
             className={`text-xs px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5 shrink-0 transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
               rodizio
                 ? 'border-green-500/40 bg-green-500/15 text-green-300'
-                : 'border-[#2a3147] text-slate-400 hover:text-slate-200'
+                : 'border-[var(--border)] text-slate-400 hover:text-slate-200'
             }`}
           >
             {salvandoRodizio ? <Loader2 size={12} className="animate-spin" /> : rodizio ? <Check size={12} /> : null}
@@ -175,7 +175,7 @@ export default function DistribuicaoComercialPanel() {
       ) : participantes.length === 0 ? (
         <p className="text-sm text-slate-500">Nenhum comercial ativo nesta organização. Convide membros em Equipe.</p>
       ) : (
-        <ul className="divide-y divide-[#2a3147] border border-[#2a3147] rounded-lg">
+        <ul className="divide-y divide-[var(--border)] border border-[var(--border)] rounded-lg">
           {participantes.map((p) => {
             const salvando = salvandoId === p.usuarioId;
             return (
@@ -197,7 +197,7 @@ export default function DistribuicaoComercialPanel() {
                     className={`text-xs px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                       p.participa
                         ? 'border-green-500/40 bg-green-500/15 text-green-300'
-                        : 'border-[#2a3147] text-slate-400 hover:text-slate-200'
+                        : 'border-[var(--border)] text-slate-400 hover:text-slate-200'
                     }`}
                   >
                     {salvando ? <Loader2 size={12} className="animate-spin" /> : p.participa ? <Check size={12} /> : null}
@@ -220,7 +220,7 @@ export default function DistribuicaoComercialPanel() {
         </p>
       )}
 
-      <div className="pt-4 border-t border-[#2a3147] space-y-2">
+      <div className="pt-4 border-t border-[var(--border)] space-y-2">
         <div className="text-sm font-semibold text-slate-200 inline-flex items-center gap-2">
           <MessageCircle size={14} className="text-green-400" /> Grupo de avisos comercial
         </div>
@@ -231,7 +231,7 @@ export default function DistribuicaoComercialPanel() {
         </p>
         <div className="flex gap-2">
           <input
-            className="flex-1 bg-[#0f1117] border border-[#2a3147] rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+            className="flex-1 bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
             value={grupo}
             onChange={(e) => setGrupo(e.target.value)}
             disabled={!podeEditar || salvandoGrupo}
@@ -249,7 +249,7 @@ export default function DistribuicaoComercialPanel() {
         <div className="flex items-center gap-2 pt-1">
           <label className="text-xs text-slate-400 shrink-0">Check-in de acompanhamento após</label>
           <input
-            className="w-24 bg-[#0f1117] border border-[#2a3147] rounded-lg px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+            className="w-24 bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
             value={janela}
             onChange={(e) => setJanela(e.target.value.replace(/[^0-9]/g, ''))}
             disabled={!podeEditar || salvandoGrupo}
@@ -261,7 +261,7 @@ export default function DistribuicaoComercialPanel() {
         <div className="flex items-center gap-2 pt-1">
           <label className="text-xs text-slate-400 shrink-0">Voltar para follow-up usa a campanha</label>
           <select
-            className="flex-1 bg-[#0f1117] border border-[#2a3147] rounded-lg px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+            className="flex-1 bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
             value={campanhaRetorno}
             onChange={(e) => setCampanhaRetorno(e.target.value)}
             disabled={!podeEditar || salvandoGrupo}

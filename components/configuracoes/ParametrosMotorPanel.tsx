@@ -88,7 +88,7 @@ export default function ParametrosMotorPanel() {
   }
 
   return (
-    <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] shadow-none p-5">
+    <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] shadow-none p-5">
       <h2 className="font-semibold text-slate-200 mb-1 flex items-center gap-2">
         <Sliders size={16} className="text-indigo-500" />
         Parâmetros de Cadência do Motor
@@ -102,7 +102,7 @@ export default function ParametrosMotorPanel() {
       ) : (
         <div className="space-y-1">
           {CAMPOS_NUMERICOS.map(campo => (
-            <div key={campo.key} className="grid grid-cols-3 gap-4 items-start py-3 border-b border-[#2a3147]">
+            <div key={campo.key} className="grid grid-cols-3 gap-4 items-start py-3 border-b border-[var(--border)]">
               <div className="col-span-2">
                 <label className="text-sm font-semibold text-slate-300">{campo.label}</label>
                 <p className="text-xs text-slate-500 mt-0.5">{campo.desc}</p>
@@ -113,12 +113,12 @@ export default function ParametrosMotorPanel() {
                 max={campo.max}
                 value={form[campo.key]}
                 onChange={e => setForm(f => ({ ...f, [campo.key]: Number(e.target.value) }))}
-                className="border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 bg-[#1a1f2e]"
+                className="border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 bg-[var(--bg-card)]"
               />
             </div>
           ))}
 
-          <div className="grid grid-cols-3 gap-4 items-start py-3 border-b border-[#2a3147]">
+          <div className="grid grid-cols-3 gap-4 items-start py-3 border-b border-[var(--border)]">
             <div className="col-span-2">
               <label className="text-sm font-semibold text-slate-300">Dias da semana ativos</label>
               <p className="text-xs text-slate-500 mt-0.5">A cadência diária só roda nos dias marcados.</p>
@@ -134,7 +134,7 @@ export default function ParametrosMotorPanel() {
                     className={`text-xs font-medium px-2 py-1.5 rounded-lg border transition-colors ${
                       ativo
                         ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
-                        : 'bg-[#0f1117] text-slate-500 border-[#2a3147] hover:text-slate-300'
+                        : 'bg-[var(--bg-base)] text-slate-500 border-[var(--border)] hover:text-slate-300'
                     }`}
                   >
                     {nome}
@@ -154,7 +154,7 @@ export default function ParametrosMotorPanel() {
               placeholder="closer@empresa.com.br"
               value={form.closerEmailFallback}
               onChange={e => setForm(f => ({ ...f, closerEmailFallback: e.target.value }))}
-              className="border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 bg-[#1a1f2e]"
+              className="border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 bg-[var(--bg-card)]"
             />
           </div>
         </div>
@@ -183,7 +183,7 @@ export default function ParametrosMotorPanel() {
         <button
           onClick={() => { setForm(PARAMS_PADRAO); setFeedback(null); }}
           disabled={carregando || salvando}
-          className="text-sm text-slate-400 border border-[#2a3147] px-4 py-2.5 rounded-lg hover:bg-[#0f1117] disabled:opacity-50"
+          className="text-sm text-slate-400 border border-[var(--border)] px-4 py-2.5 rounded-lg hover:bg-[var(--bg-base)] disabled:opacity-50"
         >
           Restaurar padrão
         </button>

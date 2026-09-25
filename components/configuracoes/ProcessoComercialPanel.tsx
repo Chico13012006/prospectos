@@ -160,11 +160,11 @@ export default function ProcessoComercialPanel() {
     { id: 'permissoes', label: 'Permissões', icon: ShieldCheck },
   ];
 
-  const input = 'w-full bg-[#0f1117] border border-[#2a3147] rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 disabled:opacity-50';
+  const input = 'w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 disabled:opacity-50';
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-1 border-b border-[#2a3147]">
+      <div className="flex items-center gap-1 border-b border-[var(--border)]">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setAba(id)}
             className={`px-4 py-2 text-sm font-semibold inline-flex items-center gap-2 border-b-2 -mb-px transition-colors ${aba === id ? 'border-indigo-400 text-indigo-300' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
@@ -174,7 +174,7 @@ export default function ProcessoComercialPanel() {
       </div>
 
       {aba === 'geral' && (
-        <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-6 space-y-5 max-w-2xl">
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6 space-y-5 max-w-2xl">
           {!podeEditar && <div className="text-xs text-amber-400">Somente leitura — requer a permissão workspace.configure para editar.</div>}
           <div>
             <label className="text-xs text-slate-400">Como chamar &quot;lead&quot; (nomenclatura)</label>
@@ -200,7 +200,7 @@ export default function ProcessoComercialPanel() {
       {aba === 'pipelines' && (
         <div className="space-y-4">
           {pipelines.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-14 bg-[#1a1f2e] border border-[#2a3147] rounded-xl gap-3">
+            <div className="flex flex-col items-center justify-center py-14 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl gap-3">
               <Kanban size={32} className="text-slate-600" />
               <p className="text-slate-300 font-medium">Nenhum pipeline configurado</p>
               <p className="text-slate-500 text-sm text-center max-w-xs">
@@ -221,14 +221,14 @@ export default function ProcessoComercialPanel() {
               const em = editBuffers[p.id];
               const editando = !!em;
               return (
-                <div key={p.id} className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-5 space-y-3">
+                <div key={p.id} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="font-semibold text-slate-100">
                       {p.nome} <span className="text-xs text-slate-500">({p.tipo})</span>
                     </div>
                     {!editando && podeEditar && (
                       <button onClick={() => iniciarEdicao(p)}
-                        className="text-xs px-2.5 py-1 rounded border border-[#2a3147] text-slate-400 hover:text-slate-200 hover:border-indigo-500/50 inline-flex items-center gap-1">
+                        className="text-xs px-2.5 py-1 rounded border border-[var(--border)] text-slate-400 hover:text-slate-200 hover:border-indigo-500/50 inline-flex items-center gap-1">
                         <Pencil size={11} /> Editar
                       </button>
                     )}
@@ -247,19 +247,19 @@ export default function ProcessoComercialPanel() {
                             type="color"
                             value={e.cor ?? '#64748b'}
                             onChange={(ev) => atualizarEstagio(p.id, i, 'cor', ev.target.value)}
-                            className="w-7 h-7 rounded cursor-pointer border border-[#2a3147] bg-transparent p-0"
+                            className="w-7 h-7 rounded cursor-pointer border border-[var(--border)] bg-transparent p-0"
                             title="Cor do estágio"
                           />
                           <input
                             value={e.nome}
                             onChange={(ev) => atualizarEstagio(p.id, i, 'nome', ev.target.value)}
-                            className="flex-1 bg-[#0f1117] border border-[#2a3147] rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                            className="flex-1 bg-[var(--bg-base)] border border-[var(--border)] rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
                             placeholder="Nome do estágio"
                           />
                           <select
                             value={e.papel}
                             onChange={(ev) => atualizarEstagio(p.id, i, 'papel', ev.target.value)}
-                            className="bg-[#0f1117] border border-[#2a3147] rounded px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                            className="bg-[var(--bg-base)] border border-[var(--border)] rounded px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
                           >
                             {PAPEIS.map((papel) => (
                               <option key={papel} value={papel}>{papel}</option>
@@ -275,7 +275,7 @@ export default function ProcessoComercialPanel() {
                         className="text-xs text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1 pt-1">
                         <Plus size={12} /> Adicionar estágio
                       </button>
-                      <div className="flex gap-2 pt-1 border-t border-[#2a3147]">
+                      <div className="flex gap-2 pt-1 border-t border-[var(--border)]">
                         <button onClick={() => salvarPipeline(p.id)} disabled={salvandoId === p.id}
                           className="px-3 py-1.5 rounded bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 disabled:opacity-40 inline-flex items-center gap-1">
                           {salvandoId === p.id
@@ -283,7 +283,7 @@ export default function ProcessoComercialPanel() {
                             : <><Save size={12} /> Salvar</>}
                         </button>
                         <button onClick={() => cancelarEdicao(p.id)}
-                          className="px-3 py-1.5 rounded border border-[#2a3147] text-slate-400 text-xs hover:text-slate-200">
+                          className="px-3 py-1.5 rounded border border-[var(--border)] text-slate-400 text-xs hover:text-slate-200">
                           Cancelar
                         </button>
                       </div>
@@ -310,7 +310,7 @@ export default function ProcessoComercialPanel() {
       {aba === 'email' && <EmailProspeccaoPanel />}
 
       {aba === 'permissoes' && rbac && (
-        <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-5">
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5">
           <div className="text-sm text-slate-300 mb-3">Seu papel: <span className="text-indigo-300 font-semibold">{rbac.role}</span></div>
           <ul className="space-y-1.5">
             {rbac.permissoes.map((perm) => {

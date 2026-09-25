@@ -111,7 +111,7 @@ function PipelineEditor({ pipelines, podeEditar, onSalvo }: {
     }
   }
 
-  const inp = 'bg-[#0f1117] border border-[#2a3147] rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-indigo-500'
+  const inp = 'bg-[var(--bg-base)] border border-[var(--border)] rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-indigo-500'
 
   if (pipelines.length === 0) {
     return <p className="text-sm text-slate-500">Nenhum pipeline encontrado.</p>
@@ -124,8 +124,8 @@ function PipelineEditor({ pipelines, podeEditar, onSalvo }: {
         const emSalvamento = salvando === p.id
         const foiSalvo = salvo === p.id
         return (
-          <div key={p.id} className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-[#2a3147] flex items-center justify-between">
+          <div key={p.id} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-[var(--border)] flex items-center justify-between">
               <div>
                 <span className="font-semibold text-slate-100">{p.nome}</span>
                 <span className="ml-2 text-xs text-slate-500">({p.tipo})</span>
@@ -133,7 +133,7 @@ function PipelineEditor({ pipelines, podeEditar, onSalvo }: {
               {podeEditar && (
                 <div className="flex items-center gap-2">
                   <button onClick={() => adicionar(p.id)}
-                    className="text-xs px-2.5 py-1.5 rounded-lg border border-[#2a3147] text-slate-300 hover:bg-[#252b3b] inline-flex items-center gap-1">
+                    className="text-xs px-2.5 py-1.5 rounded-lg border border-[var(--border)] text-slate-300 hover:bg-[var(--bg-input)] inline-flex items-center gap-1">
                     <Plus size={12} /> Estágio
                   </button>
                   <button onClick={() => salvar(p.id)} disabled={emSalvamento}
@@ -148,7 +148,7 @@ function PipelineEditor({ pipelines, podeEditar, onSalvo }: {
 
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#2a3147] text-[11px] uppercase tracking-wide text-slate-500">
+                <tr className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-slate-500">
                   <th className="text-left font-medium px-5 py-2.5 w-8"></th>
                   <th className="text-left font-medium px-3 py-2.5">Nome</th>
                   <th className="text-left font-medium px-3 py-2.5">Chave</th>
@@ -159,7 +159,7 @@ function PipelineEditor({ pipelines, podeEditar, onSalvo }: {
               </thead>
               <tbody>
                 {es.map((e, idx) => (
-                  <tr key={e.id || e.chave} className="border-b border-[#2a3147]/60 last:border-0 hover:bg-[#0f1117]/50 transition-colors">
+                  <tr key={e.id || e.chave} className="border-b border-[var(--border)]/60 last:border-0 hover:bg-[var(--bg-base)]/50 transition-colors">
                     <td className="px-5 py-2">
                       {podeEditar && (
                         <div className="flex flex-col gap-0.5">
@@ -195,8 +195,8 @@ function PipelineEditor({ pipelines, podeEditar, onSalvo }: {
                       {podeEditar
                         ? <input type="color" value={e.cor ?? '#6366f1'}
                             onChange={(ev) => set(p.id, idx, { cor: ev.target.value })}
-                            className="w-7 h-7 rounded cursor-pointer border border-[#2a3147] bg-transparent" />
-                        : <span className="inline-block w-4 h-4 rounded-full border border-[#2a3147]"
+                            className="w-7 h-7 rounded cursor-pointer border border-[var(--border)] bg-transparent" />
+                        : <span className="inline-block w-4 h-4 rounded-full border border-[var(--border)]"
                             style={{ background: e.cor ?? '#475569' }} />
                       }
                     </td>
@@ -302,12 +302,12 @@ export default function PersonalizacaoPanel() {
     { id: 'terminologia', label: 'Terminologia', Icon: Type },
   ];
 
-  const input = 'w-full bg-[#0f1117] border border-[#2a3147] rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 disabled:opacity-50';
+  const input = 'w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 disabled:opacity-50';
 
   return (
     <div className="space-y-5">
       {/* Sub-abas */}
-      <div className="flex items-center gap-1 border-b border-[#2a3147]">
+      <div className="flex items-center gap-1 border-b border-[var(--border)]">
         {TABS.map(({ id, label, Icon }) => (
           <button key={id} onClick={() => setAba(id)}
             className={`px-4 py-2 text-sm font-semibold inline-flex items-center gap-2 border-b-2 -mb-px transition-colors ${
@@ -333,7 +333,7 @@ export default function PersonalizacaoPanel() {
               <button
                 disabled
                 title="Campos customizados entram numa iteração seguinte"
-                className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-[#2a3147] text-slate-500 opacity-50 cursor-not-allowed">
+                className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-[var(--border)] text-slate-500 opacity-50 cursor-not-allowed">
                 <Plus size={13} /> Novo campo
               </button>
               {podeEditar && (
@@ -347,10 +347,10 @@ export default function PersonalizacaoPanel() {
 
           {erro && <p className="text-sm text-red-400">{erro}</p>}
 
-          <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl overflow-hidden">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#2a3147] text-[11px] uppercase tracking-wide text-slate-500">
+                <tr className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-slate-500">
                   <th className="text-left font-medium px-5 py-3">Campo</th>
                   <th className="text-left font-medium px-4 py-3">Tipo</th>
                   <th className="text-center font-medium px-4 py-3">Obrigatório</th>
@@ -362,7 +362,7 @@ export default function PersonalizacaoPanel() {
                 {campos.map((c) => {
                   const obrigatorioFixo = CAMPOS_UI_PADRAO.find((p) => p.chave === c.chave)?.obrigatorio;
                   return (
-                    <tr key={c.chave} className="border-b border-[#2a3147]/60 last:border-0 hover:bg-[#0f1117]/60 transition-colors">
+                    <tr key={c.chave} className="border-b border-[var(--border)]/60 last:border-0 hover:bg-[var(--bg-base)]/60 transition-colors">
                       <td className="px-5 py-3 font-medium text-slate-100">{c.label}</td>
                       <td className="px-4 py-3 text-xs text-slate-400">{TIPO_CAMPO[c.chave] ?? 'Texto'}</td>
                       <td className="px-4 py-3 text-center">
@@ -384,7 +384,7 @@ export default function PersonalizacaoPanel() {
             </table>
           </div>
 
-          <div className="flex items-start gap-2 text-xs text-slate-500 bg-[#0f1117] border border-[#2a3147]/60 rounded-lg px-4 py-3">
+          <div className="flex items-start gap-2 text-xs text-slate-500 bg-[var(--bg-base)] border border-[var(--border)]/60 rounded-lg px-4 py-3">
             <Info size={13} className="text-indigo-400 shrink-0 mt-0.5" />
             A personalização altera campos e visualizações <strong className="text-slate-300">sem misturar conceitos do CRM</strong>. Campos obrigatórios do sistema não podem ser ocultados.
           </div>
@@ -399,7 +399,7 @@ export default function PersonalizacaoPanel() {
             <span>Isto reflete os campos marcados como &quot;Usar como filtro&quot; na aba <strong>Campos</strong>. Para adicionar ou remover um filtro, edite lá.</span>
           </div>
           <p className="text-sm text-slate-400">Os filtros disponíveis em Base de Leads e Pipeline são definidos pelo toggle <strong className="text-slate-300">Usar como filtro</strong> na aba Campos.</p>
-          <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-5">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5">
             <h3 className="font-semibold text-slate-200 text-sm mb-3">Filtros ativos neste workspace</h3>
             <div className="flex flex-wrap gap-2">
               {campos.filter((c) => c.filtro).map((c) => (
@@ -435,7 +435,7 @@ export default function PersonalizacaoPanel() {
               <Lock size={13} /> Somente leitura — requer <code>workspace.configure</code>.
             </div>
           )}
-          <div className="bg-[#1a1f2e] border border-[#2a3147] rounded-xl p-6 max-w-2xl space-y-4">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6 max-w-2xl space-y-4">
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Como chamar &quot;Lead&quot; neste workspace</label>
               <input className={input} value={nomeLead} onChange={(e) => setNomeLead(e.target.value)}
