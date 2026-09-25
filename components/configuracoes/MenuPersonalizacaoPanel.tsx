@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Check, Eye, EyeOff, Info, Loader2, Lock, PanelLeft, RotateCcw, Save, Settings } from 'lucide-react';
-import { EVENTO_MENU_ATUALIZADO, ITENS_MENU, itemVisivel, modulosComMenu } from '@/lib/navegacao/menu';
+import { agruparMenu, EVENTO_MENU_ATUALIZADO, ITENS_MENU, itemVisivel, modulosComMenu } from '@/lib/navegacao/menu';
 import { ICONE_MENU } from '@/components/layout/iconesMenu';
 import { estilosModulo as m, TituloSecao } from '@/components/tema/Modulo';
 
@@ -97,46 +97,51 @@ export default function MenuPersonalizacaoPanel() {
             </p>
           )}
 
-          {ITENS_MENU.map((item) => {
-            const Icone = ICONE_MENU[item.id];
-            const visivel = !ocultos.includes(item.id);
-            return (
-              <div
-                key={item.id}
-                className={`flex items-center gap-3 rounded-[11px] border px-3 py-2.5 transition-colors ${
-                  visivel ? 'border-[#155987] bg-[rgba(3,24,45,0.6)]' : 'border-dashed border-[#1f4a70] bg-transparent opacity-70'
-                }`}
-              >
-                <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[9px] ${visivel ? 'bg-indigo-500/20 text-indigo-200' : 'bg-slate-500/10 text-slate-500'}`}>
-                  {Icone && <Icone size={17} aria-hidden="true" />}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-slate-100">{item.label}</div>
-                  <div className="truncate text-xs text-slate-400">{item.descricao} <span className="font-mono text-slate-500">{item.href}</span></div>
-                </div>
-                <span className={`hidden items-center gap-1 text-xs sm:inline-flex ${visivel ? 'text-emerald-300' : 'text-slate-500'}`}>
-                  {visivel ? <><Eye size={13} /> Visível</> : <><EyeOff size={13} /> Oculto</>}
-                </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={visivel}
-                  aria-label={`${visivel ? 'Esconder' : 'Mostrar'} ${item.label} no menu`}
-                  disabled={!podeEditar}
-                  onClick={() => alternar(item.id)}
-                  className="relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors focus-ring disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{ background: visivel ? 'var(--accent)' : '#334155', boxShadow: visivel ? '0 0 10px rgba(99,102,241,0.5)' : undefined }}
-                >
-                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${visivel ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                </button>
-              </div>
-            );
-          })}
+          {agruparMenu(ITENS_MENU).map((grupo) => (
+            <div key={grupo.id} className="grid gap-2">
+              <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{grupo.label}</p>
+              {grupo.itens.map((item) => {
+                const Icone = ICONE_MENU[item.id];
+                const visivel = !ocultos.includes(item.id);
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex items-center gap-3 rounded-[11px] border px-3 py-2.5 transition-colors ${
+                      visivel ? 'border-[#155987] bg-[rgba(3,24,45,0.6)]' : 'border-dashed border-[#1f4a70] bg-transparent opacity-70'
+                    }`}
+                  >
+                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[9px] ${visivel ? 'bg-indigo-500/20 text-indigo-200' : 'bg-slate-500/10 text-slate-500'}`}>
+                      {Icone && <Icone size={17} aria-hidden="true" />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-slate-100">{item.label}</div>
+                      <div className="truncate text-xs text-slate-400">{item.descricao} <span className="font-mono text-slate-500">{item.href}</span></div>
+                    </div>
+                    <span className={`hidden items-center gap-1 text-xs sm:inline-flex ${visivel ? 'text-emerald-300' : 'text-slate-500'}`}>
+                      {visivel ? <><Eye size={13} /> Visível</> : <><EyeOff size={13} /> Oculto</>}
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={visivel}
+                      aria-label={`${visivel ? 'Esconder' : 'Mostrar'} ${item.label} no menu`}
+                      disabled={!podeEditar}
+                      onClick={() => alternar(item.id)}
+                      className="relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors focus-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ background: visivel ? 'var(--accent)' : '#334155', boxShadow: visivel ? '0 0 10px rgba(99,102,241,0.5)' : undefined }}
+                    >
+                      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${visivel ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
 
           <p className="mt-2 flex items-start gap-2 text-xs text-slate-400">
             <Info size={13} className="mt-0.5 shrink-0 text-sky-300" />
             Esconder só tira o item do menu — quem tiver o link ainda abre a página, e as permissões de cada pessoa continuam valendo.
-            Configurações sempre aparece para quem administra a conta.
+            Configurações sempre aparece, em Administração, para quem administra a conta.
           </p>
         </div>
       </section>
@@ -148,17 +153,24 @@ export default function MenuPersonalizacaoPanel() {
         </div>
         <div className="p-4">
           <nav aria-label="Prévia do menu" className="grid gap-1 rounded-xl bg-indigo-950 p-2.5">
-            {visiveis.map((item) => {
-              const Icone = ICONE_MENU[item.id];
-              return (
-                <span key={item.id} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium text-indigo-200">
-                  {Icone && <Icone size={16} strokeWidth={1.8} aria-hidden="true" />} {item.label}
-                </span>
-              );
-            })}
-            <span className="mt-1 flex items-center gap-2.5 border-t border-white/10 px-2.5 pt-2.5 text-[13px] font-medium text-indigo-300/70">
-              <Settings size={16} strokeWidth={1.8} aria-hidden="true" /> Configurações
-            </span>
+            {agruparMenu(visiveis, ['administracao']).map((grupo) => (
+              <div key={grupo.id} className="grid gap-0.5 [&+&]:mt-2">
+                <span className="px-2.5 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-indigo-300/60">{grupo.label}</span>
+                {grupo.itens.map((item) => {
+                  const Icone = ICONE_MENU[item.id];
+                  return (
+                    <span key={item.id} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium text-indigo-200">
+                      {Icone && <Icone size={16} strokeWidth={1.8} aria-hidden="true" />} {item.label}
+                    </span>
+                  );
+                })}
+                {grupo.id === 'administracao' && (
+                  <span className="flex items-center gap-2.5 px-2.5 py-2 text-[13px] font-medium text-indigo-300/70">
+                    <Settings size={16} strokeWidth={1.8} aria-hidden="true" /> Configurações
+                  </span>
+                )}
+              </div>
+            ))}
           </nav>
         </div>
 

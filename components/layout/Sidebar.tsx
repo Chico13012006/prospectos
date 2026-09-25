@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, Settings, Zap, LogOut } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
-import { EVENTO_MENU_ATUALIZADO, itensVisiveis } from '@/lib/navegacao/menu';
+import { agruparMenu, EVENTO_MENU_ATUALIZADO, itensVisiveis } from '@/lib/navegacao/menu';
 import { ICONE_MENU } from './iconesMenu';
 
 // Navegação consolidada (auditoria 11/08): Oportunidades, Campanhas, ROI,
@@ -13,7 +13,8 @@ import { ICONE_MENU } from './iconesMenu';
 // viraram abas/visões dentro de módulos maiores (Automação, Comercial,
 // Inteligência Comercial, Configurações). As rotas antigas redirecionam.
 // A organização escolhe o que aparece (Configurações > Personalização > Menu);
-// a lista e a regra ficam em lib/navegacao/menu.ts.
+// a lista, os grupos (Visão / Execução / Gestão / Administração) e a regra
+// ficam em lib/navegacao/menu.ts.
 
 interface PerfilSidebar {
   nome: string | null;
@@ -97,31 +98,43 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Main Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
-        {modulos !== null && itensVisiveis(modulos).map(({ id, href, label }) => {
-          const Icon = ICONE_MENU[id] ?? LayoutDashboard;
-          const active = isActive(href);
-          return (
-            <Link key={href} href={href} className={navItemClasses(active)}>
-              <Icon size={18} strokeWidth={1.8} />
-              {label}
-            </Link>
-          );
-        })}
+      {/* Main Navigation — em grupos; grupo vazio some. Administração fica
+          enquanto houver Configurações para mostrar. */}
+      <nav className="flex-1 px-3 py-4 space-y-4">
+        {modulos !== null && agruparMenu(itensVisiveis(modulos), podeConfigurar ? ['administracao'] : []).map((grupo) => (
+          <div key={grupo.id} role="group" aria-labelledby={`menu-grupo-${grupo.id}`}>
+            <p
+              id={`menu-grupo-${grupo.id}`}
+              className="px-3 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-indigo-300/60"
+            >
+              {grupo.label}
+            </p>
+            <div className="space-y-1">
+              {grupo.itens.map(({ id, href, label }) => {
+                const Icon = ICONE_MENU[id] ?? LayoutDashboard;
+                return (
+                  <Link key={href} href={href} className={navItemClasses(isActive(href))}>
+                    <Icon size={18} strokeWidth={1.8} />
+                    {label}
+                  </Link>
+                );
+              })}
+              {grupo.id === 'administracao' && podeConfigurar && (
+                <Link href="/configuracoes" className={navItemClasses(isActive('/configuracoes'))}>
+                  <Settings size={18} strokeWidth={1.8} />
+                  Configurações
+                </Link>
+              )}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      {/* Configurações */}
+      {/* Sair */}
       <div className="px-3 pb-2 border-t border-white/10 pt-3">
-        {podeConfigurar && (
-          <Link href="/configuracoes" className={navItemClasses(isActive('/configuracoes'))}>
-            <Settings size={18} strokeWidth={1.8} />
-            Configurações
-          </Link>
-        )}
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border-l-[3px] border-transparent w-full text-[#FC8181] hover:bg-red-500/10 mt-0.5"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border-l-[3px] border-transparent w-full text-[#FC8181] hover:bg-red-500/10"
         >
           <LogOut size={18} strokeWidth={1.8} />
           Sair

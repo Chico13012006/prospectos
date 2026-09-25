@@ -5,23 +5,37 @@
 // acessível e as permissões seguem impostas no servidor.
 // Puro: usado pelo Sidebar, pela tela de personalização e pelos testes.
 
+export type GrupoMenu = 'visao' | 'execucao' | 'gestao' | 'administracao'
+
+/** Seções do menu, na ordem em que aparecem (Plano de Execução 24/09). */
+export const GRUPOS_MENU: readonly { id: GrupoMenu; label: string }[] = [
+  { id: 'visao', label: 'Visão' },
+  { id: 'execucao', label: 'Execução' },
+  { id: 'gestao', label: 'Gestão' },
+  { id: 'administracao', label: 'Administração' },
+]
+
 export interface ItemMenu {
   id: string // chave em configuracoes.modulos
   href: string
   label: string
   descricao: string
+  grupo: GrupoMenu
 }
 
+// Ordem dentro de cada grupo = ordem desta lista. Configurações não entra aqui:
+// não é escondível e depende de `workspace.configure` (o Sidebar a acrescenta em
+// Administração).
 export const ITENS_MENU: readonly ItemMenu[] = [
-  { id: 'dashboard', href: '/dashboard', label: 'Dashboard', descricao: 'Visão geral e indicadores.' },
-  { id: 'pipeline', href: '/pipeline', label: 'Pipeline de Contato', descricao: 'Kanban, lista e cadência dos leads.' },
-  { id: 'base_leads', href: '/base-leads', label: 'Base de Leads', descricao: 'Banco geral de leads, com filtros.' },
-  { id: 'prospeccao', href: '/prospeccao', label: 'Prospecção', descricao: 'Busca de empresas no catálogo da Receita.' },
-  { id: 'reunioes', href: '/reunioes', label: 'Reuniões', descricao: 'Agenda e reuniões marcadas.' },
-  { id: 'inteligencia_comercial', href: '/inteligencia-comercial', label: 'Inteligência Comercial', descricao: 'Análises da prospecção.' },
-  { id: 'comercial', href: '/comercial', label: 'Comercial', descricao: 'Simulador, propostas, copiloto e templates.' },
-  { id: 'equipe', href: '/equipe', label: 'Equipe', descricao: 'Membros, papéis e desempenho.' },
-  { id: 'automacao', href: '/automacao', label: 'Automação', descricao: 'Campanhas, workflows e modelos.' },
+  { id: 'dashboard', href: '/dashboard', label: 'Dashboard', descricao: 'Visão geral e indicadores.', grupo: 'visao' },
+  { id: 'inteligencia_comercial', href: '/inteligencia-comercial', label: 'Inteligência Comercial', descricao: 'Análises da prospecção.', grupo: 'visao' },
+  { id: 'prospeccao', href: '/prospeccao', label: 'Prospecção', descricao: 'Busca de empresas no catálogo da Receita.', grupo: 'execucao' },
+  { id: 'automacao', href: '/automacao', label: 'Automação', descricao: 'Campanhas, workflows e modelos.', grupo: 'execucao' },
+  { id: 'pipeline', href: '/pipeline', label: 'Pipeline de Contato', descricao: 'Kanban, lista e cadência dos leads.', grupo: 'gestao' },
+  { id: 'base_leads', href: '/base-leads', label: 'Base de Leads', descricao: 'Banco geral de leads, com filtros.', grupo: 'gestao' },
+  { id: 'reunioes', href: '/reunioes', label: 'Reuniões', descricao: 'Agenda e reuniões marcadas.', grupo: 'gestao' },
+  { id: 'comercial', href: '/comercial', label: 'Comercial', descricao: 'Simulador, propostas, copiloto e templates.', grupo: 'gestao' },
+  { id: 'equipe', href: '/equipe', label: 'Equipe', descricao: 'Membros, papéis e desempenho.', grupo: 'administracao' },
 ]
 
 /** Evento de janela disparado ao salvar, para o Sidebar refletir na hora. */
@@ -33,6 +47,22 @@ export function itemVisivel(modulos: Record<string, boolean> | undefined | null,
 
 export function itensVisiveis(modulos: Record<string, boolean> | undefined | null): ItemMenu[] {
   return ITENS_MENU.filter((i) => itemVisivel(modulos, i.id))
+}
+
+export interface SecaoMenu {
+  id: GrupoMenu
+  label: string
+  itens: ItemMenu[]
+}
+
+/**
+ * Grupos na ordem de GRUPOS_MENU, só com os itens de `itens`. Grupo vazio sai,
+ * exceto os listados em `manter` (ex.: Administração, que ganha Configurações).
+ */
+export function agruparMenu(itens: readonly ItemMenu[], manter: readonly GrupoMenu[] = []): SecaoMenu[] {
+  return GRUPOS_MENU
+    .map((g) => ({ ...g, itens: itens.filter((i) => i.grupo === g.id) }))
+    .filter((g) => g.itens.length > 0 || manter.includes(g.id))
 }
 
 /**
