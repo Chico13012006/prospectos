@@ -27,7 +27,7 @@ export default function GlobalFilters({
   const temFiltro = value.search || value.responsavel || value.segmento || value.canal
 
   const selectCls =
-    'text-sm border border-[#2a3147] rounded-lg px-2.5 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/40'
+    'text-sm border border-[var(--border)] rounded-lg px-2.5 py-2 bg-[var(--bg-card)] text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/40'
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -37,7 +37,7 @@ export default function GlobalFilters({
           value={value.search}
           onChange={(e) => set({ search: e.target.value })}
           placeholder="Buscar em todo o pipeline..."
-          className="pl-8 pr-3 py-2 text-sm border border-[#2a3147] rounded-lg bg-[#1a1f2e] text-slate-300 placeholder:text-slate-600 w-60 focus:outline-none focus:ring-1 focus:ring-indigo-500/40"
+          className="pl-8 pr-3 py-2 text-sm border border-[var(--border)] rounded-lg bg-[var(--bg-card)] text-slate-300 placeholder:text-slate-600 w-60 focus:outline-none focus:ring-1 focus:ring-indigo-500/40"
         />
       </div>
 

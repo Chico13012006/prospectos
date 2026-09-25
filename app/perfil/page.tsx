@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Camera, Save, Lock, User } from 'lucide-react';
+import { estilosModulo as m, PaginaModulo, TituloSecao } from '@/components/tema/Modulo';
 // (Lock também usado no campo de nicho travado para usuário comum — item 1.)
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
@@ -115,26 +116,23 @@ export default function PerfilPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-100">Meu Perfil</h1>
-        <p className="text-slate-400 text-sm mt-0.5">Gerencie suas informações e credenciais de acesso.</p>
-      </div>
+    <PaginaModulo grupo="Conta" titulo="Meu perfil" subtitulo="Gerencie suas informações e credenciais de acesso.">
+    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
 
       {/* Foto e dados */}
-      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] p-6">
-        <h2 className="text-base font-semibold text-slate-100 mb-5 flex items-center gap-2">
-          <User size={17} /> Informações pessoais
-        </h2>
+      <section className={m.painel}>
+        <div className={m.painelBarra}>
+          <TituloSecao icone={User} titulo="Informações pessoais" subtitulo="Nome, foto e contato que a equipe vê." />
+        </div>
 
-        <form onSubmit={handleSalvarPerfil} className="space-y-5">
+        <form onSubmit={handleSalvarPerfil} className="space-y-5 p-5">
           {/* Foto */}
           <div className="flex items-center gap-5">
             <div className="relative">
               <img
                 src={fotoExibida}
                 alt="Avatar"
-                className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-none"
+                className="w-20 h-20 rounded-full object-cover border-4 border-[#1b68a8] shadow-none"
               />
               <button
                 type="button"
@@ -167,7 +165,7 @@ export default function PerfilPage() {
             <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
             <input
               type="email" value={email} disabled
-              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm bg-[#0f1117] text-slate-500 cursor-not-allowed"
+              className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm bg-[var(--bg-base)] text-slate-500 cursor-not-allowed"
             />
           </div>
 
@@ -177,7 +175,7 @@ export default function PerfilPage() {
             <input
               type="text" value={nome} onChange={e => setNome(e.target.value)} required
               placeholder="Seu nome"
-              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
@@ -187,7 +185,7 @@ export default function PerfilPage() {
             <input
               type="tel" value={telefone} onChange={e => setTelefone(e.target.value)}
               placeholder="(11) 90000-0000"
-              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
@@ -197,14 +195,14 @@ export default function PerfilPage() {
             {role === 'admin' ? (
               <select
                 value={nicho} onChange={e => setNicho(e.target.value)}
-                className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[#1a1f2e]"
+                className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-[var(--bg-card)]"
               >
                 <option value="">Selecione seu segmento</option>
                 {NICHOS.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
             ) : (
               <>
-                <div className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm bg-[#0f1117] text-slate-400 flex items-center gap-2 cursor-not-allowed">
+                <div className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm bg-[var(--bg-base)] text-slate-400 flex items-center gap-2 cursor-not-allowed">
                   <Lock size={13} className="text-slate-500 shrink-0" />
                   <span>{nicho || 'Definido pela sua organização'}</span>
                 </div>
@@ -221,27 +219,27 @@ export default function PerfilPage() {
 
           <button
             type="submit" disabled={salvando}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+            className={`${m.primaryButton} focus-ring`}
           >
             <Save size={15} />
             {salvando ? 'Salvando...' : 'Salvar alterações'}
           </button>
         </form>
-      </div>
+      </section>
 
       {/* Alterar senha */}
-      <div className="bg-[#1a1f2e] rounded-xl border border-[#2a3147] p-6">
-        <h2 className="text-base font-semibold text-slate-100 mb-5 flex items-center gap-2">
-          <Lock size={17} /> Alterar senha
-        </h2>
+      <section className={m.painel}>
+        <div className={m.painelBarra}>
+          <TituloSecao icone={Lock} titulo="Alterar senha" subtitulo="Mínimo de 6 caracteres." />
+        </div>
 
-        <form onSubmit={handleAlterarSenha} className="space-y-4">
+        <form onSubmit={handleAlterarSenha} className="space-y-4 p-5">
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Nova senha</label>
             <input
               type="password" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} required
               placeholder="••••••••" minLength={6}
-              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
           <div>
@@ -249,7 +247,7 @@ export default function PerfilPage() {
             <input
               type="password" value={confirmarSenha} onChange={e => setConfirmarSenha(e.target.value)} required
               placeholder="••••••••" minLength={6}
-              className="w-full border border-[#2a3147] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
@@ -261,13 +259,14 @@ export default function PerfilPage() {
 
           <button
             type="submit" disabled={salvandoSenha}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+            className={`${m.primaryButton} focus-ring`}
           >
             <Lock size={15} />
             {salvandoSenha ? 'Alterando...' : 'Alterar senha'}
           </button>
         </form>
-      </div>
+      </section>
     </div>
+    </PaginaModulo>
   );
 }

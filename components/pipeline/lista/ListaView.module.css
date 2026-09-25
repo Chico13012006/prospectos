@@ -9,7 +9,7 @@
   overflow: hidden;
   background:
     radial-gradient(circle at 88% 3%, rgba(62, 84, 180, 0.1), transparent 27rem),
-    #0c121f;
+    #041524;
   color: #f4f7ff;
 }
 
@@ -89,7 +89,7 @@
 
 .toolbar {
   flex-shrink: 0;
-  border-bottom: 1px solid #202c40;
+  border-bottom: 1px solid #092f4f;
   padding: 0 1.5rem 1rem;
 }
 
@@ -113,10 +113,10 @@
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border: 1px solid #28364e;
+  border: 1px solid #0b3962;
   border-radius: 0.5rem;
   padding: 0.45rem 0.85rem;
-  background: #111c2e;
+  background: #061f34;
   color: #a9b4c8;
   font-size: 0.78rem;
   font-weight: 590;
@@ -124,7 +124,7 @@
 }
 
 .tabs button:hover {
-  border-color: #3a4b68;
+  border-color: #0f4e86;
   color: #eef2ff;
 }
 
@@ -155,9 +155,9 @@
 .filters select,
 .search {
   height: 2.35rem;
-  border: 1px solid #26344a;
+  border: 1px solid #0a365d;
   border-radius: 0.48rem;
-  background: #101a2b;
+  background: #051d31;
   color: #cbd4e5;
   font-size: 0.76rem;
 }
@@ -206,10 +206,10 @@
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border: 1px solid #2a3951;
+  border: 1px solid #0b3c66;
   border-radius: 0.48rem;
   padding: 0 0.8rem;
-  background: #111c2e;
+  background: #061f34;
   color: #c1cbda;
   font-size: 0.76rem;
   font-weight: 560;
@@ -246,10 +246,10 @@
   min-height: 0;
   flex: 1;
   overflow: auto;
-  border: 1px solid #1e2a3d;
+  border: 1px solid #082c4b;
   border-radius: 0.7rem;
-  background: rgba(16, 26, 43, 0.6);
-  scrollbar-color: #34445f transparent;
+  background: rgba(5, 29, 49, 0.6);
+  scrollbar-color: #0e477a transparent;
   scrollbar-width: thin;
 }
 
@@ -263,8 +263,8 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  border-bottom: 1px solid #22304a;
-  background: #0f1a2b;
+  border-bottom: 1px solid #0a3459;
+  background: #051c30;
   padding: 0.7rem 0.9rem;
   color: #6e7d95;
   font-size: 0.68rem;
@@ -295,7 +295,7 @@
 }
 
 .table tbody td {
-  border-bottom: 1px solid rgba(32, 44, 66, 0.72);
+  border-bottom: 1px solid rgba(9, 47, 81, 0.72);
   padding: 0.72rem 0.9rem;
   color: #aab6c9;
   font-size: 0.76rem;
@@ -312,7 +312,7 @@
 }
 
 .row:hover td {
-  background: rgba(27, 42, 68, 0.55);
+  background: rgba(9, 46, 79, 0.55);
 }
 
 .rowSelected td {
@@ -438,10 +438,10 @@
 
 .porPagina select {
   height: 1.95rem;
-  border: 1px solid #26344a;
+  border: 1px solid #0a365d;
   border-radius: 0.42rem;
   padding: 0 1.7rem 0 0.55rem;
-  background: #101a2b;
+  background: #051d31;
   color: #cbd4e5;
   font-size: 0.72rem;
   outline: none;
@@ -459,10 +459,10 @@
   height: 1.85rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid #26344a;
+  border: 1px solid #0a365d;
   border-radius: 0.42rem;
   padding: 0 0.35rem;
-  background: #101a2b;
+  background: #051d31;
   color: #aab6c9;
   font: inherit;
   font-size: 0.72rem;

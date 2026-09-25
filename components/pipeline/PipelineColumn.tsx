@@ -127,7 +127,7 @@ export default function PipelineColumn({
           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
           <span className="text-sm font-semibold text-slate-300 leading-tight truncate">{stage.label}</span>
         </div>
-        <span className="text-xs font-bold text-slate-500 bg-[#252b3b] px-2 py-0.5 rounded-full shrink-0" title="total na etapa">
+        <span className="text-xs font-bold text-slate-500 bg-[var(--bg-input)] px-2 py-0.5 rounded-full shrink-0" title="total na etapa">
           {total.toLocaleString('pt-BR')}
         </span>
       </div>
@@ -137,7 +137,7 @@ export default function PipelineColumn({
         <select
           value={dias}
           onChange={(e) => setDias(Number(e.target.value))}
-          className="mb-1.5 shrink-0 text-xs border border-[#2a3147] rounded-lg px-2 py-1.5 bg-[#1a1f2e] text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/40"
+          className="mb-1.5 shrink-0 text-xs border border-[var(--border)] rounded-lg px-2 py-1.5 bg-[var(--bg-card)] text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/40"
         >
           {OPCOES_DATA.map((o) => (
             <option key={o.dias} value={o.dias}>{o.label}</option>
@@ -152,7 +152,7 @@ export default function PipelineColumn({
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           placeholder="Buscar nesta etapa"
-          className="w-full pl-7 pr-2 py-1.5 text-xs border border-[#2a3147] rounded-lg bg-[#1a1f2e] text-slate-300 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/40"
+          className="w-full pl-7 pr-2 py-1.5 text-xs border border-[var(--border)] rounded-lg bg-[var(--bg-card)] text-slate-300 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/40"
         />
       </div>
 
@@ -160,7 +160,7 @@ export default function PipelineColumn({
       <div
         ref={parentRef}
         onScroll={onScroll}
-        className="flex-1 min-h-0 overflow-y-auto rounded-lg bg-[#0f1117]/40 border border-[#2a3147]/40 p-1.5"
+        className="flex-1 min-h-0 overflow-y-auto rounded-lg bg-[var(--bg-base)]/40 border border-[var(--border)]/40 p-1.5"
       >
         {data.length === 0 && !loading ? (
           <div className="text-center text-xs text-slate-600 py-6">

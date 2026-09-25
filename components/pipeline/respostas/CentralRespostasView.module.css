@@ -9,7 +9,7 @@
   overflow: hidden;
   background:
     radial-gradient(circle at 88% 3%, rgba(62, 84, 180, 0.1), transparent 27rem),
-    #0c121f;
+    #041524;
   color: #f4f7ff;
 }
 
@@ -89,7 +89,7 @@
 
 .toolbar {
   flex-shrink: 0;
-  border-bottom: 1px solid #202c40;
+  border-bottom: 1px solid #092f4f;
   padding: 0 1.5rem 1rem;
 }
 
@@ -113,10 +113,10 @@
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border: 1px solid #28364e;
+  border: 1px solid #0b3962;
   border-radius: 0.5rem;
   padding: 0.45rem 0.85rem;
-  background: #111c2e;
+  background: #061f34;
   color: #a9b4c8;
   font-size: 0.78rem;
   font-weight: 590;
@@ -124,7 +124,7 @@
 }
 
 .tabs button:hover {
-  border-color: #3a4b68;
+  border-color: #0f4e86;
   color: #eef2ff;
 }
 
@@ -155,9 +155,9 @@
 .filters select,
 .search {
   height: 2.35rem;
-  border: 1px solid #26344a;
+  border: 1px solid #0a365d;
   border-radius: 0.48rem;
-  background: #101a2b;
+  background: #051d31;
   color: #cbd4e5;
   font-size: 0.76rem;
 }
@@ -205,10 +205,10 @@
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border: 1px solid #2a3951;
+  border: 1px solid #0b3c66;
   border-radius: 0.48rem;
   padding: 0 0.8rem;
-  background: #111c2e;
+  background: #061f34;
   color: #93a0b5;
   font-size: 0.76rem;
   font-weight: 560;
@@ -246,14 +246,14 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #1e2a3d;
+  border: 1px solid #082c4b;
   border-radius: 0.7rem;
-  background: rgba(16, 26, 43, 0.6);
+  background: rgba(5, 29, 49, 0.6);
 }
 
 .painelHeader {
   flex-shrink: 0;
-  border-bottom: 1px solid #202c40;
+  border-bottom: 1px solid #092f4f;
   padding: 0.75rem 0.85rem;
 }
 
@@ -275,7 +275,7 @@
   min-width: 1.45rem;
   border-radius: 0.38rem;
   padding: 0.16rem 0.38rem;
-  background: #263751;
+  background: #0b3a63;
   color: #d8e0ef;
   font-size: 0.68rem;
   font-weight: 690;
@@ -293,7 +293,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  border: 1px solid #27344a;
+  border: 1px solid #0a375e;
   border-radius: 999px;
   padding: 0.22rem 0.55rem;
   background: transparent;
@@ -306,7 +306,7 @@
 }
 
 .chips button:hover {
-  border-color: #3a4b68;
+  border-color: #0f4e86;
   color: #dce4f4;
 }
 
@@ -328,7 +328,7 @@
   flex: 1;
   overflow-y: auto;
   padding: 0.4rem;
-  scrollbar-color: #34445f transparent;
+  scrollbar-color: #0e477a transparent;
   scrollbar-width: thin;
 }
 
@@ -347,7 +347,7 @@
 }
 
 .conversa:hover {
-  background: rgba(27, 42, 68, 0.6);
+  background: rgba(9, 46, 79, 0.6);
 }
 
 .conversaAtiva {
@@ -416,7 +416,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 0.45rem;
-  background: #273450;
+  background: #0b3a63;
   color: #b9c5dc;
   font-size: 0.58rem;
   font-weight: 760;
@@ -426,9 +426,9 @@
 
 .prospeccao {
   flex-shrink: 0;
-  border-top: 1px solid #202c40;
+  border-top: 1px solid #092f4f;
   padding: 0.7rem 0.7rem 0.75rem;
-  background: rgba(13, 22, 38, 0.5);
+  background: rgba(5, 25, 42, 0.5);
 }
 
 .prospTitulo {
@@ -454,9 +454,9 @@
 .prospCampo,
 .prospSelect {
   height: 1.95rem;
-  border: 1px solid #26344a;
+  border: 1px solid #0a365d;
   border-radius: 0.42rem;
-  background: #0d1626;
+  background: #05192a;
   color: #dce4f4;
   font: inherit;
   font-size: 0.7rem;
@@ -522,7 +522,7 @@
   margin: 0.5rem 0 0;
   padding: 0;
   list-style: none;
-  scrollbar-color: #34445f transparent;
+  scrollbar-color: #0e477a transparent;
   scrollbar-width: thin;
 }
 
@@ -540,7 +540,7 @@
 }
 
 .prospLista button:hover {
-  background: rgba(27, 42, 68, 0.7);
+  background: rgba(9, 46, 79, 0.7);
 }
 
 .prospEmpresa {
@@ -615,7 +615,7 @@
   flex-shrink: 0;
   align-items: center;
   gap: 0.65rem;
-  border-bottom: 1px solid #202c40;
+  border-bottom: 1px solid #092f4f;
   padding: 0.8rem 0.95rem;
 }
 
@@ -627,7 +627,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 0.5rem;
-  background: #273450;
+  background: #0b3a63;
   color: #c6d2e8;
   font-size: 0.7rem;
   font-weight: 760;
@@ -672,10 +672,10 @@
   display: inline-flex;
   align-items: center;
   gap: 0.32rem;
-  border: 1px solid #27344a;
+  border: 1px solid #0a375e;
   border-radius: 0.45rem;
   padding: 0.3rem 0.55rem;
-  background: #101a2b;
+  background: #051d31;
   color: #94a2b8;
   font: inherit;
   font-size: 0.7rem;
@@ -685,7 +685,7 @@
 }
 
 .canais button:hover:not(:disabled) {
-  border-color: #3a4b68;
+  border-color: #0f4e86;
   color: #dce4f4;
 }
 
@@ -708,7 +708,7 @@
   gap: 0.55rem;
   overflow-y: auto;
   padding: 0.9rem;
-  scrollbar-color: #34445f transparent;
+  scrollbar-color: #0e477a transparent;
   scrollbar-width: thin;
 }
 
@@ -716,7 +716,7 @@
   align-self: center;
   border-radius: 999px;
   padding: 0.2rem 0.65rem;
-  background: rgba(38, 55, 81, 0.7);
+  background: rgba(11, 58, 99, 0.7);
   color: #8494ab;
   font-size: 0.66rem;
   font-weight: 600;
@@ -730,8 +730,8 @@
 
 .mensagemEntrada {
   align-self: flex-start;
-  border: 1px solid #24324a;
-  background: #16223a;
+  border: 1px solid #0a355b;
+  background: #072742;
 }
 
 .mensagemSaida {
@@ -791,7 +791,7 @@
 
 .composer {
   flex-shrink: 0;
-  border-top: 1px solid #202c40;
+  border-top: 1px solid #092f4f;
   padding: 0.55rem 0.85rem 0.6rem;
 }
 
@@ -810,10 +810,10 @@
 
 .composerTopo select {
   height: 1.95rem;
-  border: 1px solid #26344a;
+  border: 1px solid #0a365d;
   border-radius: 0.42rem;
   padding: 0 1.6rem 0 0.5rem;
-  background: #101a2b;
+  background: #051d31;
   color: #cbd4e5;
   font-size: 0.7rem;
   outline: none;
@@ -827,10 +827,10 @@
 /* Canal do composer: segmented control — o estado ativo tem de ser óbvio. */
 .segmented {
   display: inline-flex;
-  border: 1px solid #26344a;
+  border: 1px solid #0a365d;
   border-radius: 0.45rem;
   padding: 0.12rem;
-  background: #0d1626;
+  background: #05192a;
 }
 
 .segmented button {
@@ -873,10 +873,10 @@
   height: 1.95rem;
   min-width: 0;
   flex: 1 1 9rem;
-  border: 1px solid #26344a;
+  border: 1px solid #0a365d;
   border-radius: 0.42rem;
   padding: 0 1.5rem 0 0.5rem;
-  background: #101a2b;
+  background: #051d31;
   color: #cbd4e5;
   font: inherit;
   font-size: 0.7rem;
@@ -897,7 +897,7 @@
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  background: rgba(3, 7, 18, 0.62);
+  background: rgba(2, 10, 17, 0.62);
   inset: 0;
 }
 
@@ -907,9 +907,9 @@
   max-height: 82vh;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #26344a;
+  border: 1px solid #0a365d;
   border-radius: 0.7rem;
-  background: #101a2b;
+  background: #051d31;
   box-shadow: 0 1.5rem 3rem rgba(2, 6, 18, 0.45);
 }
 
@@ -919,7 +919,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  border-bottom: 1px solid #202c40;
+  border-bottom: 1px solid #092f4f;
   padding: 0.75rem 0.9rem;
   color: #e7ecf8;
   font-size: 0.8rem;
@@ -969,10 +969,10 @@
   width: 100%;
   height: 2.1rem;
   margin-bottom: 0.4rem;
-  border: 1px solid #26344a;
+  border: 1px solid #0a365d;
   border-radius: 0.45rem;
   padding: 0 0.6rem;
-  background: #0d1626;
+  background: #05192a;
   color: #dce4f4;
   font: inherit;
   font-size: 0.73rem;
@@ -983,10 +983,10 @@
   width: 100%;
   min-height: 4rem;
   resize: vertical;
-  border: 1px solid #26344a;
+  border: 1px solid #0a365d;
   border-radius: 0.5rem;
   padding: 0.55rem 0.6rem;
-  background: #0d1626;
+  background: #05192a;
   color: #dce4f4;
   font: inherit;
   font-size: 0.74rem;
@@ -1032,7 +1032,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  border: 1px solid #2f3a52;
+  border: 1px solid #0c3f6b;
   border-radius: 0.45rem;
   padding: 0.42rem 0.7rem;
   background: transparent;
@@ -1077,9 +1077,9 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #1e2a3d;
+  border: 1px solid #082c4b;
   border-radius: 0.7rem;
-  background: rgba(16, 26, 43, 0.6);
+  background: rgba(5, 29, 49, 0.6);
 }
 
 .contextoCorpo {
@@ -1087,7 +1087,7 @@
   flex: 1;
   overflow-y: auto;
   padding: 0.85rem;
-  scrollbar-color: #34445f transparent;
+  scrollbar-color: #0e477a transparent;
   scrollbar-width: thin;
 }
 
@@ -1114,7 +1114,7 @@
   gap: 0.5rem;
   margin-top: 0.85rem;
   padding-top: 0.85rem;
-  border-top: 1px solid rgba(32, 44, 66, 0.8);
+  border-top: 1px solid rgba(9, 47, 81, 0.8);
 }
 
 .grupo:first-of-type {
@@ -1170,7 +1170,7 @@
   justify-content: center;
   gap: 0.4rem;
   margin-top: 1rem;
-  border: 1px solid #2f3a52;
+  border: 1px solid #0c3f6b;
   border-radius: 0.5rem;
   padding: 0.5rem;
   background: transparent;
@@ -1202,7 +1202,7 @@
 }
 
 .vazio svg {
-  color: #3c4b66;
+  color: #0f4e86;
 }
 
 .vazioTitulo {
@@ -1256,11 +1256,11 @@
 
 .email {
   width: 100%;
-  border: 1px solid #1f2b40;
+  border: 1px solid #092e4f;
   border-left-width: 3px;
   border-radius: 0.55rem;
   padding: 0.7rem 0.95rem 0.75rem;
-  background: rgba(15, 25, 42, 0.55);
+  background: rgba(5, 28, 47, 0.55);
 }
 
 .emailEntrada {
@@ -1287,7 +1287,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: #27354f;
+  background: #0b3962;
   color: #c9d4ea;
   font-size: 0.58rem;
   font-weight: 760;
@@ -1378,8 +1378,8 @@
    dos dois lados — nível próprio na hierarquia, sem virar título. */
 .emailAssunto {
   margin: 0.75rem 0 0.7rem;
-  border-top: 1px solid rgba(38, 52, 78, 0.95);
-  border-bottom: 1px solid rgba(32, 44, 66, 0.7);
+  border-top: 1px solid rgba(11, 56, 96, 0.95);
+  border-bottom: 1px solid rgba(9, 47, 81, 0.7);
   padding: 0.55rem 0 0.55rem;
 }
 
@@ -1427,7 +1427,7 @@
 /* Histórico citado: recolhido; aberto, bloco secundário e menor. */
 .citacao {
   margin-top: 0.55rem;
-  border-top: 1px dashed rgba(42, 56, 82, 0.9);
+  border-top: 1px dashed rgba(11, 60, 103, 0.9);
   padding-top: 0.45rem;
 }
 
@@ -1450,7 +1450,7 @@
   max-height: 16rem;
   overflow: auto;
   margin: 0.45rem 0 0;
-  border-left: 2px solid #2a3852;
+  border-left: 2px solid #0b3c67;
   padding: 0.3rem 0 0.3rem 0.65rem;
   color: #7f8ea8;
   font: inherit;
@@ -1458,7 +1458,7 @@
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
-  scrollbar-color: #34445f transparent;
+  scrollbar-color: #0e477a transparent;
   scrollbar-width: thin;
 }
 
@@ -1469,9 +1469,9 @@
   height: 1.95rem;
   align-items: stretch;
   margin-bottom: 0.4rem;
-  border: 1px solid #26344a;
+  border: 1px solid #0a365d;
   border-radius: 0.42rem;
-  background: #0d1626;
+  background: #05192a;
   overflow: hidden;
 }
 
@@ -1483,7 +1483,7 @@
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
-  border-right: 1px solid #26344a;
+  border-right: 1px solid #0a365d;
   padding: 0 0.6rem;
   color: #7f8ea8;
   font-size: 0.66rem;
@@ -1531,9 +1531,9 @@
   grid-template-columns: auto 1fr;
   gap: 0.25rem 0.8rem;
   margin: 0;
-  border-bottom: 1px solid #202c40;
+  border-bottom: 1px solid #092f4f;
   padding: 0.55rem 0.9rem;
-  background: rgba(13, 22, 38, 0.6);
+  background: rgba(5, 25, 42, 0.6);
   font-size: 0.72rem;
 }
 

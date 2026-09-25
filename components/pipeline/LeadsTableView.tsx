@@ -123,7 +123,7 @@ export default function LeadsTableView({
               className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
                 ativo
                   ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
-                  : 'text-slate-400 border-[#2a3147] hover:text-slate-200 hover:border-slate-600'
+                  : 'text-slate-400 border-[var(--border)] hover:text-slate-200 hover:border-slate-600'
               }`}
             >
               {c.color && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.color }} />}
@@ -134,12 +134,12 @@ export default function LeadsTableView({
       </div>
 
       {/* Tabela */}
-      <div className="flex-1 min-h-0 overflow-auto rounded-lg border border-[#2a3147]/60">
+      <div className="flex-1 min-h-0 overflow-auto rounded-lg border border-[var(--border)]/60">
         <table className="w-full text-sm border-separate border-spacing-0">
           <thead className="sticky top-0 z-10">
-            <tr className="text-left text-xs uppercase tracking-wide text-slate-500 bg-[#0f1117]">
+            <tr className="text-left text-xs uppercase tracking-wide text-slate-500 bg-[var(--bg-base)]">
               {COLUNAS_TABELA.map(col => (
-                <th key={col.key} className="font-semibold px-3 py-2.5 border-b border-[#2a3147] whitespace-nowrap">
+                <th key={col.key} className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">
                   {col.ordenarPor ? (
                     <button
                       onClick={() => toggleSort(col.ordenarPor)}
@@ -170,17 +170,17 @@ export default function LeadsTableView({
                   <tr
                     key={lead.id}
                     onClick={() => onSelect(lead.id)}
-                    className={`cursor-pointer transition-colors ${selectedId === lead.id ? 'bg-indigo-500/10' : 'hover:bg-[#1a1f2e]'}`}
+                    className={`cursor-pointer transition-colors ${selectedId === lead.id ? 'bg-indigo-500/10' : 'hover:bg-[var(--bg-card)]'}`}
                   >
-                    <td className="px-3 py-2.5 border-b border-[#2a3147]/60 font-medium text-slate-100 max-w-56 truncate">{dash(lead.empresa)}</td>
-                    <td className="px-3 py-2.5 border-b border-[#2a3147]/60 max-w-48">
+                    <td className="px-3 py-2.5 border-b border-[var(--border)]/60 font-medium text-slate-100 max-w-56 truncate">{dash(lead.empresa)}</td>
+                    <td className="px-3 py-2.5 border-b border-[var(--border)]/60 max-w-48">
                       <div className="text-slate-300 truncate">{dash(lead.contato_nome)}</div>
                       {lead.contato_email && <div className="text-xs text-slate-500 truncate">{lead.contato_email}</div>}
                     </td>
-                    <td className="px-3 py-2.5 border-b border-[#2a3147]/60 text-slate-300 whitespace-nowrap max-w-40 truncate">{dash(lead.contato_cargo)}</td>
-                    <td className="px-3 py-2.5 border-b border-[#2a3147]/60 text-slate-300 whitespace-nowrap">{dash(lead.segmento)}</td>
-                    <td className="px-3 py-2.5 border-b border-[#2a3147]/60 text-slate-300 whitespace-nowrap">{labelCanal(lead.canal_preferencial)}</td>
-                    <td className="px-3 py-2.5 border-b border-[#2a3147]/60 whitespace-nowrap">
+                    <td className="px-3 py-2.5 border-b border-[var(--border)]/60 text-slate-300 whitespace-nowrap max-w-40 truncate">{dash(lead.contato_cargo)}</td>
+                    <td className="px-3 py-2.5 border-b border-[var(--border)]/60 text-slate-300 whitespace-nowrap">{dash(lead.segmento)}</td>
+                    <td className="px-3 py-2.5 border-b border-[var(--border)]/60 text-slate-300 whitespace-nowrap">{labelCanal(lead.canal_preferencial)}</td>
+                    <td className="px-3 py-2.5 border-b border-[var(--border)]/60 whitespace-nowrap">
                       <span
                         className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium"
                         style={{ backgroundColor: `${corEstagio(lead.estagio)}26`, color: corEstagio(lead.estagio) }}
@@ -188,9 +188,9 @@ export default function LeadsTableView({
                         {labelEstagio(lead.estagio)}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 border-b border-[#2a3147]/60 text-slate-400 whitespace-nowrap">{ultima ?? '—'}</td>
-                    <td className="px-3 py-2.5 border-b border-[#2a3147]/60 text-slate-300 whitespace-nowrap max-w-40 truncate">{labelProximaAcao(lead.proxima_acao)}</td>
-                    <td className="px-3 py-2.5 border-b border-[#2a3147]/60 text-slate-300 whitespace-nowrap">{dash(responsavel)}</td>
+                    <td className="px-3 py-2.5 border-b border-[var(--border)]/60 text-slate-400 whitespace-nowrap">{ultima ?? '—'}</td>
+                    <td className="px-3 py-2.5 border-b border-[var(--border)]/60 text-slate-300 whitespace-nowrap max-w-40 truncate">{labelProximaAcao(lead.proxima_acao)}</td>
+                    <td className="px-3 py-2.5 border-b border-[var(--border)]/60 text-slate-300 whitespace-nowrap">{dash(responsavel)}</td>
                   </tr>
                 )
               })

@@ -6,7 +6,7 @@
   overflow: hidden;
   background:
     radial-gradient(circle at 88% 3%, rgba(62, 84, 180, 0.1), transparent 27rem),
-    #0c121f;
+    #041524;
   color: #f4f7ff;
 }
 
@@ -86,7 +86,7 @@
 
 .toolbar {
   flex-shrink: 0;
-  border-bottom: 1px solid #202c40;
+  border-bottom: 1px solid #092f4f;
   padding: 0 1.5rem 1rem;
 }
 
@@ -110,10 +110,10 @@
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border: 1px solid #28364e;
+  border: 1px solid #0b3962;
   border-radius: 0.5rem;
   padding: 0.45rem 0.85rem;
-  background: #111c2e;
+  background: #061f34;
   color: #a9b4c8;
   font-size: 0.78rem;
   font-weight: 590;
@@ -121,7 +121,7 @@
 }
 
 .tabs button:hover {
-  border-color: #3a4b68;
+  border-color: #0f4e86;
   color: #eef2ff;
 }
 
@@ -152,9 +152,9 @@
 .filters select,
 .search {
   height: 2.35rem;
-  border: 1px solid #26344a;
+  border: 1px solid #0a365d;
   border-radius: 0.48rem;
-  background: #101a2b;
+  background: #051d31;
   color: #cbd4e5;
   font-size: 0.76rem;
 }
@@ -207,10 +207,10 @@
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border: 1px solid #2a3951;
+  border: 1px solid #0b3c66;
   border-radius: 0.48rem;
   padding: 0 0.8rem;
-  background: #111c2e;
+  background: #061f34;
   color: #c1cbda;
   font-size: 0.76rem;
   font-weight: 560;
@@ -259,15 +259,15 @@
   height: 100%;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #22314a;
+  border: 1px solid #0a3459;
   border-radius: 0.65rem;
-  background: linear-gradient(180deg, rgba(18, 31, 53, 0.96), rgba(13, 24, 42, 0.94));
-  box-shadow: 0 0.75rem 2.2rem rgba(2, 7, 18, 0.13);
+  background: linear-gradient(180deg, rgba(7, 34, 59, 0.96), rgba(5, 27, 46, 0.94));
+  box-shadow: 0 0.75rem 2.2rem rgba(2, 10, 17, 0.13);
 }
 
 .columnHeader {
   flex-shrink: 0;
-  border-bottom: 1px solid rgba(40, 54, 78, 0.78);
+  border-bottom: 1px solid rgba(11, 57, 98, 0.78);
   padding: 0.75rem 0.7rem 0.68rem;
 }
 
@@ -302,7 +302,7 @@
   min-width: 1.45rem;
   border-radius: 0.38rem;
   padding: 0.18rem 0.38rem;
-  background: #263751;
+  background: #0b3a63;
   color: #d8e0ef;
   font-size: 0.68rem;
   font-weight: 690;
@@ -329,10 +329,10 @@
   align-items: center;
   gap: 0.4rem;
   margin-top: 0.5rem;
-  border: 1px solid #26344a;
+  border: 1px solid #0a365d;
   border-radius: 0.4rem;
   padding: 0 0.45rem;
-  background: #0d1626;
+  background: #05192a;
   color: #6b7a92;
 }
 
@@ -381,7 +381,7 @@
   flex: 1;
   overflow-y: auto;
   padding: 0.36rem;
-  scrollbar-color: #34445f transparent;
+  scrollbar-color: #0e477a transparent;
   scrollbar-width: thin;
 }
 
@@ -394,7 +394,7 @@
 /* "Ver mais (N)": só soma mais um lote no DOM desta coluna. */
 .verMais {
   width: 100%;
-  border: 1px dashed #2f4160;
+  border: 1px dashed #0d4576;
   border-radius: 0.5rem;
   padding: 0.5rem;
   background: transparent;
@@ -418,11 +418,11 @@
   flex-direction: column;
   align-items: stretch;
   margin: 0;
-  border: 1px solid #293954;
+  border: 1px solid #0c3d68;
   border-radius: 0.55rem;
   padding: 0.7rem;
-  background: #15243c;
-  box-shadow: 0 0.35rem 1rem rgba(1, 6, 17, 0.12);
+  background: #072743;
+  box-shadow: 0 0.35rem 1rem rgba(1, 9, 16, 0.12);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -431,7 +431,7 @@
 
 .card:hover {
   border-color: rgba(106, 115, 255, 0.58);
-  background: #182a46;
+  background: #092e4e;
   transform: translateY(-1px);
 }
 

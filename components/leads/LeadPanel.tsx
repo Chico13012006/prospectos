@@ -555,10 +555,10 @@ export default function LeadPanel({
 
   if (!selectedEmpresa) return null;
 
-  // Visual por contexto — toda diferença passa por `noPipeline`, nunca por
-  // alteração global. Pipeline: largura contida e blocos com mais respiro.
-  // Base de Leads: gaveta do tema dos módulos (fundo desfocado, entrada
-  // deslizando), igual ao painel de perfil da Prospecção.
+  // Nos dois contextos o painel é a gaveta do tema dos módulos (fundo
+  // desfocado, entrada deslizando), igual ao painel de perfil da Prospecção.
+  // Diferenças de layout passam por `noPipeline`: no Pipeline, largura contida
+  // e blocos com mais respiro.
   const noPipeline = contexto === 'pipeline';
   const larguraPainel = noPipeline
     ? 'max-w-full sm:max-w-[520px]'
@@ -570,10 +570,10 @@ export default function LeadPanel({
   return (
     <>
       <div
-        className={noPipeline ? 'fixed inset-0 bg-black/20 z-40' : `${tema.gavetaFundo} z-40`}
+        className={`${tema.gavetaFundo} z-40`}
         onClick={onClose}
       />
-      <div className={`fixed top-0 right-0 h-full w-full ${larguraPainel} z-50 flex flex-col ${noPipeline ? 'bg-[var(--bg-card)] shadow-2xl' : tema.gaveta}`}>
+      <div className={`fixed top-0 right-0 h-full w-full ${larguraPainel} z-50 flex flex-col ${tema.gaveta}`}>
         {/* Panel header */}
         <div className={`${noPipeline ? 'px-4 py-3' : 'px-5 py-4'} ${divisor}`}>
           <div className={`flex items-start justify-between ${noPipeline ? 'mb-1.5' : 'mb-2'}`}>

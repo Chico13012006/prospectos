@@ -12,6 +12,7 @@ import CentralRespostasView from '@/components/pipeline/respostas/CentralRespost
 import LeadPanel from '@/components/leads/LeadPanel';
 import NovoLeadModal from '@/components/leads/NovoLeadModal';
 import { COLUNAS_KANBAN } from '@/lib/pipeline-stages';
+import { estilosModulo as m } from '@/components/tema/Modulo';
 
 // useSearchParams() exige um limite de Suspense (Next) — por isso o conteúdo real
 // da página vive em PipelineInner e o default export só o envolve.
@@ -59,7 +60,9 @@ function PipelineInner() {
   const usingSupabase = !useFallback && !loading;
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    // Paleta do tema dos módulos: as visões pintam com tokens e com os tons
+    // azul-marinho dos próprios módulos CSS.
+    <div className={`${m.cores} h-screen flex flex-col overflow-hidden`}>
       {vista === 'cadencia' ? (
         <CadenciaView
           filtros={filtros}
@@ -114,7 +117,7 @@ function PipelineInner() {
           <p className="text-sm text-slate-400 mt-0.5">CRM de prospecção — tabela operacional, Kanban para quem já engajou</p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 text-sm text-slate-300 border border-[#2a3147] px-3 py-2 rounded-lg hover:bg-[#0f1117]">
+          <button className="flex items-center gap-2 text-sm text-slate-300 border border-[var(--border)] px-3 py-2 rounded-lg hover:bg-[var(--bg-base)]">
             <Settings size={14} /> Configurar automações
           </button>
         </div>
@@ -125,7 +128,7 @@ function PipelineInner() {
         {/* Aba: forma de VISUALIZAR os mesmos leads (não muda os estágios do motor).
             Tabela é a padrão — Kanban só mostra quem já respondeu/tem interesse/
             virou oportunidade (ver COLUNAS_KANBAN). */}
-        <div className="flex items-center rounded-lg border border-[#2a3147] bg-[#1a1f2e] p-0.5">
+        <div className="flex items-center rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-0.5">
           {([
             { id: 'tabela', label: 'Tabela' },
             { id: 'comercial', label: 'Kanban' },
