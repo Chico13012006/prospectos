@@ -3,37 +3,17 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {
-  LayoutDashboard,
-  Kanban,
-  Database,
-  BrainCircuit,
-  Calendar,
-  Users,
-  Briefcase,
-  Settings,
-  Zap,
-  LogOut,
-  Bot,
-  Radar,
-} from 'lucide-react';
+import { LayoutDashboard, Settings, Zap, LogOut } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
+import { EVENTO_MENU_ATUALIZADO, itensVisiveis } from '@/lib/navegacao/menu';
+import { ICONE_MENU } from './iconesMenu';
 
 // Navegação consolidada (auditoria 11/08): Oportunidades, Campanhas, ROI,
 // Processo comercial, Tarefas e Workflows deixaram de ser itens de 1º nível —
 // viraram abas/visões dentro de módulos maiores (Automação, Comercial,
 // Inteligência Comercial, Configurações). As rotas antigas redirecionam.
-const mainNav = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/pipeline', icon: Kanban, label: 'Pipeline de Contato' },
-  { href: '/base-leads', icon: Database, label: 'Base de Leads' },
-  { href: '/prospeccao', icon: Radar, label: 'Prospecção' },
-  { href: '/reunioes', icon: Calendar, label: 'Reuniões' },
-  { href: '/inteligencia-comercial', icon: BrainCircuit, label: 'Inteligência Comercial' },
-  { href: '/comercial', icon: Briefcase, label: 'Comercial' },
-  { href: '/equipe', icon: Users, label: 'Equipe' },
-  { href: '/automacao', icon: Bot, label: 'Automação' },
-];
+// A organização escolhe o que aparece (Configurações > Personalização > Menu);
+// a lista e a regra ficam em lib/navegacao/menu.ts.
 
 interface PerfilSidebar {
   nome: string | null;
@@ -54,6 +34,8 @@ export default function Sidebar() {
   // Sem `workspace.configure` o item nem aparece — a página e as APIs recusam de
   // qualquer forma, isto só evita oferecer um caminho que termina em erro.
   const [podeConfigurar, setPodeConfigurar] = useState(false);
+  // null = ainda carregando: não desenha a lista para não piscar item escondido.
+  const [modulos, setModulos] = useState<Record<string, boolean> | null>(null);
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + '/');
@@ -71,6 +53,10 @@ export default function Sidebar() {
         });
       })
       .catch(() => {});
+    fetch('/api/configuracoes/workspace')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => { if (ativo) setModulos(data?.config?.modulos ?? {}); })
+      .catch(() => { if (ativo) setModulos({}); });
     fetch('/api/rbac/permissoes')
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
@@ -79,7 +65,10 @@ export default function Sidebar() {
         setPodeConfigurar(minhas.includes('workspace.configure'));
       })
       .catch(() => {});
-    return () => { ativo = false; };
+    // Salvar em Personalização > Menu reflete aqui sem recarregar a página.
+    const aoAtualizar = (e: Event) => setModulos((e as CustomEvent<Record<string, boolean>>).detail ?? {});
+    window.addEventListener(EVENTO_MENU_ATUALIZADO, aoAtualizar);
+    return () => { ativo = false; window.removeEventListener(EVENTO_MENU_ATUALIZADO, aoAtualizar); };
   }, []);
 
   async function handleLogout() {
@@ -110,7 +99,8 @@ export default function Sidebar() {
 
       {/* Main Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {mainNav.map(({ href, icon: Icon, label }) => {
+        {modulos !== null && itensVisiveis(modulos).map(({ id, href, label }) => {
+          const Icon = ICONE_MENU[id] ?? LayoutDashboard;
           const active = isActive(href);
           return (
             <Link key={href} href={href} className={navItemClasses(active)}>

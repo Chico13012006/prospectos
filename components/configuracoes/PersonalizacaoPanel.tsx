@@ -2,18 +2,19 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Columns3, SlidersHorizontal, Kanban, Type,
+  Columns3, SlidersHorizontal, Kanban, Type, PanelLeft,
   Save, Check, ToggleLeft, ToggleRight, Lock,
   Info, Plus, Trash2, ChevronUp, ChevronDown,
 } from 'lucide-react';
 import { CAMPOS_UI_PADRAO, camposUIEfetivos, type CampoUI } from '@/lib/config/workspaceConfig';
+import MenuPersonalizacaoPanel from './MenuPersonalizacaoPanel';
 
-// Personalização por workspace: 4 abas (Campos / Filtros e visualizações /
-// Pipeline / Terminologia). A aba Campos é funcional e reflete em Base de Leads
+// Personalização por workspace: 5 abas (Campos / Filtros e visualizações /
+// Pipeline / Terminologia / Menu). A aba Campos é funcional e reflete em Base de Leads
 // e Pipeline. As demais abas expõem os mesmos dados do ProcessoComercialPanel
 // para que o usuário tenha tudo num lugar só.
 
-type Aba = 'campos' | 'filtros' | 'pipeline' | 'terminologia';
+type Aba = 'campos' | 'filtros' | 'pipeline' | 'terminologia' | 'menu';
 
 interface PipelineEstagio { id: string; chave: string; nome: string; papel: string; cor: string | null; ordem: number }
 interface Pipeline { id: string; nome: string; tipo: string; ativo: boolean; estagios: PipelineEstagio[] }
@@ -300,6 +301,7 @@ export default function PersonalizacaoPanel() {
     { id: 'filtros', label: 'Filtros e visualizações', Icon: SlidersHorizontal },
     { id: 'pipeline', label: 'Pipeline', Icon: Kanban },
     { id: 'terminologia', label: 'Terminologia', Icon: Type },
+    { id: 'menu', label: 'Menu', Icon: PanelLeft },
   ];
 
   const input = 'w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 disabled:opacity-50';
@@ -419,6 +421,9 @@ export default function PersonalizacaoPanel() {
       {aba === 'pipeline' && (
         <PipelineEditor pipelines={pipelines} podeEditar={podeEditar} onSalvo={carregar} />
       )}
+
+      {/* --- Aba Menu --- */}
+      {aba === 'menu' && <MenuPersonalizacaoPanel />}
 
       {/* --- Aba Terminologia --- */}
       {aba === 'terminologia' && (
