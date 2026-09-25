@@ -17,6 +17,7 @@ import {
   Plus,
   Search,
   Send,
+  SquareKanban,
   Target,
   X,
 } from 'lucide-react'
@@ -283,6 +284,7 @@ export default function CentralRespostasView({
   usingSupabase,
   onOpenCadencia,
   onOpenLista,
+  onOpenKanban,
   onNovoContato,
 }: {
   filtros: GlobalFilterState
@@ -295,6 +297,7 @@ export default function CentralRespostasView({
   usingSupabase: boolean
   onOpenCadencia: () => void
   onOpenLista: () => void
+  onOpenKanban: () => void
   onNovoContato: () => void
 }) {
   const [conversas, setConversas] = useState<ConversaResposta[]>([])
@@ -814,6 +817,9 @@ export default function CentralRespostasView({
             </button>
             <button type="button" onClick={onOpenLista} aria-pressed="false">
               <List size={15} /> Lista
+            </button>
+            <button type="button" onClick={onOpenKanban} aria-pressed="false">
+              <SquareKanban size={15} /> Kanban
             </button>
             <button type="button" className={styles.tabActive} aria-pressed="true">
               <MessagesSquare size={15} /> Central de Respostas

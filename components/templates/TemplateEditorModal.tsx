@@ -14,7 +14,8 @@ import HtmlEmailEditor from '@/components/automacao/HtmlEmailEditor'
 import PreviaEmailModal from '@/components/automacao/PreviaEmailModal'
 import { atualizarTemplateBiblioteca, criarTemplateBiblioteca } from '@/lib/api'
 import { CANAIS_NOVO_TEMPLATE, rotuloCanal } from '@/lib/templates/biblioteca'
-import { VARIAVEIS_TEMPLATE, previaTemplate } from '@/lib/templates/previa'
+import { previaTemplate, variaveisDoTemplate } from '@/lib/templates/previa'
+import { ESTAGIOS_DESTINO_KANBAN } from '@/lib/pipeline/mensagemEtapa'
 import {
   LIMITE_ASSUNTO_TEMPLATE, LIMITE_NOME_TEMPLATE, validarEdicaoTemplate, validarNovoTemplate,
   type CanalTemplate, type FormatoTemplate, type TemplateBiblioteca,
@@ -61,8 +62,8 @@ export default function TemplateEditorModal({
   const ehEmail = canal === 'email'
   const usaHtml = ehEmail && formato === 'html'
   const previa = useMemo(
-    () => previaTemplate({ canal, assunto, corpo, html: usaHtml ? html ?? null : null }),
-    [canal, assunto, corpo, html, usaHtml],
+    () => previaTemplate({ canal, assunto, corpo, html: usaHtml ? html ?? null : null, tipo }),
+    [canal, assunto, corpo, html, usaHtml, tipo],
   )
 
   const conteudo = useMemo(() => ({
@@ -190,7 +191,7 @@ export default function TemplateEditorModal({
                         onChange={(e) => setTipo(normalizarChave(e.target.value))}
                         placeholder="ex.: renovacao_1"
                       />
-                      <datalist id="tipos-conhecidos">{tiposConhecidos.map((t) => <option key={t} value={t} />)}</datalist>
+                      <datalist id="tipos-conhecidos">{[...new Set([...tiposConhecidos, ...ESTAGIOS_DESTINO_KANBAN])].map((t) => <option key={t} value={t} />)}</datalist>
                     </>
                   )}
                 </label>
@@ -206,7 +207,13 @@ export default function TemplateEditorModal({
                   )}
                 </label>
               </div>
-              {!edicao && <p className={`${s.dica} -mt-1.5`}>Chave: letras minúsculas, números e _. Segmento vazio = vale para todos.</p>}
+              {!edicao && (
+                <p className={`${s.dica} -mt-1.5`}>
+                  Chave: letras minúsculas, números e _. Segmento vazio = vale para todos.
+                  Para a mensagem de uma etapa do Kanban (&quot;Mover e enviar&quot;), use a chave da etapa:
+                  {' '}<code>respondeu</code>, <code>reuniao_agendada</code> ou <code>ganho</code>.
+                </p>
+              )}
             </section>
 
             {/* Conteúdo */}
@@ -258,7 +265,7 @@ export default function TemplateEditorModal({
 
               <div className={s.variaveis}>
                 <span>Inserir no {alvoVariavel === 'assunto' && ehEmail ? 'assunto' : 'texto'}:</span>
-                {VARIAVEIS_TEMPLATE.map((v) => (
+                {variaveisDoTemplate(tipo).map((v) => (
                   <button
                     key={v}
                     type="button"

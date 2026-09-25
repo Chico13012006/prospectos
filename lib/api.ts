@@ -452,6 +452,49 @@ export async function executarAcao(
   return res.json()
 }
 
+// KANBAN: mover o lead de etapa, com ou sem a mensagem da etapa de destino
+// (/api/leads/[id]/mover). A prévia (/mover/previa) não tem efeito nenhum.
+// Não lança em erro de negócio: devolve { ok: false, erro, codigo } para o
+// modal mostrar o motivo.
+export interface CorpoMoverLead {
+  de: string
+  para: string
+  reuniao?: { data: string; hora: string }
+  canal?: 'email' | 'whatsapp' | null
+}
+
+export type RespostaPreviaMover =
+  | {
+    ok: true
+    modoEnsaio: boolean
+    envio: { canal: 'email' | 'whatsapp'; destino: string; templateNome: string; assunto: string | null; texto: string; html: string | null }
+  }
+  | { ok: false; erro: string; codigo?: string }
+
+export type RespostaMoverLead =
+  | { ok: true; simulado: true; canal: 'email' | 'whatsapp'; destino: string }
+  | { ok: true; simulado: false; estagio: string; enviado: null | { canal: 'email' | 'whatsapp'; destino: string }; registrada: boolean }
+  | { ok: false; erro: string; codigo?: string }
+
+async function postarMover<T>(url: string, corpo: CorpoMoverLead): Promise<T | { ok: false; erro: string; codigo?: string }> {
+  try {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) })
+    const dados = await res.json().catch(() => ({}))
+    if (!res.ok) return { ok: false, erro: dados.erro ?? `Erro ${res.status}`, codigo: dados.codigo }
+    return dados as T
+  } catch {
+    return { ok: false, erro: 'Sem conexão com o servidor. Tente de novo.' }
+  }
+}
+
+export function previaMoverLead(leadId: string, corpo: CorpoMoverLead) {
+  return postarMover<RespostaPreviaMover>(`/api/leads/${encodeURIComponent(leadId)}/mover/previa`, corpo)
+}
+
+export function moverLeadKanban(leadId: string, corpo: CorpoMoverLead) {
+  return postarMover<RespostaMoverLead>(`/api/leads/${encodeURIComponent(leadId)}/mover`, corpo)
+}
+
 // INTELIGÊNCIA COMERCIAL POR LEAD (sprint item 4): dispara a rota server-side
 // que chama a IA (Haiku) e devolve a leitura comercial do lead. Sob demanda —
 // não é chamada no load do painel para não gastar tokens à toa.

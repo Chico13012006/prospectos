@@ -14,6 +14,7 @@ import {
   Search,
   Send,
   SlidersHorizontal,
+  SquareKanban,
   X,
 } from 'lucide-react'
 import { getLeadsCadencia, type EtapaCadencia, type LeadCadencia } from '@/lib/api'
@@ -295,6 +296,7 @@ export default function CadenciaView({
   loading,
   usingSupabase,
   onOpenList,
+  onOpenKanban,
   onOpenRespostas,
   onNovoContato,
 }: {
@@ -309,6 +311,7 @@ export default function CadenciaView({
   loading: boolean
   usingSupabase: boolean
   onOpenList: () => void
+  onOpenKanban: () => void
   onOpenRespostas: () => void
   onNovoContato: () => void
 }) {
@@ -393,6 +396,9 @@ export default function CadenciaView({
             </button>
             <button type="button" onClick={onOpenList} aria-pressed="false">
               <List size={15} /> Lista
+            </button>
+            <button type="button" onClick={onOpenKanban} aria-pressed="false">
+              <SquareKanban size={15} /> Kanban
             </button>
             <button type="button" onClick={onOpenRespostas} aria-pressed="false">
               <MessagesSquare size={15} /> Central de Respostas

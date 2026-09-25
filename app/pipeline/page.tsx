@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Settings, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { getPipelineFiltrosOpcoes } from '@/lib/api';
-import PipelineColumn from '@/components/pipeline/PipelineColumn';
+import PipelineColumn, { type LeadArrastado } from '@/components/pipeline/PipelineColumn';
+import MoverLeadModal, { type MovimentoPendente } from '@/components/pipeline/MoverLeadModal';
 import GlobalFilters, { type GlobalFilterState } from '@/components/pipeline/GlobalFilters';
 import CadenciaView from '@/components/pipeline/cadencia/CadenciaView';
 import ListaView from '@/components/pipeline/lista/ListaView';
@@ -12,6 +13,7 @@ import CentralRespostasView from '@/components/pipeline/respostas/CentralRespost
 import LeadPanel from '@/components/leads/LeadPanel';
 import NovoLeadModal from '@/components/leads/NovoLeadModal';
 import { COLUNAS_KANBAN } from '@/lib/pipeline-stages';
+import { ESTAGIO_DESTINO_POR_COLUNA } from '@/lib/pipeline/mensagemEtapa';
 import { estilosModulo as m } from '@/components/tema/Modulo';
 
 // useSearchParams() exige um limite de Suspense (Next) — por isso o conteúdo real
@@ -36,11 +38,26 @@ function PipelineInner() {
   const [loading, setLoading] = useState(true);
   const [useFallback, setUseFallback] = useState(false);
   const [showNovoLead, setShowNovoLead] = useState(false);
+  // Kanban: lead solto em outra coluna aguardando "Apenas mover"/"Mover e enviar".
+  const [movimento, setMovimento] = useState<MovimentoPendente | null>(null);
+  const [avisoMovimento, setAvisoMovimento] = useState<string | null>(null);
 
   // Cada PipelineColumn busca os seus leads server-side (paginado + COUNT). No
   // mount só fazemos uma sonda leve — carregar as opções dos filtros — que também
   // serve de teste de conexão com o Supabase.
   const bumpReload = useCallback(() => setReloadKey(k => k + 1), []);
+
+  const aoSoltarLead = useCallback((colunaId: string, lead: LeadArrastado) => {
+    const para = ESTAGIO_DESTINO_POR_COLUNA[colunaId];
+    if (!para) return;
+    setMovimento({ leadId: lead.id, empresa: lead.empresa, de: lead.estagio, para });
+  }, []);
+
+  useEffect(() => {
+    if (!avisoMovimento) return;
+    const t = setTimeout(() => setAvisoMovimento(null), 6000);
+    return () => clearTimeout(t);
+  }, [avisoMovimento]);
 
   useEffect(() => {
     getPipelineFiltrosOpcoes()
@@ -76,6 +93,7 @@ function PipelineInner() {
           loading={loading}
           usingSupabase={usingSupabase}
           onOpenList={() => setVista('tabela')}
+          onOpenKanban={() => setVista('comercial')}
           onOpenRespostas={() => setVista('respostas')}
           onNovoContato={() => setShowNovoLead(true)}
         />
@@ -91,6 +109,7 @@ function PipelineInner() {
           usingSupabase={usingSupabase}
           onOpenCadencia={() => setVista('cadencia')}
           onOpenLista={() => setVista('tabela')}
+          onOpenKanban={() => setVista('comercial')}
           onNovoContato={() => setShowNovoLead(true)}
         />
       ) : vista === 'tabela' ? (
@@ -106,6 +125,7 @@ function PipelineInner() {
           loading={loading}
           usingSupabase={usingSupabase}
           onOpenCadencia={() => setVista('cadencia')}
+          onOpenKanban={() => setVista('comercial')}
           onOpenRespostas={() => setVista('respostas')}
           onNovoContato={() => setShowNovoLead(true)}
         />
@@ -114,28 +134,25 @@ function PipelineInner() {
       <div className="px-6 pt-6 pb-3 flex items-start justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Pipeline de Contato</h1>
-          <p className="text-sm text-slate-400 mt-0.5">CRM de prospecção — tabela operacional, Kanban para quem já engajou</p>
-        </div>
-        <div className="flex gap-3">
-          <button className="flex items-center gap-2 text-sm text-slate-300 border border-[var(--border)] px-3 py-2 rounded-lg hover:bg-[var(--bg-base)]">
-            <Settings size={14} /> Configurar automações
-          </button>
+          <p className="text-sm text-slate-400 mt-0.5">Quem já respondeu. Arraste um lead para outra coluna para mover — com ou sem a mensagem da etapa.</p>
         </div>
       </div>
 
-      {/* Filtros globais + abas (Comercial x Cadência) */}
+      {/* Filtros globais + abas (as mesmas das outras visões) */}
       <div className="px-6 pb-3 flex items-center gap-2 flex-wrap shrink-0">
-        {/* Aba: forma de VISUALIZAR os mesmos leads (não muda os estágios do motor).
-            Tabela é a padrão — Kanban só mostra quem já respondeu/tem interesse/
-            virou oportunidade (ver COLUNAS_KANBAN). */}
+        {/* Aba: forma de VISUALIZAR os mesmos leads. O Kanban só mostra quem já
+            respondeu/tem interesse/virou oportunidade (ver COLUNAS_KANBAN). */}
         <div className="flex items-center rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-0.5">
           {([
-            { id: 'tabela', label: 'Tabela' },
-            { id: 'comercial', label: 'Kanban' },
             { id: 'cadencia', label: 'Cadência' },
+            { id: 'tabela', label: 'Lista' },
+            { id: 'comercial', label: 'Kanban' },
+            { id: 'respostas', label: 'Central de Respostas' },
           ] as const).map(v => (
             <button
               key={v.id}
+              type="button"
+              aria-pressed={vista === v.id}
               onClick={() => setVista(v.id)}
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 vista === v.id ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:text-slate-200'
@@ -180,6 +197,7 @@ function PipelineInner() {
                 onSelect={setSelectedId}
                 reloadKey={reloadKey}
                 comFiltroData={col.tipo === 'reservatorio'}
+                onSoltar={(lead) => aoSoltarLead(col.id, lead)}
               />
             ))}
           </div>
@@ -201,6 +219,20 @@ function PipelineInner() {
           onClose={() => setShowNovoLead(false)}
           onCreated={bumpReload}
         />
+      )}
+
+      {movimento && (
+        <MoverLeadModal
+          movimento={movimento}
+          onFechar={() => setMovimento(null)}
+          onConcluido={(aviso) => { setMovimento(null); setAvisoMovimento(aviso); bumpReload(); }}
+        />
+      )}
+
+      {avisoMovimento && (
+        <div role="status" className="fixed bottom-5 right-5 z-50 max-w-sm rounded-xl border border-[#1b68a8] bg-[#06213d] px-4 py-3 text-sm text-slate-100 shadow-2xl">
+          {avisoMovimento}
+        </div>
       )}
     </div>
   );

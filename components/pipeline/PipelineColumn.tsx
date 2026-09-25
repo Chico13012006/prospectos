@@ -11,6 +11,10 @@ import LeadCardCompact, { type StatusChip } from './LeadCardCompact'
 
 const PAGE = 50
 
+// Arrastar no Kanban: o cartão leva id, empresa, estágio e coluna de origem.
+const TIPO_ARRASTE = 'application/x-prospectos-lead'
+export interface LeadArrastado { id: string; empresa: string; estagio: string; coluna: string }
+
 // Chips de status da visão Cadência.
 const CHIP_MAP: Record<ChipCadencia, StatusChip> = {
   enviado: { label: 'E-mail enviado', classes: 'bg-blue-500/20 text-blue-300' },
@@ -43,6 +47,7 @@ export default function PipelineColumn({
   reloadKey,
   comFiltroData = false,
   chipKind,
+  onSoltar,
 }: {
   stage: { id: string; label: string; color: string; estagios: string[]; followups?: number | { gte: number } }
   filtros: GlobalFilterState
@@ -52,6 +57,8 @@ export default function PipelineColumn({
   comFiltroData?: boolean
   // Visão Cadência: chip de status mostrado em cada card desta coluna.
   chipKind?: ChipCadencia
+  // Kanban: presente = cartões arrastáveis e coluna que recebe lead de outra.
+  onSoltar?: (lead: LeadArrastado) => void
 }) {
   const [dias, setDias] = useState(30)
   const [busca, setBusca] = useState('')
@@ -61,6 +68,8 @@ export default function PipelineColumn({
   const offsetRef = useRef(0)
   const carregandoRef = useRef(false)
   const parentRef = useRef<HTMLDivElement>(null)
+  const [alvo, setAlvo] = useState(false)
+  const contadorAlvo = useRef(0)
 
   // Busca local da etapa OU busca global (a que estiver preenchida).
   const buscaEfetiva = busca.trim() || filtros.search.trim()
@@ -119,8 +128,32 @@ export default function PipelineColumn({
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 300) carregar(false)
   }
 
+  const aoArrastarSobre = (e: React.DragEvent) => {
+    if (!onSoltar || !e.dataTransfer.types.includes(TIPO_ARRASTE)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+  const aoSoltar = (e: React.DragEvent) => {
+    contadorAlvo.current = 0
+    setAlvo(false)
+    if (!onSoltar) return
+    const bruto = e.dataTransfer.getData(TIPO_ARRASTE)
+    if (!bruto) return
+    e.preventDefault()
+    try {
+      const lead = JSON.parse(bruto) as LeadArrastado
+      if (lead.coluna !== stage.id) onSoltar(lead)
+    } catch { /* arraste de outra origem: ignora */ }
+  }
+
   return (
-    <div className="flex flex-col h-full w-72 shrink-0">
+    <div
+      className={`flex flex-col h-full w-72 shrink-0 rounded-xl transition-shadow ${alvo ? 'ring-2 ring-indigo-400/60 ring-offset-2 ring-offset-[var(--bg-base)]' : ''}`}
+      onDragOver={onSoltar ? aoArrastarSobre : undefined}
+      onDragEnter={onSoltar ? (e) => { if (e.dataTransfer.types.includes(TIPO_ARRASTE)) { contadorAlvo.current++; setAlvo(true) } } : undefined}
+      onDragLeave={onSoltar ? () => { contadorAlvo.current = Math.max(0, contadorAlvo.current - 1); if (contadorAlvo.current === 0) setAlvo(false) } : undefined}
+      onDrop={onSoltar ? aoSoltar : undefined}
+    >
       {/* Cabeçalho: título + TOTAL REAL (COUNT do servidor) */}
       <div className="flex items-center justify-between mb-2 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
@@ -177,6 +210,13 @@ export default function PipelineColumn({
                     data-index={vi.index}
                     ref={virtualizer.measureElement}
                     style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${vi.start}px)` }}
+                    draggable={!!onSoltar}
+                    onDragStart={onSoltar ? (e) => {
+                      const payload: LeadArrastado = { id: lead.id, empresa: lead.empresa ?? 'Lead', estagio: lead.estagio, coluna: stage.id }
+                      e.dataTransfer.setData(TIPO_ARRASTE, JSON.stringify(payload))
+                      e.dataTransfer.effectAllowed = 'move'
+                    } : undefined}
+                    className={onSoltar ? 'cursor-grab active:cursor-grabbing' : undefined}
                   >
                     <LeadCardCompact
                       lead={lead}

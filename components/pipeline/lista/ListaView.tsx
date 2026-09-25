@@ -15,6 +15,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  SquareKanban,
   X,
 } from 'lucide-react'
 import { getTodosLeads, type LeadOrdenavel } from '@/lib/api'
@@ -108,6 +109,7 @@ export default function ListaView({
   loading,
   usingSupabase,
   onOpenCadencia,
+  onOpenKanban,
   onOpenRespostas,
   onNovoContato,
 }: {
@@ -122,6 +124,7 @@ export default function ListaView({
   loading: boolean
   usingSupabase: boolean
   onOpenCadencia: () => void
+  onOpenKanban: () => void
   onOpenRespostas: () => void
   onNovoContato: () => void
 }) {
@@ -217,6 +220,9 @@ export default function ListaView({
             </button>
             <button type="button" className={styles.tabActive} aria-pressed="true">
               <List size={15} /> Lista
+            </button>
+            <button type="button" onClick={onOpenKanban} aria-pressed="false">
+              <SquareKanban size={15} /> Kanban
             </button>
             <button type="button" onClick={onOpenRespostas} aria-pressed="false">
               <MessagesSquare size={15} /> Central de Respostas

@@ -100,3 +100,19 @@ describe('prévia não tem efeito', () => {
     expect(fonte).not.toMatch(/supabase|nodemailer|fetch\(|EmailProvider|server-only|registrarInteracao/)
   })
 })
+
+describe('variáveis da mensagem de Reunião Agendada', () => {
+  it('só a chave reuniao_agendada ganha data e hora da reunião', async () => {
+    const { variaveisDoTemplate } = await import('../previa')
+    expect(variaveisDoTemplate('reuniao_agendada')).toEqual([...VARIAVEIS_MENSAGEM_CAMPANHA, 'data_reuniao', 'hora_reuniao'])
+    expect(variaveisDoTemplate('ganho')).toEqual([...VARIAVEIS_MENSAGEM_CAMPANHA])
+    expect(variaveisDoTemplate(null)).toEqual([...VARIAVEIS_MENSAGEM_CAMPANHA])
+  })
+
+  it('a prévia preenche a reunião de exemplo só nessa chave', () => {
+    const corpo = 'Dia {{data_reuniao}} às {{hora_reuniao}}'
+    expect(previaTemplate({ canal: 'whatsapp', assunto: null, corpo, html: null, tipo: 'reuniao_agendada' }).texto)
+      .toBe('Dia 30/09/2026 às 14:00')
+    expect(previaTemplate({ canal: 'whatsapp', assunto: null, corpo, html: null, tipo: 'ganho' }).texto).toBe(corpo)
+  })
+})
