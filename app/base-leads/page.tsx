@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { Database, Plus, FileSpreadsheet, Megaphone, Rocket } from 'lucide-react';
+import { ChevronRight, Database, Plus, FileSpreadsheet, Megaphone, Rocket } from 'lucide-react';
 import { formatDate, dash } from '@/lib/utils';
 import { labelEstagio, corEstagio } from '@/lib/pipeline-stages';
 import { getTodosLeads, getPipelineFiltrosOpcoes, type BaseLeadsFiltros } from '@/lib/api';
@@ -13,6 +13,8 @@ import NovoLeadModal from '@/components/leads/NovoLeadModal';
 import ImportarLeadsModal from '@/components/leads/ImportarLeadsModal';
 import FiltrosBase, { FILTRO_VAZIO, type BaseFiltroForm } from '@/components/base/FiltrosBase';
 import { EstadoTabela, PaginacaoTabela } from '@/components/ui/tabela';
+import CaixaSelecao from '@/components/prospeccao/CaixaSelecao';
+import { estilosModulo as m, TituloSecao } from '@/components/tema/Modulo';
 
 const PAGE = 50;
 
@@ -152,202 +154,190 @@ export default function BaseLeadsPage() {
   }, [data]);
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    // Tema dos módulos (components/tema): mesma paleta e cabeçalho da Prospecção.
+    // A página segue em altura de tela: só a tabela rola, a paginação fica fixa.
+    <div className={`${m.cores} h-screen flex flex-col overflow-hidden`}>
       {/* Header */}
-      <div className="px-6 pt-6 pb-3 shrink-0 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-            <Database size={22} className="text-indigo-400" /> Base de Leads
-          </h1>
-          <p className="text-sm text-slate-400 mt-0.5">Banco geral — todos os leads, em qualquer estado.</p>
-        </div>
-        <div className="shrink-0 flex items-center gap-3">
-          <div className="flex gap-2">
+      <header className={`${m.pageHeader} px-6 pt-5 pb-3 shrink-0`}>
+        <nav className={m.breadcrumb} aria-label="Navegação estrutural">
+          <span>Execução</span><ChevronRight size={13} aria-hidden="true" /><strong>Base de Leads</strong>
+        </nav>
+        <div className={m.titleRow}>
+          <div>
+            <h1>Base de Leads</h1>
+            <p>Banco geral — todos os leads, em qualquer estado.</p>
+          </div>
+          <div className={m.actions}>
             {selecionadosCampanha.size > 0 && (
               <>
-                <Link
-                  href={hrefProspeccao}
-                  className="flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-                >
+                <Link href={hrefProspeccao} className={`${m.primaryButton} focus-ring`}>
                   <Rocket size={14} /> Iniciar prospecção ({selecionadosCampanha.size})
                 </Link>
-                <Link
-                  href={hrefComunicado}
-                  className="flex items-center gap-2 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-sm font-medium text-indigo-200 hover:bg-indigo-500/20"
-                >
+                <Link href={hrefComunicado} className={`${m.outlineButton} focus-ring`}>
                   <Megaphone size={14} /> Enviar novidade
                 </Link>
               </>
             )}
-            <button
-              onClick={() => setModal('importar')}
-              className="flex items-center gap-2 text-sm text-slate-300 border border-[#2a3147] px-3 py-2 rounded-lg hover:bg-[#0f1117]"
-            >
+            <button type="button" onClick={() => setModal('importar')} className={`${m.outlineButton} focus-ring`}>
               <FileSpreadsheet size={14} /> Importar leads
             </button>
-            <button
-              onClick={() => setModal('novo')}
-              className="flex items-center gap-2 text-sm font-medium text-white px-4 py-2 rounded-lg"
-              style={{ backgroundColor: '#1e3a5f' }}
-            >
+            <button type="button" onClick={() => setModal('novo')} className={`${selecionadosCampanha.size > 0 ? m.outlineButton : m.primaryButton} focus-ring`}>
               <Plus size={14} /> Novo lead
             </button>
           </div>
-          {!useFallback && (
-            <div className="text-right">
-              <div className="text-2xl font-bold text-slate-100 leading-none tabular-nums">{total.toLocaleString('pt-BR')}</div>
-              <div className="text-xs text-slate-500 mt-1">
-                {total === 1 ? 'lead' : 'leads'}{loading ? '…' : ''}
-              </div>
-            </div>
-          )}
         </div>
-      </div>
+      </header>
 
       {/* Filtros */}
-      <div className="px-6 pb-3 shrink-0">
+      <section className={`${m.painel} mx-6 mb-3 shrink-0 px-4 py-3`}>
         <FiltrosBase
           value={form}
           onChange={setForm}
           responsaveis={filtroOpcoes.responsaveis}
           segmentos={filtroOpcoes.segmentos}
         />
-      </div>
+      </section>
 
-      {/* Tabela */}
-      <div className="flex-1 min-h-0 px-6 pb-2 overflow-auto">
-        {useFallback ? (
-          <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2">
-            <span className="text-sm font-medium text-slate-400">Sem conexão com os dados.</span>
-            <span className="text-xs">Verifique a conexão com o Supabase.</span>
-          </div>
-        ) : (
-          <table className="w-full text-sm border-separate border-spacing-0">
-            <thead className="sticky top-0 z-10">
-              <tr className="text-left text-xs uppercase tracking-wide text-slate-500 bg-[var(--bg-base)]">
-                <th className="w-10 border-b border-[var(--border)] px-3 py-2.5">
-                  <input
-                    type="checkbox"
-                    checked={todosDaPaginaSelecionados}
-                    onChange={alternarPagina}
-                    aria-label="Selecionar todos os leads desta página"
-                    className="h-4 w-4 accent-indigo-500"
-                  />
-                </th>
-                {camposUI.find(c => c.chave === 'empresa')?.visivel !== false && (
-                  <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Empresa</th>
-                )}
-                {camposUI.find(c => c.chave === 'contato_nome')?.visivel !== false && (
-                  <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Contato</th>
-                )}
-                {camposUI.find(c => c.chave === 'responsavel_id')?.visivel !== false && (
-                  <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Responsável</th>
-                )}
-                {camposUI.find(c => c.chave === 'estagio')?.visivel !== false && (
-                  <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Status</th>
-                )}
-                <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Follow-up</th>
-                {camposUI.find(c => c.chave === 'score')?.visivel !== false && (
-                  <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">
-                    <button onClick={toggleOrdenarScore}
-                      className="inline-flex items-center gap-1 uppercase tracking-wide hover:text-slate-300 transition-colors focus-ring rounded"
-                      title="Ordenar por score">
-                      Score {ordenarPor ? (ordenarPor.asc ? '↑' : '↓') : '↕'}
-                    </button>
+      {/* Tabela + paginação num painel; só o miolo rola */}
+      <section className={`${m.painel} mx-6 mb-4 flex-1 min-h-0 flex flex-col overflow-hidden`}>
+        <div className={`${m.painelBarra} shrink-0`}>
+          <TituloSecao icone={Database} titulo="Leads" subtitulo="Clique numa linha para abrir o lead; marque para montar uma campanha." />
+          {!useFallback && (
+            <div className="text-right shrink-0">
+              <div className="text-xl font-bold text-slate-100 leading-none tabular-nums">{total.toLocaleString('pt-BR')}</div>
+              <div className="text-xs text-slate-400 mt-1">
+                {total === 1 ? 'lead' : 'leads'}{loading ? '…' : ''}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Tabela */}
+        <div className="flex-1 min-h-0 overflow-auto">
+          {useFallback ? (
+            <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2">
+              <span className="text-sm font-medium text-slate-400">Sem conexão com os dados.</span>
+              <span className="text-xs">Verifique a conexão com o Supabase.</span>
+            </div>
+          ) : (
+            <table className="w-full text-sm border-separate border-spacing-0">
+              <thead className="sticky top-0 z-10">
+                <tr className="text-left text-xs uppercase tracking-wide text-slate-400 bg-[var(--bg-elevated)]">
+                  <th className="w-10 border-b border-[var(--border)] px-3 py-2.5">
+                    <CaixaSelecao marcado={todosDaPaginaSelecionados} onChange={alternarPagina} rotulo="Selecionar todos os leads desta página" />
                   </th>
+                  {camposUI.find(c => c.chave === 'empresa')?.visivel !== false && (
+                    <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Empresa</th>
+                  )}
+                  {camposUI.find(c => c.chave === 'contato_nome')?.visivel !== false && (
+                    <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Contato</th>
+                  )}
+                  {camposUI.find(c => c.chave === 'responsavel_id')?.visivel !== false && (
+                    <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Responsável</th>
+                  )}
+                  {camposUI.find(c => c.chave === 'estagio')?.visivel !== false && (
+                    <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Status</th>
+                  )}
+                  <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Follow-up</th>
+                  {camposUI.find(c => c.chave === 'score')?.visivel !== false && (
+                    <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">
+                      <button onClick={toggleOrdenarScore}
+                        className="inline-flex items-center gap-1 uppercase tracking-wide hover:text-slate-300 transition-colors focus-ring rounded"
+                        title="Ordenar por score">
+                        Score {ordenarPor ? (ordenarPor.asc ? '↑' : '↓') : '↕'}
+                      </button>
+                    </th>
+                  )}
+                  {camposUI.find(c => c.chave === 'data_validade')?.visivel === true && (
+                    <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Val. laudo</th>
+                  )}
+                  {['Cidade/UF', 'Última interação', 'Cadastrado em'].map(h => (
+                    <th key={h} className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.length === 0 ? (
+                  <EstadoTabela colSpan={10} loading={loading} />
+                ) : (
+                  data.map(lead => {
+                    const responsavel = lead.usuarios?.nome ?? lead.responsavel_nome ?? null;
+                    const cidadeUf = [lead.cidade, lead.estado].filter(Boolean).join('/');
+                    const selecionado = selectedId === lead.id;
+                    return (
+                      <tr
+                        key={lead.id}
+                        onClick={() => setSelectedId(lead.id)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(lead.id); } }}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`Abrir ${lead.empresa ?? 'lead'}`}
+                        className={`cursor-pointer transition-colors focus-ring ${selecionado ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--bg-card)]'}`}
+                      >
+                        <td className="w-10 border-b border-[var(--border-subtle)] px-3 py-2.5" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                          <CaixaSelecao
+                            marcado={selecionadosCampanha.has(lead.id)}
+                            onChange={() => alternarSelecao(lead.id)}
+                            rotulo={`Selecionar ${lead.empresa ?? lead.contato_nome ?? 'lead'} para campanha`}
+                          />
+                        </td>
+                        {camposUI.find(c => c.chave === 'empresa')?.visivel !== false && (
+                          <td className={`px-3 py-2.5 border-b border-[var(--border-subtle)] font-medium text-slate-100 max-w-56 truncate ${selecionado ? 'border-l-2 border-l-[var(--accent)]' : 'border-l-2 border-l-transparent'}`}>{dash(lead.empresa)}</td>
+                        )}
+                        {camposUI.find(c => c.chave === 'contato_nome')?.visivel !== false && (
+                          <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] max-w-56">
+                            <div className="text-slate-300 truncate">{dash(lead.contato_nome)}</div>
+                            {lead.contato_email && camposUI.find(c => c.chave === 'contato_email')?.visivel !== false && (
+                              <div className="text-xs text-slate-500 truncate">{lead.contato_email}</div>
+                            )}
+                          </td>
+                        )}
+                        {camposUI.find(c => c.chave === 'responsavel_id')?.visivel !== false && (
+                          <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{dash(responsavel)}</td>
+                        )}
+                        {camposUI.find(c => c.chave === 'estagio')?.visivel !== false && (
+                          <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1.5 text-xs text-slate-300">
+                              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: corEstagio(lead.estagio) }} />
+                              {labelEstagio(lead.estagio)}
+                            </span>
+                          </td>
+                        )}
+                        <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{etapaFollowup(lead.followups_enviados)}</td>
+                        {camposUI.find(c => c.chave === 'score')?.visivel !== false && (
+                          <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1.5 text-slate-300 tabular-nums">
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: corScore(lead.score) }} />
+                              {lead.score ?? '—'}
+                            </span>
+                          </td>
+                        )}
+                        {camposUI.find(c => c.chave === 'data_validade')?.visivel === true && (
+                          <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">
+                            {lead.data_validade ? formatDate(lead.data_validade) : '—'}
+                          </td>
+                        )}
+                        <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{dash(cidadeUf)}</td>
+                        <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-400 whitespace-nowrap">{lead.ultimo_contato ? formatDate(lead.ultimo_contato) : '—'}</td>
+                        <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-400 whitespace-nowrap">{lead.created_at ? formatDate(lead.created_at) : '—'}</td>
+                      </tr>
+                    );
+                  })
                 )}
-                {camposUI.find(c => c.chave === 'data_validade')?.visivel === true && (
-                  <th className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">Val. laudo</th>
-                )}
-                {['Cidade/UF', 'Última interação', 'Cadastrado em'].map(h => (
-                  <th key={h} className="font-semibold px-3 py-2.5 border-b border-[var(--border)] whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.length === 0 ? (
-                <EstadoTabela colSpan={10} loading={loading} />
-              ) : (
-                data.map(lead => {
-                  const responsavel = lead.usuarios?.nome ?? lead.responsavel_nome ?? null;
-                  const cidadeUf = [lead.cidade, lead.estado].filter(Boolean).join('/');
-                  const selecionado = selectedId === lead.id;
-                  return (
-                    <tr
-                      key={lead.id}
-                      onClick={() => setSelectedId(lead.id)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(lead.id); } }}
-                      tabIndex={0}
-                      role="button"
-                      aria-label={`Abrir ${lead.empresa ?? 'lead'}`}
-                      className={`cursor-pointer transition-colors focus-ring ${selecionado ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--bg-card)]'}`}
-                    >
-                      <td className="w-10 border-b border-[var(--border-subtle)] px-3 py-2.5">
-                        <input
-                          type="checkbox"
-                          checked={selecionadosCampanha.has(lead.id)}
-                          onChange={() => alternarSelecao(lead.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          aria-label={`Selecionar ${lead.empresa ?? lead.contato_nome ?? 'lead'} para campanha`}
-                          className="h-4 w-4 accent-indigo-500"
-                        />
-                      </td>
-                      {camposUI.find(c => c.chave === 'empresa')?.visivel !== false && (
-                        <td className={`px-3 py-2.5 border-b border-[var(--border-subtle)] font-medium text-slate-100 max-w-56 truncate ${selecionado ? 'border-l-2 border-l-[var(--accent)]' : 'border-l-2 border-l-transparent'}`}>{dash(lead.empresa)}</td>
-                      )}
-                      {camposUI.find(c => c.chave === 'contato_nome')?.visivel !== false && (
-                        <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] max-w-56">
-                          <div className="text-slate-300 truncate">{dash(lead.contato_nome)}</div>
-                          {lead.contato_email && camposUI.find(c => c.chave === 'contato_email')?.visivel !== false && (
-                            <div className="text-xs text-slate-500 truncate">{lead.contato_email}</div>
-                          )}
-                        </td>
-                      )}
-                      {camposUI.find(c => c.chave === 'responsavel_id')?.visivel !== false && (
-                        <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{dash(responsavel)}</td>
-                      )}
-                      {camposUI.find(c => c.chave === 'estagio')?.visivel !== false && (
-                        <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1.5 text-xs text-slate-300">
-                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: corEstagio(lead.estagio) }} />
-                            {labelEstagio(lead.estagio)}
-                          </span>
-                        </td>
-                      )}
-                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{etapaFollowup(lead.followups_enviados)}</td>
-                      {camposUI.find(c => c.chave === 'score')?.visivel !== false && (
-                        <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1.5 text-slate-300 tabular-nums">
-                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: corScore(lead.score) }} />
-                            {lead.score ?? '—'}
-                          </span>
-                        </td>
-                      )}
-                      {camposUI.find(c => c.chave === 'data_validade')?.visivel === true && (
-                        <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">
-                          {lead.data_validade ? formatDate(lead.data_validade) : '—'}
-                        </td>
-                      )}
-                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-300 whitespace-nowrap">{dash(cidadeUf)}</td>
-                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-400 whitespace-nowrap">{lead.ultimo_contato ? formatDate(lead.ultimo_contato) : '—'}</td>
-                      <td className="px-3 py-2.5 border-b border-[var(--border-subtle)] text-slate-400 whitespace-nowrap">{lead.created_at ? formatDate(lead.created_at) : '—'}</td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </tbody>
+            </table>
+          )}
+        </div>
 
-      <PaginacaoTabela
-        total={total}
-        page={page}
-        pageSize={PAGE}
-        loading={loading}
-        onPageChange={setPage}
-        className="px-6 py-3 shrink-0 border-t border-[var(--border)] bg-[var(--bg-base)]"
-      />
+        <PaginacaoTabela
+          total={total}
+          page={page}
+          pageSize={PAGE}
+          loading={loading}
+          onPageChange={setPage}
+          className="px-4 py-3 shrink-0 border-t border-[var(--border-subtle)]"
+        />
+      </section>
 
       {/* Painel lateral completo (componente compartilhado em components/leads) */}
       <LeadPanel

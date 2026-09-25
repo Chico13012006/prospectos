@@ -46,7 +46,7 @@ export function PaginacaoTabela({
   const inicio = total === 0 ? 0 : page * pageSize + 1
   const fim = Math.min((page + 1) * pageSize, total)
   const btnCls =
-    'flex items-center gap-1 text-xs text-slate-300 border border-[#2a3147] px-2.5 py-1.5 rounded-lg hover:bg-[#1a1f2e] disabled:opacity-40 disabled:cursor-not-allowed'
+    'flex items-center gap-1 text-xs text-slate-300 border border-[var(--border)] px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-card)] disabled:opacity-40 disabled:cursor-not-allowed'
 
   return (
     <div className={`flex items-center justify-between ${className}`}>

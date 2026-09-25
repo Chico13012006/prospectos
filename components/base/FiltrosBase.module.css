@@ -1,0 +1,206 @@
+/* Filtros da Base de Leads — mesma linguagem da barra de filtros da Prospecção.
+   Barra (busca + atalhos + botão Filtros) sempre à vista; filtros avançados
+   num painel agrupado por assunto; etiquetas dos ativos quando fechado. */
+
+/* Barra principal */
+.barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+.busca { flex: 1 1 280px; min-width: 220px; max-width: 460px; }
+.acoesBarra { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+/* Atalhos em controle segmentado (como os nichos da Prospecção) */
+.segmentado {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  min-height: 36px;
+  padding: 3px;
+  border: 1px solid #145b94;
+  border-radius: 10px;
+  background: rgba(3, 30, 57, 0.74);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+.segmentado button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #bdc9db;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+.segmentado button:hover { color: #f8fafc; background: rgba(18, 67, 108, 0.35); }
+.segmentado button > b { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; }
+.segmentado .segmentoAtivo,
+.segmentado .segmentoAtivo:hover {
+  border-color: #6979ff;
+  background: linear-gradient(135deg, #4d49e6, #2634b9);
+  color: #fff;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2), 0 0 14px rgba(79, 70, 229, 0.25);
+}
+
+/* Botões da barra */
+.botaoFiltros,
+.limpar {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #155b95;
+  border-radius: 10px;
+  background: rgba(4, 28, 54, 0.72);
+  color: #d6e7fb;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.botaoFiltros:hover,
+.limpar:hover { border-color: #2286cf; background: rgba(7, 42, 76, 0.82); }
+.botaoFiltrosAberto { border-color: #2286cf; background: rgba(7, 42, 76, 0.82); }
+.limpar { color: #aebdd2; font-weight: 500; }
+.botaoFiltros > em {
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #4d49e6;
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+}
+
+/* Etiquetas dos filtros ativos */
+.etiquetas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.etiqueta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 6px 0 10px;
+  border: 1px solid rgba(105, 121, 255, 0.55);
+  border-radius: 999px;
+  background: rgba(77, 73, 230, 0.16);
+  color: #dfe4ff;
+  font-size: 12px;
+}
+.etiqueta button {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 50%;
+  color: #b9c2ff;
+}
+.etiqueta button:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+
+/* Painel dos filtros agrupados */
+.painelAvancado {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #17496e;
+  animation: abrir 160ms ease-out;
+}
+@keyframes abrir {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .painelAvancado { animation: none; }
+}
+
+.grupo {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid #155987;
+  border-radius: 11px;
+  background: rgba(3, 24, 45, 0.6);
+}
+.grupo > legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  color: #7dd3fc;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.grupoFunil { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grupoFunil > legend { grid-column: 1 / -1; }
+
+/* Campos */
+.rotulo { display: grid; min-width: 0; gap: 6px; }
+.rotulo > span { color: #eef4ff; font-size: 12px; font-weight: 600; }
+
+.campo {
+  height: 36px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid #1b68a8;
+  border-radius: 10px;
+  background: rgba(4, 32, 61, 0.82);
+  color: #dce8f7;
+  font-size: 13px;
+  color-scheme: dark;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+  transition: border-color 150ms ease;
+}
+.campo:hover { border-color: #2286cf; }
+.campo::placeholder { color: #7f93b0; }
+.campo option { background: #0b1729; color: #e5edf8; }
+.campoAtivo { border-color: #6979ff; }
+
+/* Espaço para ícone à esquerda / botão ou seta à direita (depois de .campo). */
+.campo.comIcone { padding-left: 36px; }
+.campo.comAcao { padding-right: 36px; }
+
+/* Par de datas "de – até" num único bloco */
+.periodo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+.periodo > i { color: #7f93b0; font-size: 12px; font-style: normal; }
+.periodo .campo { padding: 0 8px; }
+
+@media (max-width: 1280px) {
+  .painelAvancado { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .painelAvancado > :first-child { grid-column: 1 / -1; }
+  .grupoFunil { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  .grupoFunil { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .busca { max-width: none; }
+  .acoesBarra { margin-left: 0; }
+  .painelAvancado,
+  .grupoFunil { grid-template-columns: 1fr; }
+}

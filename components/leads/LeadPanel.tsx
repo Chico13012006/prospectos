@@ -19,6 +19,7 @@ import type { Lead, Interacao, MensagemWhatsapp } from '@/lib/supabase';
 import { ESTAGIOS_MANUAIS } from '@/lib/pipeline-stages';
 import { ultimoContatoEfetivo } from '@/lib/leads/ultimoContato';
 import PropostasLista from '@/components/comercial/propostas/PropostasLista';
+import tema from '@/components/tema/TemaModulo.module.css';
 
 // Data real de hoje (YYYY-MM-DD).
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -110,9 +111,9 @@ function getTipoInteracaoBadge(tipo: string, descricao?: string): { label: strin
   // Item 8: análise do copiloto pós-reunião.
   if (tipo === 'nota' && descricao?.startsWith('Copiloto pós-reunião'))
     return { label: 'Copiloto pós-reunião', classes: 'bg-violet-500/20 text-violet-300' };
-  if (tipo === 'nota') return { label: 'Nota', classes: 'bg-[#252b3b] text-slate-300' };
+  if (tipo === 'nota') return { label: 'Nota', classes: 'bg-[var(--bg-input)] text-slate-300' };
   if (tipo === 'reuniao') return { label: 'Reunião', classes: 'bg-amber-500/20 text-amber-400' };
-  return { label: tipo, classes: 'bg-[#252b3b] text-slate-300' };
+  return { label: tipo, classes: 'bg-[var(--bg-input)] text-slate-300' };
 }
 
 // "Resposta a tratar": sinais que o MOTOR grava em proxima_acao quando um lead
@@ -189,7 +190,7 @@ function remetenteWhatsapp(m: MensagemWhatsapp): string | null {
 
 // Rótulo, ícone e cor do canal (valores em minúsculo no Supabase)
 const CANAL_INFO: Record<string, { label: string; Icon: typeof Bot; classes: string }> = {
-  email: { label: 'Email', Icon: Mail, classes: 'bg-[#252b3b] text-slate-300' },
+  email: { label: 'Email', Icon: Mail, classes: 'bg-[var(--bg-input)] text-slate-300' },
   whatsapp: { label: 'WhatsApp', Icon: MessageSquare, classes: 'bg-green-500/20 text-green-400' },
   linkedin: { label: 'LinkedIn', Icon: ExternalLink, classes: 'bg-blue-500/20 text-blue-400' },
   telefone: { label: 'Telefone', Icon: Phone, classes: 'bg-purple-500/20 text-purple-400' },
@@ -554,25 +555,25 @@ export default function LeadPanel({
 
   if (!selectedEmpresa) return null;
 
-  // Refino visual restrito ao Pipeline. A Base de Leads continua recebendo
-  // EXATAMENTE as classes de antes — toda diferença passa por `noPipeline`,
-  // nunca por alteração global. O painel já era sobreposto (fixed + backdrop);
-  // o que apertava a Lista era a largura escalar até 44rem nas telas grandes.
+  // Visual por contexto — toda diferença passa por `noPipeline`, nunca por
+  // alteração global. Pipeline: largura contida e blocos com mais respiro.
+  // Base de Leads: gaveta do tema dos módulos (fundo desfocado, entrada
+  // deslizando), igual ao painel de perfil da Prospecção.
   const noPipeline = contexto === 'pipeline';
   const larguraPainel = noPipeline
     ? 'max-w-full sm:max-w-[520px]'
     : 'max-w-md lg:max-w-[32rem] xl:max-w-[38rem] 2xl:max-w-[44rem]';
   // Divisor mais discreto e blocos com mais respiro só no Pipeline.
-  const divisor = noPipeline ? 'border-b border-[#212a3c]' : 'border-b border-[#2a3147]';
+  const divisor = noPipeline ? 'border-b border-[#212a3c]' : 'border-b border-[var(--border)]';
   const secao = noPipeline ? 'px-4 py-4' : 'px-5 py-3';
 
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/20 z-40"
+        className={noPipeline ? 'fixed inset-0 bg-black/20 z-40' : `${tema.gavetaFundo} z-40`}
         onClick={onClose}
       />
-      <div className={`fixed top-0 right-0 h-full w-full ${larguraPainel} bg-[#1a1f2e] shadow-2xl z-50 flex flex-col`}>
+      <div className={`fixed top-0 right-0 h-full w-full ${larguraPainel} z-50 flex flex-col ${noPipeline ? 'bg-[var(--bg-card)] shadow-2xl' : tema.gaveta}`}>
         {/* Panel header */}
         <div className={`${noPipeline ? 'px-4 py-3' : 'px-5 py-4'} ${divisor}`}>
           <div className={`flex items-start justify-between ${noPipeline ? 'mb-1.5' : 'mb-2'}`}>
@@ -600,7 +601,7 @@ export default function LeadPanel({
                   className={noPipeline
                     /* Ação secundária: discreta no Pipeline, para não competir
                        com o CTA "Executar ação". */
-                    ? 'inline-flex items-center gap-1.5 rounded-lg border border-[#2a3147] px-2 py-1 text-[11px] font-semibold text-slate-400 hover:border-indigo-500/40 hover:text-indigo-300'
+                    ? 'inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2 py-1 text-[11px] font-semibold text-slate-400 hover:border-indigo-500/40 hover:text-indigo-300'
                     : 'inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20'}
                   title="Editar informações e validade do lead"
                 >
@@ -669,7 +670,7 @@ export default function LeadPanel({
 
         <div className="flex-1 overflow-y-auto">
           {/* Abas da ficha (item 2): Visão geral · Conversa · Propostas · Dados */}
-          <div className={`${noPipeline ? 'px-4' : 'px-5'} pt-2 flex gap-1 ${divisor} sticky top-0 bg-[#1a1f2e] z-10`}>
+          <div className={`${noPipeline ? 'px-4' : 'px-5'} pt-2 flex gap-1 ${divisor} sticky top-0 bg-[var(--bg-card)] z-10`}>
             {([
               { id: 'visao', label: 'Visão geral' },
               { id: 'conversa', label: 'Conversa' },
@@ -741,7 +742,7 @@ export default function LeadPanel({
                  sólida) para não pesarem igual ao bloco de Próxima ação. */
               <div
                 key={card.label}
-                className={noPipeline ? 'rounded-lg px-2.5 py-1.5 border border-[#212a3c]' : 'bg-[#0f1117] rounded-xl px-3 py-2'}
+                className={noPipeline ? 'rounded-lg px-2.5 py-1.5 border border-[#212a3c]' : 'bg-[var(--bg-base)] rounded-xl px-3 py-2'}
                 style={{ maxHeight: 80 }}
               >
                 <div className="text-xs text-slate-500 mb-1 leading-none">{card.label}</div>
@@ -756,7 +757,7 @@ export default function LeadPanel({
               <button
                 type="button"
                 onClick={() => setEditandoDados(true)}
-                className={`w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-left hover:border-indigo-500/40 hover:bg-indigo-500/5 ${noPipeline ? 'border border-[#212a3c]' : 'border border-[#2a3147] bg-[#0f1117]'}`}
+                className={`w-full flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-left hover:border-indigo-500/40 hover:bg-indigo-500/5 ${noPipeline ? 'border border-[#212a3c]' : 'border border-[var(--border)] bg-[var(--bg-base)]'}`}
               >
                 <span>
                   <span className="block text-xs text-slate-500">Validade do laudo</span>
@@ -840,8 +841,8 @@ export default function LeadPanel({
               <button
                 onClick={handleGerarMensagem}
                 disabled={mensagemLoading}
-                className={`flex-1 text-xs font-medium text-slate-300 rounded-lg border hover:bg-[#0f1117] transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-1 ${
-                  noPipeline ? 'py-2 border-[#2f3a52]' : 'py-1.5 border-[#2a3147]'
+                className={`flex-1 text-xs font-medium text-slate-300 rounded-lg border hover:bg-[var(--bg-base)] transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-1 ${
+                  noPipeline ? 'py-2 border-[#2f3a52]' : 'py-1.5 border-[var(--border)]'
                 }`}
               >
                 {mensagemLoading ? <Loader2 size={12} className="animate-spin" /> : null}
@@ -880,7 +881,7 @@ export default function LeadPanel({
               <span className="text-slate-400">{contatosEnviados} de {CADENCIA_TOTAL} contatos</span>
               <span className="text-slate-500">{cadenciaPct}%</span>
             </div>
-            <div className="w-full h-2 bg-[#0f1117] rounded-full overflow-hidden">
+            <div className="w-full h-2 bg-[var(--bg-base)] rounded-full overflow-hidden">
               <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${cadenciaPct}%` }} />
             </div>
             <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2">
@@ -986,7 +987,7 @@ export default function LeadPanel({
                   const Icon = isIA ? Bot : cfg.Icon;
                   return (
                     <div key={interacao.id} className="flex items-start gap-2.5">
-                      <div className="w-5 h-5 rounded-full bg-[#252b3b] flex items-center justify-center shrink-0 mt-0.5">
+                      <div className="w-5 h-5 rounded-full bg-[var(--bg-input)] flex items-center justify-center shrink-0 mt-0.5">
                         <Icon size={10} className={isIA ? 'text-blue-500' : cfg.color} />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1008,7 +1009,7 @@ export default function LeadPanel({
             <button
               type="button"
               onClick={() => setShowAllInteracoes(true)}
-              className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-slate-300 py-2 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-slate-300 py-2 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-base)] transition-colors"
             >
               <Maximize2 size={12} /> Abrir ficha completa
             </button>
@@ -1036,7 +1037,7 @@ export default function LeadPanel({
                   <select
                     value={novaInteracao.tipo}
                     onChange={e => setNovaInteracao(s => ({ ...s, tipo: e.target.value }))}
-                    className="text-xs border border-[#2a3147] rounded-lg px-2 py-1.5 bg-[#0f1117] text-slate-300 focus:outline-none"
+                    className="text-xs border border-[var(--border)] rounded-lg px-2 py-1.5 bg-[var(--bg-base)] text-slate-300 focus:outline-none"
                   >
                     <option value="abordagem">Abordagem</option>
                     <option value="follow_up">Follow-up</option>
@@ -1047,7 +1048,7 @@ export default function LeadPanel({
                   <select
                     value={novaInteracao.canal}
                     onChange={e => setNovaInteracao(s => ({ ...s, canal: e.target.value }))}
-                    className="text-xs border border-[#2a3147] rounded-lg px-2 py-1.5 bg-[#0f1117] text-slate-300 focus:outline-none"
+                    className="text-xs border border-[var(--border)] rounded-lg px-2 py-1.5 bg-[var(--bg-base)] text-slate-300 focus:outline-none"
                   >
                     <option value="email">Email</option>
                     <option value="whatsapp">WhatsApp</option>
@@ -1060,12 +1061,12 @@ export default function LeadPanel({
                   onChange={e => setNovaInteracao(s => ({ ...s, descricao: e.target.value }))}
                   rows={3}
                   placeholder="Descreva a interação..."
-                  className="w-full text-xs border border-[#2a3147] rounded-lg px-2 py-1.5 bg-[#0f1117] text-slate-300 focus:outline-none resize-none"
+                  className="w-full text-xs border border-[var(--border)] rounded-lg px-2 py-1.5 bg-[var(--bg-base)] text-slate-300 focus:outline-none resize-none"
                 />
                 <div className="flex justify-end gap-2">
                   <button
                     onClick={() => { setShowRegistrar(false); setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' }); }}
-                    className="text-xs font-medium text-slate-300 px-3 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#252b3b] transition-colors"
+                    className="text-xs font-medium text-slate-300 px-3 py-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-input)] transition-colors"
                   >
                     Cancelar
                   </button>
@@ -1117,7 +1118,7 @@ export default function LeadPanel({
                     const expandida = msgsExpandidas.has(m.id);
                     const longa = corpo.length > 160 || corpo.split('\n').length > 3;
                     return (
-                      <div key={m.id} className="rounded-lg border border-[#2a3147] bg-[#0f1117] p-2.5">
+                      <div key={m.id} className="rounded-lg border border-[var(--border)] bg-[var(--bg-base)] p-2.5">
                         <div className="flex items-center gap-2 mb-1">
                           <MessageSquare size={11} className="text-green-400 shrink-0" />
                           <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${dir.classes}`}>{dir.rotulo}</span>
@@ -1168,7 +1169,7 @@ export default function LeadPanel({
                   const tipoBase = interacao.tipo.startsWith('follow_up') ? 'follow_up' : interacao.tipo;
                   const Icon = isIA ? Bot : (INTERACAO_TIPO[tipoBase] ?? INTERACAO_TIPO.nota).Icon;
                   return (
-                    <div key={interacao.id} className="rounded-lg border border-[#2a3147] bg-[#0f1117] p-2.5">
+                    <div key={interacao.id} className="rounded-lg border border-[var(--border)] bg-[var(--bg-base)] p-2.5">
                       <div className="flex items-center gap-2 mb-1">
                         <Icon size={11} className={isIA ? 'text-blue-500' : 'text-slate-400'} />
                         <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${badge.classes}`}>{rotulo}</span>
@@ -1283,11 +1284,11 @@ export default function LeadPanel({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-[#2a3147] flex items-center gap-2.5 bg-[#0f1117]">
+        <div className="px-5 py-4 border-t border-[var(--border)] flex items-center gap-2.5 bg-[var(--bg-base)]">
           <select
             value={selectedLead?.estagio ?? selectedEmpresa.estagio_pipeline ?? ''}
             onChange={(e) => handleMoverEstagio(e.target.value)}
-            className="flex-1 text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none"
+            className="flex-1 text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-card)] text-slate-300 focus:outline-none"
           >
             <option value="" disabled>Mover para outro estágio</option>
             {ESTAGIOS_MANUAIS
@@ -1319,11 +1320,11 @@ export default function LeadPanel({
           onClick={() => setShowAllInteracoes(false)}
         >
           <div
-            className="bg-[#1a1f2e] rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col"
+            className="bg-[var(--bg-card)] rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* HEADER */}
-            <div className="px-6 py-5 border-b border-[#2a3147]">
+            <div className="px-6 py-5 border-b border-[var(--border)]">
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
                   <h2 className="text-xl font-bold text-slate-100 leading-tight">{selectedEmpresa.nome}</h2>
@@ -1358,27 +1359,27 @@ export default function LeadPanel({
 
               {/* Row de badges informativos */}
               <div className="flex flex-wrap gap-2 mt-4">
-                <div className="flex flex-col bg-[#0f1117] rounded-lg px-3 py-1.5 border border-[#2a3147]">
+                <div className="flex flex-col bg-[var(--bg-base)] rounded-lg px-3 py-1.5 border border-[var(--border)]">
                   <span className="text-[10px] text-slate-500 uppercase tracking-wide">Responsável</span>
                   <span className="text-sm font-medium text-slate-300">{selectedEmpresa.responsavel || '—'}</span>
                 </div>
-                <div className="flex flex-col bg-[#0f1117] rounded-lg px-3 py-1.5 border border-[#2a3147]">
+                <div className="flex flex-col bg-[var(--bg-base)] rounded-lg px-3 py-1.5 border border-[var(--border)]">
                   <span className="text-[10px] text-slate-500 uppercase tracking-wide">Status</span>
                   <span className="text-sm font-medium text-slate-300">{getEstagioPipelineLabel(selectedEmpresa.estagio_pipeline as EstagioPipeline)}</span>
                 </div>
-                <div className="flex flex-col bg-[#0f1117] rounded-lg px-3 py-1.5 border border-[#2a3147]">
+                <div className="flex flex-col bg-[var(--bg-base)] rounded-lg px-3 py-1.5 border border-[var(--border)]">
                   <span className="text-[10px] text-slate-500 uppercase tracking-wide">Último contato</span>
                   <span className="text-sm font-medium text-slate-300">{ultimoContato ? formatDate(ultimoContato) : '—'}</span>
                 </div>
-                <div className="flex flex-col bg-[#0f1117] rounded-lg px-3 py-1.5 border border-[#2a3147] max-w-xs">
+                <div className="flex flex-col bg-[var(--bg-base)] rounded-lg px-3 py-1.5 border border-[var(--border)] max-w-xs">
                   <span className="text-[10px] text-slate-500 uppercase tracking-wide">Próxima ação</span>
                   <span className="text-sm font-medium text-slate-300 truncate">{selectedLead?.proxima_acao || '—'}</span>
                 </div>
-                <div className="flex flex-col bg-[#0f1117] rounded-lg px-3 py-1.5 border border-[#2a3147]">
+                <div className="flex flex-col bg-[var(--bg-base)] rounded-lg px-3 py-1.5 border border-[var(--border)]">
                   <span className="text-[10px] text-slate-500 uppercase tracking-wide">Canal preferencial</span>
                   <span className="text-sm font-medium text-slate-300 capitalize">{selectedLead?.canal_preferencial ?? selectedContato?.canal_preferencial ?? '—'}</span>
                 </div>
-                <div className="flex flex-col bg-[#0f1117] rounded-lg px-3 py-1.5 border border-[#2a3147]">
+                <div className="flex flex-col bg-[var(--bg-base)] rounded-lg px-3 py-1.5 border border-[var(--border)]">
                   <span className="text-[10px] text-slate-500 uppercase tracking-wide">Score</span>
                   <span className="text-sm font-bold" style={{ color: scoreColor(selectedLead?.score ?? selectedEmpresa.score_engajamento) }}>
                     {selectedLead?.score ?? selectedEmpresa.score_engajamento} <span className="text-slate-500 font-normal">/ 100</span>
@@ -1392,7 +1393,7 @@ export default function LeadPanel({
             {selectedLead && <ServicosLaudosCard leadId={selectedLead.id} />}
 
             {/* TABS */}
-            <div className="px-6 border-b border-[#2a3147] flex gap-1">
+            <div className="px-6 border-b border-[var(--border)] flex gap-1">
               {([
                 { id: 'timeline', label: 'Linha do tempo' },
                 { id: 'dados', label: 'Dados do lead' },
@@ -1425,14 +1426,14 @@ export default function LeadPanel({
                     </button>
 
                     {showRegistrar && (
-                      <div className="mt-3 p-4 rounded-xl border border-[#2a3147] bg-[#0f1117] space-y-3">
+                      <div className="mt-3 p-4 rounded-xl border border-[var(--border)] bg-[var(--bg-base)] space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="text-xs font-medium text-slate-400 block mb-1">Tipo</label>
                             <select
                               value={novaInteracao.tipo}
                               onChange={e => setNovaInteracao(s => ({ ...s, tipo: e.target.value }))}
-                              className="w-full text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                              className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-card)] text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                             >
                               <option value="abordagem">Abordagem</option>
                               <option value="follow_up">Follow-up</option>
@@ -1446,7 +1447,7 @@ export default function LeadPanel({
                             <select
                               value={novaInteracao.canal}
                               onChange={e => setNovaInteracao(s => ({ ...s, canal: e.target.value }))}
-                              className="w-full text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                              className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-card)] text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                             >
                               <option value="email">Email</option>
                               <option value="whatsapp">WhatsApp</option>
@@ -1462,13 +1463,13 @@ export default function LeadPanel({
                             onChange={e => setNovaInteracao(s => ({ ...s, descricao: e.target.value }))}
                             rows={3}
                             placeholder="Descreva a interação..."
-                            className="w-full text-sm border border-[#2a3147] rounded-lg px-3 py-2 bg-[#1a1f2e] text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-none"
+                            className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-card)] text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-none"
                           />
                         </div>
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={() => { setShowRegistrar(false); setNovaInteracao({ tipo: 'abordagem', canal: 'email', descricao: '' }); }}
-                            className="text-sm font-medium text-slate-300 px-3 py-1.5 rounded-lg border border-[#2a3147] hover:bg-[#252b3b] transition-colors"
+                            className="text-sm font-medium text-slate-300 px-3 py-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-input)] transition-colors"
                           >
                             Cancelar
                           </button>
@@ -1504,7 +1505,7 @@ export default function LeadPanel({
                           const dir = direcaoWhatsapp(m);
                           const remetente = remetenteWhatsapp(m);
                           return (
-                            <div key={m.id} className="rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-4 shadow-none">
+                            <div key={m.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 shadow-none">
                               <div className="flex items-start justify-between gap-3 mb-2">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="inline-flex items-center gap-1 text-xs text-slate-500">
@@ -1539,7 +1540,7 @@ export default function LeadPanel({
                         const canal = interacao.canal ? CANAL_INFO[interacao.canal.toLowerCase()] : null;
                         const isIA = interacao.origem_acao === 'ia';
                         return (
-                          <div key={interacao.id} className="rounded-xl border border-[#2a3147] bg-[#1a1f2e] p-4 shadow-none">
+                          <div key={interacao.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 shadow-none">
                             <div className="flex items-start justify-between gap-3 mb-2">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="inline-flex items-center gap-1 text-xs text-slate-500">
@@ -1595,7 +1596,7 @@ export default function LeadPanel({
                     { label: 'Criado em', value: selectedLead?.created_at ? formatDate(selectedLead.created_at) : formatDate(selectedEmpresa.data_entrada) },
                     { label: 'Validade do laudo', value: selectedLead?.data_validade ? formatDate(selectedLead.data_validade) : 'Não configurada' },
                   ].map(field => (
-                    <div key={field.label} className="border-b border-[#2a3147] pb-2">
+                    <div key={field.label} className="border-b border-[var(--border)] pb-2">
                       <span className="text-xs text-slate-500 uppercase tracking-wide block mb-0.5">{field.label}</span>
                       {field.value ? (
                         field.isLink ? (
@@ -1636,8 +1637,8 @@ export default function LeadPanel({
       {/* Modal — preview da próxima mensagem da cadência (botão "Gerar mensagem") */}
       {mensagem && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40" onClick={() => setMensagem(null)}>
-          <div className="bg-[#1a1f2e] rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-[#2a3147] flex items-center justify-between">
+          <div className="bg-[var(--bg-card)] rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Mail size={16} className="text-indigo-400" />
                 <h2 className="font-semibold text-slate-100">
@@ -1653,12 +1654,12 @@ export default function LeadPanel({
               </div>
               <div>
                 <div className="text-xs text-slate-500 mb-1">Corpo</div>
-                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap bg-[#0f1117] rounded-lg p-3 border border-[#2a3147]">{mensagem.corpo}</p>
+                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap bg-[var(--bg-base)] rounded-lg p-3 border border-[var(--border)]">{mensagem.corpo}</p>
               </div>
               <p className="text-[11px] text-slate-600">Preview do que o motor enviaria a seguir. Não envia nada — use “Executar ação” para disparar de verdade.</p>
             </div>
-            <div className="px-5 py-3 border-t border-[#2a3147] flex justify-end gap-2">
-              <button onClick={copiarMensagem} className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-300 px-3 py-2 rounded-lg border border-[#2a3147] hover:bg-[#0f1117] transition-colors">
+            <div className="px-5 py-3 border-t border-[var(--border)] flex justify-end gap-2">
+              <button onClick={copiarMensagem} className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-300 px-3 py-2 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-base)] transition-colors">
                 {mensagemCopiada ? <><Check size={12} /> Copiado</> : <><Copy size={12} /> Copiar</>}
               </button>
             </div>
