@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Search } from 'lucide-react';
+import { FolderOpen, Search, X } from 'lucide-react';
 import PropostasLista from '@/components/comercial/propostas/PropostasLista';
+import { estilosModulo as m, TituloSecao } from '@/components/tema/Modulo';
+import s from './Comercial.module.css';
 
 // Aba "Propostas" do módulo Comercial: todas as propostas salvas que o usuário
 // enxerga (admin: a organização; comercial: a própria carteira), com busca por
@@ -18,25 +20,37 @@ export default function PropostasPanel() {
   }, [texto]);
 
   return (
-    <div className="card p-5 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="font-semibold text-slate-200">Propostas salvas</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Baixe o PDF de novo ou envie ao cliente por e-mail ou WhatsApp.
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5 border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-base)] w-full sm:w-72">
-          <Search size={14} className="text-slate-500" />
+    <section className={m.painel}>
+      <div className={`${m.painelBarra} flex-wrap`}>
+        <TituloSecao
+          icone={FolderOpen}
+          titulo="Propostas salvas"
+          subtitulo="Baixe o PDF de novo ou envie ao cliente por e-mail ou WhatsApp."
+        />
+        <div className="relative w-full sm:w-80">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sky-300" />
           <input
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
-            placeholder="Buscar por empresa..."
-            className="flex-1 bg-transparent text-sm text-slate-100 focus:outline-none"
+            placeholder="Buscar por empresa"
+            aria-label="Buscar proposta por empresa"
+            className={`${s.campo} ${s.comIcone} ${s.comAcao} focus-ring`}
           />
+          {texto && (
+            <button
+              type="button"
+              onClick={() => setTexto('')}
+              aria-label="Limpar busca"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-100"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
       </div>
-      <PropostasLista busca={busca} mostrarEmpresa grade />
-    </div>
+      <div className="p-4">
+        <PropostasLista busca={busca} mostrarEmpresa grade />
+      </div>
+    </section>
   );
 }

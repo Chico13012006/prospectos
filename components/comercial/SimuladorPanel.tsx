@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Minus, Plus, Info, TrendingDown } from 'lucide-react';
+import {
+  Info, Minus, Monitor, Nfc, Package, Plus, Printer, Receipt, ScanBarcode, TabletSmartphone, TrendingDown,
+  type LucideIcon,
+} from 'lucide-react';
 import {
   PRODUTOS, PRAZO_COMODATO_MESES, calcularCompra, calcularComodato,
   percentualDesconto, valorComDesconto, totalItens, formatarBRL,
@@ -13,10 +16,16 @@ import { excedeLimiteItens, montarDadosProposta } from '@/lib/proposta/dados';
 import type { LeadDaProposta } from '@/lib/propostas/tipos';
 import GerarProposta from '@/components/comercial/GerarProposta';
 import AcoesProposta from '@/components/comercial/propostas/AcoesProposta';
+import { estilosModulo as m, TituloSecao } from '@/components/tema/Modulo';
+import s from './Comercial.module.css';
 
 // Aba "Simulador" do módulo Comercial. Sem H1/padding próprios — a página
 // /comercial provê o cabeçalho e as abas. Precisa de um <Suspense> acima
 // (useSearchParams), garantido pela página.
+
+const ICONE_PRODUTO: Record<ProdutoId, LucideIcon> = {
+  coletor: ScanBarcode, impressora: Printer, totem: TabletSmartphone, pdv: Monitor, mesa_rfid: Nfc,
+};
 
 const MODELOS: { id: ModeloComercial; label: string; sub: string }[] = [
   { id: 'compra', label: 'Compra', sub: 'Venda definitiva' },
@@ -95,147 +104,157 @@ export default function SimuladorPanel() {
   );
 
   return (
-    <div className="space-y-5">
-      {/* Modelo */}
-      <div className="flex items-center gap-2">
-        {MODELOS.map((m) => (
-          <button
-            key={m.id}
-            onClick={() => setModelo(m.id)}
-            className={`flex flex-col items-start px-4 py-2 rounded-lg border text-left transition-colors ${
-              modelo === m.id
-                ? 'border-indigo-500 bg-indigo-500/15 text-indigo-200'
-                : 'border-[var(--border)] bg-[var(--bg-card)] text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <span className="text-sm font-semibold">{m.label}</span>
-            <span className="text-[11px] opacity-80">{m.sub}</span>
-          </button>
-        ))}
-      </div>
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
+      {/* Equipamentos */}
+      <section className={`${m.painel} lg:col-span-3`}>
+        <div className={`${m.painelBarra} flex-wrap`}>
+          <TituloSecao icone={Package} titulo="Equipamentos" subtitulo="Escolha o modelo comercial e as quantidades." />
+          <div className={s.segmentado} role="group" aria-label="Modelo comercial">
+            {MODELOS.map((mod) => (
+              <button
+                key={mod.id}
+                type="button"
+                aria-pressed={modelo === mod.id}
+                onClick={() => setModelo(mod.id)}
+                className={`${modelo === mod.id ? s.segmentoAtivo : ''} focus-ring`}
+              >
+                <strong>{mod.label}</strong>
+                <small>{mod.sub}</small>
+              </button>
+            ))}
+          </div>
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        {/* Equipamentos */}
-        <div className="lg:col-span-3 card p-5">
-          <h2 className="font-semibold text-slate-200 mb-3">Equipamentos</h2>
-          <div className="space-y-1.5">
-            {PRODUTOS.map((p) => {
-              const preco = modelo === 'compra' ? p.precoCompra : p.mensalComodato;
-              const q = qtds[p.id];
-              return (
-                <div key={p.id} className={`flex items-center gap-3 p-2.5 rounded-lg border transition-colors ${
-                  q > 0 ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-[var(--border)]'
-                }`}>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-slate-200">{p.nome}</div>
-                    <div className="text-xs text-slate-500">
-                      {formatarBRL(preco)}{modelo === 'comodato' ? '/mês (avulso)' : ''}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button onClick={() => setQtd(p.id, q - 1)} disabled={q === 0}
-                      className="w-7 h-7 rounded-md border border-[var(--border)] flex items-center justify-center text-slate-300 hover:bg-[var(--bg-base)] disabled:opacity-40">
-                      <Minus size={13} />
-                    </button>
-                    <input
-                      type="number" min={0} value={q}
-                      onChange={(e) => setQtd(p.id, Math.floor(Number(e.target.value) || 0))}
-                      className="w-12 text-center text-sm bg-transparent border border-[var(--border)] rounded-md py-1 text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                    <button onClick={() => setQtd(p.id, q + 1)}
-                      className="w-7 h-7 rounded-md border border-[var(--border)] flex items-center justify-center text-slate-300 hover:bg-[var(--bg-base)]">
-                      <Plus size={13} />
-                    </button>
-                  </div>
-                  <div className="w-28 text-right text-sm font-semibold text-slate-200 shrink-0">
-                    {q > 0 ? formatarBRL(preco * q) + (modelo === 'comodato' ? '/mês' : '') : '—'}
+        <div className={s.equipamentos}>
+          {PRODUTOS.map((p) => {
+            const preco = modelo === 'compra' ? p.precoCompra : p.mensalComodato;
+            const q = qtds[p.id];
+            const Icone = ICONE_PRODUTO[p.id];
+            return (
+              <div key={p.id} className={`${s.equipamento} ${q > 0 ? s.equipamentoAtivo : ''}`}>
+                <span className={s.equipamentoIcone}><Icone size={18} aria-hidden="true" /></span>
+                <div className="min-w-0">
+                  <div className={`${s.equipamentoNome} truncate`}>{p.nome}</div>
+                  <div className={s.equipamentoPreco}>
+                    {formatarBRL(preco)}{modelo === 'comodato' ? '/mês (avulso)' : ' por unidade'}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-
-          <div className="flex items-start gap-2 text-xs text-slate-500 mt-4 pt-4 border-t border-[var(--border)]">
-            <Info size={14} className="text-slate-400 shrink-0 mt-0.5" />
-            <p>
-              O desconto é apenas <b>calculado e exibido</b> — não há trava de aprovação nesta versão.
-              Os valores sugeridos são uma estimativa inicial editável. O preço de fato é sempre
-              negociado; ajuste o valor final <b>ou</b> o percentual de desconto.
-            </p>
-          </div>
+                <div className={s.stepper}>
+                  <button type="button" onClick={() => setQtd(p.id, q - 1)} disabled={q === 0} aria-label={`Diminuir ${p.nome}`}>
+                    <Minus size={14} />
+                  </button>
+                  <input
+                    type="number" min={0} value={q}
+                    onChange={(e) => setQtd(p.id, Math.floor(Number(e.target.value) || 0))}
+                    aria-label={`Quantidade de ${p.nome}`}
+                  />
+                  <button type="button" onClick={() => setQtd(p.id, q + 1)} aria-label={`Aumentar ${p.nome}`}>
+                    <Plus size={14} />
+                  </button>
+                </div>
+                <div className={`${s.subtotal} ${q > 0 ? '' : s.subtotalVazio}`}>
+                  {q > 0 ? (
+                    <>
+                      {formatarBRL(preco * q)}
+                      <small>{modelo === 'comodato' ? 'por mês' : 'subtotal'}</small>
+                    </>
+                  ) : '—'}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
-        {/* Resumo da proposta */}
-        <div className="lg:col-span-2 card p-5 flex flex-col gap-4 h-fit lg:sticky lg:top-4">
-          <h2 className="font-semibold text-slate-200">Resumo da proposta</h2>
-
-          {!temItens ? (
-            <p className="text-sm text-slate-500 py-8 text-center">
-              Adicione equipamentos para montar a proposta.
-            </p>
-          ) : modelo === 'compra' ? (
-            <>
-              {/* Destaque */}
-              <Destaque
-                titulo="Valor final"
-                valor={formatarBRL(valorFinal)}
-                tabela={formatarBRL(refCompra)}
-                desconto={descontoCompra}
-                economia={economiaCompra}
-              />
-              <EditorDesconto
-                label="Negociação"
-                referencia={refCompra}
-                final={valorFinal}
-                onChange={setValorFinalOv}
-              />
-            </>
-          ) : (
-            <>
-              {/* Destaque: total do contrato */}
-              <Destaque
-                titulo={`Total do contrato (${PRAZO_COMODATO_MESES}m)`}
-                valor={formatarBRL(totalContrato)}
-                tabela={formatarBRL(totalTabelaContrato)}
-                economia={economiaContrato}
-                linha2={`${formatarBRL(mensalFinal)}/mês · entrada ${formatarBRL(entradaFinal)}`}
-              />
-              <EditorDesconto
-                label="Mensalidade"
-                sufixo="/mês"
-                referencia={refMensal}
-                final={mensalFinal}
-                onChange={setMensalFinalOv}
-              />
-              <EditorDesconto
-                label="Entrada"
-                referencia={refEntrada}
-                final={entradaFinal}
-                onChange={setEntradaFinalOv}
-              />
-            </>
-          )}
-
-          {/* PDF para o cliente: só os valores FINAIS (override ou sugestão);
-              tabela e descontos ficam internos. */}
-          {temItens && <GerarProposta
-            dados={montarDadosProposta({
-              modelo, itens, valorFinal, mensalFinal, entradaFinal, prazoMeses: comodato.prazoMeses,
-            })}
-            empresa={leadSel?.empresa}
-          />}
-
-          {/* Salvar nas Propostas do lead ou enviar ao cliente com o PDF. */}
-          {temItens && <AcoesProposta
-            proposta={escolhas}
-            leadSel={leadSel}
-            onLeadSel={setLeadSel}
-            bloqueio={excedeLimiteItens(itens)
-              ? `A proposta comporta até ${PROPOSTA_LIMITE_ITENS} tipos de equipamento. Reduza a seleção para salvar ou enviar.`
-              : null}
-          />}
+        <div className={s.rodapePainel}>
+          <Info size={14} className="text-sky-300 shrink-0 mt-0.5" />
+          <p>
+            O desconto é apenas <b>calculado e exibido</b> — não há trava de aprovação nesta versão.
+            Os valores sugeridos são uma estimativa inicial editável. O preço de fato é sempre
+            negociado; ajuste o valor final <b>ou</b> o percentual de desconto.
+          </p>
         </div>
-      </div>
+      </section>
+
+      {/* Resumo da proposta */}
+      <section className={`${m.painel} lg:col-span-2 lg:sticky lg:top-4`}>
+        <div className={m.painelBarra}>
+          <TituloSecao
+            icone={Receipt}
+            titulo="Resumo da proposta"
+            subtitulo={temItens ? `${qtdTotal} ${qtdTotal === 1 ? 'equipamento' : 'equipamentos'} · ${modelo === 'compra' ? 'compra' : 'comodato'}` : 'Monte a proposta ao lado.'}
+          />
+        </div>
+
+        {!temItens ? (
+          <div className={s.vazio}>
+            <span className={s.vazioIcone}><Package size={20} aria-hidden="true" /></span>
+            <strong>Nenhum equipamento ainda</strong>
+            <p>Use o + nos equipamentos para montar a proposta. O valor e o desconto aparecem aqui.</p>
+          </div>
+        ) : (
+          <div className={s.resumoCorpo}>
+            {modelo === 'compra' ? (
+              <>
+                <Destaque
+                  titulo="Valor final"
+                  valor={formatarBRL(valorFinal)}
+                  tabela={formatarBRL(refCompra)}
+                  desconto={descontoCompra}
+                  economia={economiaCompra}
+                />
+                <EditorDesconto
+                  label="Negociação"
+                  referencia={refCompra}
+                  final={valorFinal}
+                  onChange={setValorFinalOv}
+                />
+              </>
+            ) : (
+              <>
+                <Destaque
+                  titulo={`Total do contrato (${PRAZO_COMODATO_MESES}m)`}
+                  valor={formatarBRL(totalContrato)}
+                  tabela={formatarBRL(totalTabelaContrato)}
+                  economia={economiaContrato}
+                  linha2={`${formatarBRL(mensalFinal)}/mês · entrada ${formatarBRL(entradaFinal)}`}
+                />
+                <EditorDesconto
+                  label="Mensalidade"
+                  sufixo="/mês"
+                  referencia={refMensal}
+                  final={mensalFinal}
+                  onChange={setMensalFinalOv}
+                />
+                <EditorDesconto
+                  label="Entrada"
+                  referencia={refEntrada}
+                  final={entradaFinal}
+                  onChange={setEntradaFinalOv}
+                />
+              </>
+            )}
+
+            {/* PDF para o cliente: só os valores FINAIS (override ou sugestão);
+                tabela e descontos ficam internos. */}
+            <GerarProposta
+              dados={montarDadosProposta({
+                modelo, itens, valorFinal, mensalFinal, entradaFinal, prazoMeses: comodato.prazoMeses,
+              })}
+              empresa={leadSel?.empresa}
+            />
+
+            {/* Salvar nas Propostas do lead ou enviar ao cliente com o PDF. */}
+            <AcoesProposta
+              proposta={escolhas}
+              leadSel={leadSel}
+              onLeadSel={setLeadSel}
+              bloqueio={excedeLimiteItens(itens)
+                ? `A proposta comporta até ${PROPOSTA_LIMITE_ITENS} tipos de equipamento. Reduza a seleção para salvar ou enviar.`
+                : null}
+            />
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -245,22 +264,20 @@ function Destaque({ titulo, valor, tabela, desconto, economia, linha2 }: {
   titulo: string; valor: string; tabela: string; desconto?: number; economia: number; linha2?: string;
 }) {
   return (
-    <div className="rounded-xl bg-gradient-to-br from-indigo-500/15 to-indigo-500/5 border border-indigo-500/30 p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-slate-400">{titulo}</span>
+    <div className={s.destaque}>
+      <div className={s.destaqueTopo}>
+        <span>{titulo}</span>
         {desconto !== undefined && desconto > 0 && (
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
-            −{desconto.toLocaleString('pt-BR')}%
-          </span>
+          <span className={s.selo}>−{desconto.toLocaleString('pt-BR')}%</span>
         )}
       </div>
-      <div className="text-2xl font-bold text-slate-100 mt-1 tabular-nums">{valor}</div>
-      {linha2 && <div className="text-xs text-slate-400 mt-0.5">{linha2}</div>}
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5 text-xs">
-        <span className="text-slate-500">Tabela cheia: <span className="line-through">{tabela}</span></span>
+      <div className={s.destaqueValor}>{valor}</div>
+      {linha2 && <div className={s.destaqueLinha2}>{linha2}</div>}
+      <div className={s.destaqueRodape}>
+        <span>Tabela cheia: <span className="line-through">{tabela}</span></span>
         {economia > 0 && (
-          <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
-            <TrendingDown size={12} /> economia {formatarBRL(economia)}
+          <span className={s.economia}>
+            <TrendingDown size={13} /> economia {formatarBRL(economia)}
           </span>
         )}
       </div>
@@ -278,47 +295,43 @@ function EditorDesconto({ label, sufixo = '', referencia, final, onChange }: {
   const desconto = percentualDesconto(referencia, final);
   const aplicarPct = (pct: number) => onChange(valorComDesconto(referencia, pct));
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-base)] p-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-300">{label}</span>
-        <span className="text-[11px] text-slate-500">tabela {formatarBRL(referencia)}{sufixo}</span>
+    <div className={s.editor}>
+      <div className={s.editorTopo}>
+        <strong>{label}</strong>
+        <span>tabela {formatarBRL(referencia)}{sufixo}</span>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="text-[10px] text-slate-500 block mb-0.5">Valor final</label>
-          <div className="flex items-center gap-1 border border-[var(--border)] rounded-md px-2 py-1.5 bg-[var(--bg-card)] focus-within:ring-1 focus-within:ring-indigo-500">
-            <span className="text-slate-500 text-xs">R$</span>
+      <div className={s.editorCampos}>
+        <label className={s.rotulo}>
+          <span>Valor final</span>
+          <div className={s.campoValor}>
+            <span>R$</span>
             <input
               type="number" min={0} value={final}
               onChange={(e) => onChange(Math.max(0, Math.round(Number(e.target.value) || 0)))}
-              className="w-full bg-transparent text-sm text-slate-100 focus:outline-none tabular-nums"
             />
-            {sufixo && <span className="text-slate-500 text-[10px]">{sufixo}</span>}
+            {sufixo && <span>{sufixo}</span>}
           </div>
-        </div>
-        <div>
-          <label className="text-[10px] text-slate-500 block mb-0.5">Desconto</label>
-          <div className="flex items-center gap-1 border border-[var(--border)] rounded-md px-2 py-1.5 bg-[var(--bg-card)] focus-within:ring-1 focus-within:ring-indigo-500">
+        </label>
+        <label className={s.rotulo}>
+          <span>Desconto</span>
+          <div className={s.campoValor}>
             <input
               type="number" min={0} max={100} step={0.5} value={desconto}
               onChange={(e) => aplicarPct(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-              className="w-full bg-transparent text-sm text-slate-100 focus:outline-none tabular-nums"
             />
-            <span className="text-slate-500 text-xs">%</span>
+            <span>%</span>
           </div>
-        </div>
+        </label>
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className={s.atalhosDesconto}>
         {[5, 10, 15].map((p) => (
-          <button key={p} type="button" onClick={() => aplicarPct(p)}
-            className="text-[11px] px-2 py-0.5 rounded-md border border-[var(--border)] text-slate-300 hover:bg-[var(--bg-card)] transition-colors">
+          <button key={p} type="button" onClick={() => aplicarPct(p)} className={`${desconto === p ? s.atalhoAtivo : ''} focus-ring`}>
             {p}%
           </button>
         ))}
         {final !== referencia && (
-          <button type="button" onClick={() => onChange(referencia)}
-            className="text-[11px] text-indigo-400 hover:underline ml-auto">
-            tabela cheia
+          <button type="button" onClick={() => onChange(referencia)} className={s.linkTabela}>
+            voltar à tabela cheia
           </button>
         )}
       </div>

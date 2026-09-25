@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Sparkles, Search, X, Loader2, Check, ClipboardList, AlertTriangle, Target,
-  ListChecks, CalendarClock, Mail, ArrowRight, Copy, MessageSquare, Lightbulb,
+  ListChecks, CalendarClock, Mail, ArrowRight, Copy, MessageSquare, Lightbulb, MessageSquareText,
 } from 'lucide-react';
 import { getLeads, registrarNota, atualizarEstagio, analisarReuniaoCopiloto } from '@/lib/api';
 import type { Lead } from '@/lib/supabase';
@@ -12,6 +12,8 @@ import type { AnaliseReuniao } from '@/lib/ia/copilotoReuniao';
 import { PRODUTOS } from '@/lib/simulador';
 import { getEstagioPipelineLabel } from '@/lib/utils';
 import type { EstagioPipeline } from '@/lib/types';
+import { estilosModulo as m, TituloSecao } from '@/components/tema/Modulo';
+import s from './Comercial.module.css';
 
 // Aba "Copiloto" do módulo Comercial. Sem H1/padding próprios — a página
 // /comercial provê o cabeçalho e as abas.
@@ -52,74 +54,94 @@ export default function CopilotoPanel() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       {/* Entrada */}
-      <div className="card p-5 space-y-3">
-        <div>
-          <label className="text-sm font-medium text-slate-300 block mb-1">Lead (opcional, dá contexto à IA)</label>
-          {leadSel ? (
-            <div className="flex items-center gap-2 border border-indigo-500/40 bg-indigo-500/5 rounded-lg px-3 py-2">
-              <span className="flex-1 text-sm text-slate-200 truncate">{leadSel.empresa}</span>
-              <button onClick={() => setLeadSel(null)} className="text-slate-500 hover:text-slate-300"><X size={14} /></button>
-            </div>
-          ) : (
-            <div className="relative">
-              <div className="flex items-center gap-1.5 border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-base)]">
-                <Search size={14} className="text-slate-500" />
-                <input value={busca} onChange={(e) => setBusca(e.target.value)} onFocus={() => setAberto(true)}
-                  placeholder="Buscar empresa ou contato..." className="flex-1 bg-transparent text-sm text-slate-100 focus:outline-none" />
-              </div>
-              {aberto && filtrados.length > 0 && (
-                <div className="absolute z-10 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] shadow-xl">
-                  {filtrados.map((l) => (
-                    <button key={l.id} onClick={() => { setLeadSel(l); setAberto(false); setBusca(''); }}
-                      className="w-full text-left px-3 py-2 hover:bg-[var(--bg-base)] text-sm text-slate-200 border-b border-[var(--border)] last:border-0">
-                      <div className="truncate">{l.empresa}</div>
-                      <div className="text-xs text-slate-500 truncate">{l.contato_nome}</div>
-                    </button>
-                  ))}
+      <section className={m.painel}>
+        <div className={m.painelBarra}>
+          <TituloSecao icone={MessageSquareText} titulo="Reunião" subtitulo="Cole a transcrição; a IA resume e sugere os próximos passos." />
+        </div>
+        <div className={s.corpo}>
+          <div className={s.rotulo}>
+            <span>Lead <em className="font-normal not-italic text-slate-400">(opcional, dá contexto à IA)</em></span>
+            {leadSel ? (
+              <div className={s.leadEscolhido}>
+                <div className="min-w-0 flex-1">
+                  <strong className="truncate">{leadSel.empresa}</strong>
+                  {leadSel.contato_nome && <small className="truncate">{leadSel.contato_nome}</small>}
                 </div>
-              )}
-            </div>
-          )}
+                <button type="button" onClick={() => setLeadSel(null)} aria-label="Trocar lead" className="rounded-md p-1 text-slate-400 hover:bg-white/5 hover:text-slate-100">
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sky-300" />
+                <input
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  onFocus={() => setAberto(true)}
+                  onBlur={() => setTimeout(() => setAberto(false), 150)}
+                  placeholder="Buscar empresa ou contato"
+                  aria-label="Buscar lead"
+                  className={`${s.campo} ${s.comIcone} focus-ring`}
+                />
+                {aberto && filtrados.length > 0 && (
+                  <div className={s.menuLeads}>
+                    {filtrados.map((l) => (
+                      <button key={l.id} type="button" onClick={() => { setLeadSel(l); setAberto(false); setBusca(''); }}>
+                        <span className="block truncate">{l.empresa}</span>
+                        {l.contato_nome && <small className="truncate">{l.contato_nome}</small>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <label className={s.rotulo}>
+            <span>Transcrição</span>
+            <textarea
+              value={transcricao}
+              onChange={(e) => setTranscricao(e.target.value)}
+              rows={14}
+              placeholder="Cole aqui o texto da transcrição do Google Meet..."
+              className={`${s.campo} focus-ring`}
+            />
+          </label>
+          <div className={`${s.contador} -mt-2.5`}>{transcricao.length.toLocaleString('pt-BR')} caracteres</div>
+
+          {erro && <p className="flex items-center gap-2 text-sm text-red-300"><AlertTriangle size={14} /> {erro}</p>}
+
+          <button
+            type="button"
+            onClick={analisar}
+            disabled={analisando}
+            className={`${m.primaryButton} w-full justify-center focus-ring`}
+          >
+            {analisando ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+            {analisando ? 'Analisando reunião...' : 'Analisar reunião'}
+          </button>
         </div>
-
-        <div>
-          <label className="text-sm font-medium text-slate-300 block mb-1">Transcrição</label>
-          <textarea
-            value={transcricao}
-            onChange={(e) => setTranscricao(e.target.value)}
-            rows={14}
-            placeholder="Cole aqui o texto da transcrição do Google Meet..."
-            className="w-full text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-base)] text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y"
-          />
-          <div className="text-xs text-slate-600 mt-1">{transcricao.length.toLocaleString('pt-BR')} caracteres</div>
-        </div>
-
-        {erro && <p className="text-sm text-red-400">{erro}</p>}
-
-        <button
-          onClick={analisar}
-          disabled={analisando}
-          className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 py-2.5 rounded-lg transition-colors"
-        >
-          {analisando ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-          {analisando ? 'Analisando reunião...' : 'Analisar reunião'}
-        </button>
-      </div>
+      </section>
 
       {/* Resultado */}
       <div>
         {!analise ? (
-          <div className="card p-5 h-full flex flex-col items-center justify-center text-center gap-2 min-h-[300px]">
-            <div className="w-10 h-10 rounded-full bg-[var(--border-subtle)] flex items-center justify-center">
-              <Sparkles size={18} className="text-slate-500" />
+          <section className={m.painel}>
+            <div className={m.painelBarra}>
+              <TituloSecao icone={Sparkles} titulo="Análise" subtitulo="Resumo, dores, objeções, equipamentos e próximos passos." />
             </div>
-            <p className="text-sm text-slate-400">A análise aparece aqui</p>
-            <p className="text-xs text-slate-600 max-w-[260px]">
-              Selecione o lead (opcional), cole a transcrição e clique em Analisar.
-            </p>
-          </div>
+            <div className={`${s.vazio} py-10`}>
+              <span className={s.vazioIcone}><Sparkles size={20} aria-hidden="true" /></span>
+              <strong>A análise aparece aqui</strong>
+              <ol className={s.passos}>
+                <li><b>1</b> Escolha o lead (opcional)</li>
+                <li><b>2</b> Cole a transcrição da reunião</li>
+                <li><b>3</b> Clique em Analisar reunião</li>
+              </ol>
+            </div>
+          </section>
         ) : (
           <Resultado analise={analise} lead={leadSel} transcricao={transcricao} />
         )}
@@ -128,14 +150,23 @@ export default function CopilotoPanel() {
   );
 }
 
+const TOM_RGB: Record<string, string> = {
+  'text-indigo-400': '129, 140, 248',
+  'text-amber-400': '251, 191, 36',
+  'text-red-400': '248, 113, 113',
+  'text-emerald-400': '52, 211, 153',
+  'text-sky-400': '56, 189, 248',
+  'text-violet-400': '167, 139, 250',
+};
+
 function Bloco({ Icon, titulo, children, cor = 'text-indigo-400' }: {
   Icon: typeof Target; titulo: string; children: React.ReactNode; cor?: string;
 }) {
   return (
-    <div className="card p-4">
-      <div className="flex items-center gap-1.5 mb-2">
-        <Icon size={13} className={cor} />
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{titulo}</span>
+    <div className={s.bloco} style={{ '--tom-rgb': TOM_RGB[cor] ?? TOM_RGB['text-indigo-400'] } as React.CSSProperties}>
+      <div className={s.blocoTitulo}>
+        <span><Icon size={13} aria-hidden="true" /></span>
+        {titulo}
       </div>
       {children}
     </div>
@@ -303,12 +334,12 @@ function Resultado({ analise, lead, transcricao }: {
       </Bloco>
 
       {/* Registrar no lead */}
-      <div className="card p-4">
+      <div className={s.bloco}>
         {lead ? (
           <button
             onClick={registrar}
             disabled={salvando || registrado}
-            className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 py-2 rounded-lg transition-colors"
+            className={`${m.primaryButton} w-full justify-center focus-ring`}
           >
             {salvando ? <Loader2 size={14} className="animate-spin" /> : registrado ? <Check size={14} /> : <ClipboardList size={14} />}
             {registrado ? `Registrado em ${lead.empresa}` : `Registrar análise e transcrição no lead (${lead.empresa})`}
