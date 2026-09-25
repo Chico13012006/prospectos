@@ -1285,17 +1285,25 @@ export default function LeadPanel({
 
         {/* Footer */}
         <div className="px-5 py-4 border-t border-[var(--border)] flex items-center gap-2.5 bg-[var(--bg-base)]">
+          {/* Menu de AÇÃO, não mostrador da etapa (ela aparece em "Estágio"): fica
+              sempre em "Mover para outro estágio". Com value = etapa atual, uma
+              etapa fora da lista (ex.: Novos Leads) fazia o navegador exibir a
+              primeira opção, que então não podia ser escolhida (sem onChange). */}
           <select
-            value={selectedLead?.estagio ?? selectedEmpresa.estagio_pipeline ?? ''}
+            value=""
             onChange={(e) => handleMoverEstagio(e.target.value)}
+            aria-label="Mover para outro estágio"
             className="flex-1 text-sm border border-[var(--border)] rounded-lg px-3 py-2 bg-[var(--bg-card)] text-slate-300 focus:outline-none"
           >
             <option value="" disabled>Mover para outro estágio</option>
             {ESTAGIOS_MANUAIS
               .filter(s => contexto !== 'pipeline' || s.value !== 'perdido')
-              .map(s => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
+              .map(s => {
+                const atual = s.value === (selectedLead?.estagio ?? selectedEmpresa.estagio_pipeline);
+                return (
+                  <option key={s.value} value={s.value} disabled={atual}>{s.label}{atual ? ' (atual)' : ''}</option>
+                );
+              })}
           </select>
           {contexto !== 'pipeline' && (
             <button
